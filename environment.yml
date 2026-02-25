@@ -1,0 +1,48 @@
+name: sidar-ai
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - git
+  - setuptools
+  - packaging
+  - cudatoolkit=11.8
+  - pytorch-cuda=11.8
+  - pytorch
+  - torchvision
+  - pip:
+      # ── Temel ─────────────────────────────────
+      - python-dotenv>=1.0.0
+      - requests>=2.31.0
+      - colorama>=0.4.6
+
+      # ── Sistem İzleme ─────────────────────────
+      - psutil>=5.9.5
+      - GPUtil>=1.4.0
+      - pynvml>=11.5.0
+
+      # ── AI Sağlayıcıları ──────────────────────
+      - ollama>=0.1.6
+      - google-generativeai>=0.7.0
+
+      # ── GitHub Entegrasyonu ───────────────────
+      - PyGithub>=2.1.0
+
+      # ── Web Arama (Yeni) ──────────────────────
+      # DuckDuckGo — API key gerektirmez
+      - duckduckgo-search>=6.1.0
+
+      # ── RAG — Belge Deposu (Yeni) ─────────────
+      # BM25 arama motoru; kurulu değilse keyword search devreye girer
+      - rank-bm25>=0.2.2
+
+      # ── Geliştirme & Test ─────────────────────
+      - pytest>=7.4.0
+      - pytest-cov>=4.1.0
+      - black>=23.0.0
+      - flake8>=6.0.0
+      - mypy>=1.5.0

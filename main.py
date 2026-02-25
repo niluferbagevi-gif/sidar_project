@@ -63,8 +63,20 @@ Komutlar:
   .gpu        — GPU belleğini optimize et
   .github     — GitHub bağlantı durumu
   .level      — Mevcut erişim seviyesini göster
+  .web        — Web arama durumu
+  .docs       — Belge deposunu listele
   .help       — Bu yardım mesajını göster
   .exit / .q  — Çıkış
+
+Doğrudan Komutlar (serbest metin):
+  web'de ara: <sorgu>              → DuckDuckGo web araması
+  pypi: <paket>                    → PyPI paket bilgisi
+  npm: <paket>                     → npm paket bilgisi
+  github releases: <owner/repo>    → GitHub release listesi
+  docs ara: <sorgu>                → Belge deposunda ara
+  belge ekle <url>                 → URL'den belge ekle
+  docs ara: <sorgu>                → Depoda arama
+  stackoverflow: <sorgu>           → Stack Overflow araması
 """
 
 
@@ -77,6 +89,8 @@ def interactive_loop(agent: SidarAgent) -> None:
     print(f"  Erişim Seviyesi : {agent.cfg.ACCESS_LEVEL.upper()}")
     print(f"  AI Sağlayıcı    : {agent.cfg.AI_PROVIDER} ({agent.cfg.CODING_MODEL})")
     print(f"  GitHub          : {'Bağlı' if agent.github.is_available() else 'Bağlı değil'}")
+    print(f"  Web Arama       : {'Aktif' if agent.web.is_available() else 'duckduckgo-search kurulu değil'}")
+    print(f"  Belge Deposu    : {agent.docs.status()}")
     print(f"\n  '.help' yazarak komut listesini görebilirsiniz.\n")
 
     while True:
@@ -116,6 +130,12 @@ def interactive_loop(agent: SidarAgent) -> None:
             continue
         elif user_input.lower() == ".level":
             print(agent.security.status_report())
+            continue
+        elif user_input.lower() == ".web":
+            print(agent.web.status())
+            continue
+        elif user_input.lower() == ".docs":
+            print(agent.docs.list_documents())
             continue
 
         # Ajan yanıtı

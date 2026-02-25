@@ -1,0 +1,257 @@
+"""
+Sidar Project - Paket Bilgi Yöneticisi
+PyPI, npm Registry ve GitHub Releases entegrasyonu.
+
+Gerçek zamanlı paket sürüm kontrolü, changelog ve bağımlılık sorguları.
+"""
+
+import logging
+import re
+from typing import Tuple
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+class PackageInfoManager:
+    """
+    Python (PyPI), JavaScript (npm) ve GitHub projeleri için
+    paket bilgisi sorgular.
+    """
+
+    TIMEOUT = 12  # saniye
+
+    # ─────────────────────────────────────────────
+    #  PyPI
+    # ─────────────────────────────────────────────
+
+    def pypi_info(self, package: str) -> Tuple[bool, str]:
+        """
+        PyPI JSON API'den paket bilgisi çek.
+
+        Args:
+            package: Paket adı (örn: "fastapi", "requests")
+
+        Returns:
+            (başarı, biçimlendirilmiş_bilgi)
+        """
+        url = f"https://pypi.org/pypi/{package}/json"
+        try:
+            resp = requests.get(url, timeout=self.TIMEOUT)
+            if resp.status_code == 404:
+                return False, f"✗ PyPI'de '{package}' paketi bulunamadı."
+            resp.raise_for_status()
+            data = resp.json()
+
+            info = data.get("info", {})
+            all_versions = list(data.get("releases", {}).keys())
+            recent_versions = sorted(
+                [v for v in all_versions if not self._is_prerelease(v)],
+                key=self._version_sort_key,
+                reverse=True,
+            )[:8]
+
+            lines = [
+                f"[PyPI: {package}]",
+                f"  Güncel sürüm  : {info.get('version', '?')}",
+                f"  Yazar         : {(info.get('author') or info.get('author_email') or '?')[:80]}",
+                f"  Lisans        : {info.get('license', '?') or '?'}",
+                f"  Python gerekli: {info.get('requires_python', '?') or '?'}",
+                f"  Özet          : {(info.get('summary') or '')[:150]}",
+                f"  Proje URL     : {info.get('project_url') or 'https://pypi.org/project/' + package}",
+                f"  Son sürümler  : {', '.join(recent_versions)}",
+            ]
+
+            requires = info.get("requires_dist") or []
+            if requires:
+                cleaned = [r.split(";")[0].strip() for r in requires[:10]]
+                lines.append(f"  Bağımlılıklar : {', '.join(cleaned)}")
+
+            home_page = info.get("home_page") or info.get("project_url")
+            if home_page:
+                lines.append(f"  Ana sayfa     : {home_page}")
+
+            return True, "\n".join(lines)
+
+        except Exception as exc:
+            logger.error("PyPI sorgu hatası: %s", exc)
+            return False, f"[HATA] PyPI: {exc}"
+
+    def pypi_latest_version(self, package: str) -> Tuple[bool, str]:
+        """Sadece güncel sürüm numarasını döndür."""
+        url = f"https://pypi.org/pypi/{package}/json"
+        try:
+            resp = requests.get(url, timeout=self.TIMEOUT)
+            if resp.status_code == 404:
+                return False, f"✗ '{package}' bulunamadı."
+            resp.raise_for_status()
+            version = resp.json().get("info", {}).get("version", "?")
+            return True, f"{package}=={version}"
+        except Exception as exc:
+            return False, f"[HATA] PyPI: {exc}"
+
+    def pypi_compare(self, package: str, current_version: str) -> Tuple[bool, str]:
+        """
+        Kurulu sürümü PyPI'deki güncel sürümle karşılaştır.
+
+        Args:
+            package        : Paket adı
+            current_version: Kurulu sürüm (örn: "2.1.0")
+        """
+        ok, info = self.pypi_info(package)
+        if not ok:
+            return False, info
+
+        m = re.search(r"Güncel sürüm\s*:\s*([\d.\w-]+)", info)
+        latest = m.group(1) if m else "?"
+
+        if current_version == latest:
+            status_line = f"  Durum         : ✓ Güncel ({current_version})"
+        else:
+            status_line = f"  Durum         : ⚠ Güncelleme mevcut — {current_version} → {latest}"
+
+        return True, f"{info}\n  Kurulu sürüm  : {current_version}\n{status_line}"
+
+    # ─────────────────────────────────────────────
+    #  npm
+    # ─────────────────────────────────────────────
+
+    def npm_info(self, package: str) -> Tuple[bool, str]:
+        """
+        npm Registry'den paket bilgisi çek.
+
+        Args:
+            package: Paket adı (örn: "react", "axios")
+        """
+        url = f"https://registry.npmjs.org/{package}/latest"
+        try:
+            resp = requests.get(url, timeout=self.TIMEOUT)
+            if resp.status_code == 404:
+                return False, f"✗ npm'de '{package}' paketi bulunamadı."
+            resp.raise_for_status()
+            data = resp.json()
+
+            author = data.get("author", {})
+            author_str = (
+                author.get("name", str(author))
+                if isinstance(author, dict)
+                else str(author)
+            )
+
+            lines = [
+                f"[npm: {package}]",
+                f"  Güncel sürüm : {data.get('version', '?')}",
+                f"  Yazar        : {author_str[:80]}",
+                f"  Lisans       : {data.get('license', '?')}",
+                f"  Özet         : {(data.get('description') or '')[:150]}",
+                f"  Ana dosya    : {data.get('main', '?')}",
+            ]
+
+            deps = data.get("dependencies", {})
+            if deps:
+                dep_list = [f"{k}@{v}" for k, v in list(deps.items())[:8]]
+                lines.append(f"  Bağımlılıklar: {', '.join(dep_list)}")
+
+            peer_deps = data.get("peerDependencies", {})
+            if peer_deps:
+                peer_list = [f"{k}@{v}" for k, v in list(peer_deps.items())[:5]]
+                lines.append(f"  Peer deps    : {', '.join(peer_list)}")
+
+            engines = data.get("engines", {})
+            if engines:
+                lines.append(f"  Engine gerek : {engines}")
+
+            return True, "\n".join(lines)
+
+        except Exception as exc:
+            logger.error("npm sorgu hatası: %s", exc)
+            return False, f"[HATA] npm: {exc}"
+
+    # ─────────────────────────────────────────────
+    #  GITHUB RELEASES
+    # ─────────────────────────────────────────────
+
+    def github_releases(self, repo: str, limit: int = 5) -> Tuple[bool, str]:
+        """
+        GitHub Releases API ile sürümleri listele.
+
+        Args:
+            repo : "owner/repo" formatı (örn: "tiangolo/fastapi")
+            limit: Gösterilecek maksimum sürüm sayısı
+        """
+        url = f"https://api.github.com/repos/{repo}/releases"
+        try:
+            resp = requests.get(
+                url,
+                timeout=self.TIMEOUT,
+                headers={"Accept": "application/vnd.github+json"},
+            )
+            if resp.status_code == 404:
+                return False, f"✗ GitHub deposu bulunamadı: {repo}"
+            resp.raise_for_status()
+            releases = resp.json()[:limit]
+
+            if not releases:
+                return True, f"[GitHub Releases: {repo}]\n  Henüz release yok."
+
+            lines = [f"[GitHub Releases: {repo}]", ""]
+            for r in releases:
+                tag = r.get("tag_name", "?")
+                name = r.get("name") or tag
+                date = (r.get("published_at") or "?")[:10]
+                prerelease = " (pre-release)" if r.get("prerelease") else ""
+                body = (r.get("body") or "").strip()[:300].replace("\n", " ")
+                lines.append(f"  {tag} — {name} [{date}]{prerelease}")
+                if body:
+                    lines.append(f"    {body}")
+                lines.append("")
+
+            return True, "\n".join(lines)
+
+        except Exception as exc:
+            logger.error("GitHub releases hatası: %s", exc)
+            return False, f"[HATA] GitHub Releases: {exc}"
+
+    def github_latest_release(self, repo: str) -> Tuple[bool, str]:
+        """Sadece en güncel release tag'ini döndür."""
+        url = f"https://api.github.com/repos/{repo}/releases/latest"
+        try:
+            resp = requests.get(
+                url,
+                timeout=self.TIMEOUT,
+                headers={"Accept": "application/vnd.github+json"},
+            )
+            if resp.status_code == 404:
+                return False, f"✗ '{repo}' için release bulunamadı."
+            resp.raise_for_status()
+            data = resp.json()
+            tag = data.get("tag_name", "?")
+            date = (data.get("published_at") or "?")[:10]
+            return True, f"{repo} — En güncel: {tag} [{date}]"
+        except Exception as exc:
+            return False, f"[HATA] GitHub: {exc}"
+
+    # ─────────────────────────────────────────────
+    #  YARDIMCILAR
+    # ─────────────────────────────────────────────
+
+    @staticmethod
+    def _is_prerelease(version: str) -> bool:
+        """Sürümün pre-release olup olmadığını kontrol et."""
+        return bool(re.search(r"[a-zA-Z]", version))
+
+    @staticmethod
+    def _version_sort_key(version: str):
+        """Sürüm dizilerini sayısal olarak sırala."""
+        parts = re.split(r"[.\-]", version)
+        result = []
+        for p in parts:
+            try:
+                result.append(int(p))
+            except ValueError:
+                result.append(0)
+        return result
+
+    def status(self) -> str:
+        return "PackageInfo: PyPI + npm + GitHub Releases — Aktif"

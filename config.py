@@ -72,3 +72,21 @@ class Config:
     # ─────────────────────────────────────────────
     MAX_REACT_STEPS: int = int(os.getenv("MAX_REACT_STEPS", "10"))
     REACT_TIMEOUT: int = int(os.getenv("REACT_TIMEOUT", "60"))   # saniye
+
+    # ─────────────────────────────────────────────
+    #  WEB ARAMA
+    # ─────────────────────────────────────────────
+    WEB_SEARCH_MAX_RESULTS: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+    WEB_FETCH_TIMEOUT: int = int(os.getenv("WEB_FETCH_TIMEOUT", "15"))    # saniye
+    WEB_FETCH_MAX_CHARS: int = int(os.getenv("WEB_FETCH_MAX_CHARS", "4000"))
+
+    # ─────────────────────────────────────────────
+    #  PAKET BİLGİ
+    # ─────────────────────────────────────────────
+    PACKAGE_INFO_TIMEOUT: int = int(os.getenv("PACKAGE_INFO_TIMEOUT", "12"))  # saniye
+
+    # ─────────────────────────────────────────────
+    #  RAG — Belge Deposu
+    # ─────────────────────────────────────────────
+    RAG_DIR: Path = BASE_DIR / os.getenv("RAG_DIR", "data/rag")
+    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))   # arama sonucu sayısı
