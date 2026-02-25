@@ -15,33 +15,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# Sistem bağımlılıklarını yükle (Git ve derleme araçları gerekebilir)
+# Sistem bağımlılıklarını yükle
+# Not: git ve build araçları bazı python paketleri için gereklidir
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Bağımlılıkları kopyala ve yükle
-# Not: environment.yml yerine doğrudan pip paketlerini yüklüyoruz
-# Docker için requirements.txt oluşturulması önerilir, ancak burada
-# doğrudan kurulum komutu ile ilerliyoruz.
+# Bağımlılık Yönetimi (Environment.yml entegrasyonu)
+# 1. environment.yml dosyasını kopyala
 COPY environment.yml .
-RUN pip install --upgrade pip && \
-    pip install \
-    requests \
-    python-dotenv \
-    psutil \
-    GPUtil \
-    pynvml \
-    ollama \
-    google-generativeai \
-    PyGithub \
-    duckduckgo-search \
-    rank-bm25 \
-    chromadb \
-    sentence-transformers \
-    colorama
+
+# 2. PyYAML kur (Yaml dosyasını okumak için) ve pip paketlerini ayrıştır
+RUN pip install --upgrade pip setuptools wheel pyyaml && \
+    python -c "import sys, yaml; \
+    deps = yaml.safe_load(open('environment.yml')); \
+    pip_deps = next((item['pip'] for item in deps['dependencies'] if isinstance(item, dict) and 'pip' in item), []); \
+    print('\n'.join(pip_deps))" > requirements.txt && \
+    \
+# 3. Ayrıştırılan paketleri kur
+    pip install -r requirements.txt
 
 # Uygulama kodlarını kopyala
 COPY . .
@@ -49,12 +43,12 @@ COPY . .
 # Kalıcı veri dizinlerini oluştur
 RUN mkdir -p logs data temp
 
-# Sidar kullanıcısı oluştur (Root olarak çalıştırmamak güvenlik için önemlidir)
+# Sidar kullanıcısı oluştur (Güvenlik için root olmayan kullanıcı)
 RUN useradd -m sidar && \
     chown -R sidar:sidar /app
 USER sidar
 
-# Sağlık kontrolü (Opsiyonel)
+# Sağlık kontrolü
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD ps aux | grep "[p]ython main.py" || exit 1
 
