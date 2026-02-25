@@ -5,11 +5,13 @@ ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı
 
 import logging
 import threading
-from typing import Optional, Iterator
+import json
+import re
+from typing import Optional, Iterator, Dict, Any
 
 from config import Config
 from core.memory import ConversationMemory
-from core.llm_client import LLMClient
+from core.llm_client.py import LLMClient
 from core.rag import DocumentStore
 from managers.code_manager import CodeManager
 from managers.system_health import SystemHealthManager
@@ -28,7 +30,7 @@ class SidarAgent:
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
     """
 
-    VERSION = "2.2.0"  # Streaming Update
+    VERSION = "2.3.0"  # JSON Mode Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -58,12 +60,11 @@ class SidarAgent:
         )
 
         logger.info(
-            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s bellek=%s",
+            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (JSON MODE)",
             self.VERSION,
             self.cfg.AI_PROVIDER,
             self.cfg.CODING_MODEL,
             self.cfg.ACCESS_LEVEL,
-            "kalıcı" if self.cfg.MEMORY_FILE else "geçici",
         )
 
     # ─────────────────────────────────────────────
@@ -89,20 +90,14 @@ class SidarAgent:
                 return
 
             # ReAct döngüsünden gelen akışı kullanıcıya ilet
-            full_response = ""
+            # JSON modunda, kullanıcıya ham JSON akıtmak yerine
+            # "düşünme" sürecini veya sonucu gösterebiliriz.
+            # Şimdilik debug amaçlı JSON'u da akıtıyoruz.
             for chunk in self._react_loop(user_input):
-                full_response += chunk  # Bellek için biriktir
-                yield chunk             # Kullanıcıya gönder
-
-            # Döngü bitince son hali hafızaya kaydet
-            # Not: _react_loop içinde ara adımlar hafızaya eklenmiyor,
-            # sadece en son LLM yanıtı veya araç sonucu ekleniyor.
-            # Basitlik adına burada son birikmiş yanıtı kaydediyoruz.
-            # ReAct mantığı gereği son "full_response" her zaman son adımın çıktısıdır.
-            pass 
+                yield chunk
 
     # ─────────────────────────────────────────────
-    #  ReAct DÖNGÜSÜ (STREAMING)
+    #  ReAct DÖNGÜSÜ (JSON PARSING)
     # ─────────────────────────────────────────────
 
     def _react_loop(self, user_input: str) -> Iterator[str]:
@@ -115,6 +110,7 @@ class SidarAgent:
 
         for step in range(self.cfg.MAX_REACT_STEPS):
             # 1. LLM Çağrısı (Stream)
+            # Not: JSON modunda da stream çalışır, parça parça JSON gelir.
             response_generator = self.llm.chat(
                 messages=messages,
                 model=self.cfg.CODING_MODEL,
@@ -123,51 +119,73 @@ class SidarAgent:
                 stream=True
             )
 
-            # LLM yanıtını hem biriktir hem yield et
+            # LLM yanıtını biriktir
             llm_response_accumulated = ""
             for chunk in response_generator:
                 llm_response_accumulated += chunk
+                # Kullanıcıya JSON'un oluşumunu göster (Matrix efekti gibi)
                 yield chunk
 
-            # 2. Araç Kontrolü
-            tool_result = self._check_and_execute_tools(llm_response_accumulated)
-            
-            # Eğer araç çağrılmadıysa, bu son yanıttır.
-            if tool_result is None:
-                self.memory.add("assistant", llm_response_accumulated)
-                return
+            # 2. JSON Ayrıştırma ve Araç Kontrolü
+            try:
+                # Bazen modeller JSON'u Markdown içine alır
+                clean_json = llm_response_accumulated.strip()
+                if clean_json.startswith("```"):
+                    clean_json = re.sub(r"^```(json)?|```$", "", clean_json, flags=re.MULTILINE).strip()
 
-            # Araç çağrıldıysa, sonucu göster ve döngüye devam et
-            # Kullanıcıya aracın çalıştığını gösteren bir mesaj akıtıyoruz
-            tool_msg = f"\n\n[Sistem] Araç Çıktısı:\n{tool_result}\n\n"
-            yield tool_msg
+                action_data = json.loads(clean_json)
+                
+                tool_name = action_data.get("tool")
+                tool_arg = action_data.get("argument", "")
+                thought = action_data.get("thought", "")
 
-            # Hafızayı güncelle (Araç öncesi düşünce + Araç sonucu)
-            messages = messages + [
-                {"role": "assistant", "content": llm_response_accumulated},
-                {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
-            ]
+                # Eğer araç 'final_answer' ise döngüyü bitir
+                if tool_name == "final_answer":
+                    # Yanıt zaten yield edildi (JSON içinde), hafızaya ekle ve çık
+                    self.memory.add("assistant", tool_arg)
+                    return
+
+                # Aracı çalıştır
+                tool_result = self._execute_tool(tool_name, tool_arg)
+                
+                if tool_result is None:
+                    # Tanımsız araç veya hata
+                    yield f"\n\n[Sistem] Geçersiz araç çağrısı: {tool_name}\n"
+                    # Hafızaya ekleyip devam etme kararı (hata düzeltme şansı ver)
+                    messages = messages + [
+                         {"role": "assistant", "content": llm_response_accumulated},
+                         {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya JSON hatalı."}
+                    ]
+                    continue
+
+                # Araç çıktısını kullanıcıya göster
+                yield f"\n\n[Sistem] Araç Çıktısı ({tool_name}):\n{tool_result}\n\n"
+
+                # Hafızayı güncelle
+                messages = messages + [
+                    {"role": "assistant", "content": llm_response_accumulated},
+                    {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
+                ]
             
-            # Araç sonucunu hafızaya kalıcı olarak da ekleyelim ki context kopmasın
-            # (Basitleştirilmiş yaklaşım: sadece en son turu eklemiyoruz, adımları tutuyoruz)
-            # Ancak ana memory.add metodunu kirletmemek için buradaki messages listesini güncel tutuyoruz.
+            except json.JSONDecodeError:
+                yield "\n\n[Sistem Hatası] Model geçersiz JSON üretti. Tekrar deneniyor...\n"
+                # Hata durumunda döngüye devam etmesi için hafızaya hata mesajı ekle
+                messages = messages + [
+                    {"role": "assistant", "content": llm_response_accumulated},
+                    {"role": "user", "content": "[Sistem Hatası] Yanıtın geçerli bir JSON değil. Lütfen 'tool', 'argument' ve 'thought' anahtarlarını içeren geçerli bir JSON döndür."}
+                ]
+            except Exception as exc:
+                 yield f"\n\n[Sistem Hatası] Beklenmeyen hata: {exc}\n"
+                 return
             
         # Döngü biterse
         yield "\n[Sistem] Maksimum adım sayısına ulaşıldı."
 
-    def _check_and_execute_tools(self, llm_response: str) -> Optional[str]:
+    def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
         """
-        LLM yanıtında araç çağrısı direktifi var mı kontrol et ve çalıştır.
-        (Buradaki kod orijinaliyle aynıdır)
+        Ayrıştırılmış araç adı ve argümanını kullanarak ilgili metodu çağırır.
         """
-        import re
-
-        m = re.search(r"TOOL:(\w+)(?::(.+))?", llm_response)
-        if not m:
-            return None
-
-        tool_name = m.group(1)
-        tool_arg = (m.group(2) or "").strip()
+        tool_arg = str(tool_arg).strip()
 
         # ── Temel araçlar ──────────────────────────
         if tool_name == "list_dir":
@@ -175,11 +193,9 @@ class SidarAgent:
             return result
 
         if tool_name == "read_file":
-            if not tool_arg:
-                return "Dosya yolu belirtilmedi."
+            if not tool_arg: return "Dosya yolu belirtilmedi."
             ok, result = self.code.read_file(tool_arg)
-            if ok:
-                self.memory.set_last_file(tool_arg)
+            if ok: self.memory.set_last_file(tool_arg)
             return result
 
         if tool_name == "audit":
@@ -192,10 +208,8 @@ class SidarAgent:
             return self.health.optimize_gpu_memory()
 
         if tool_name == "github_commits":
-            try:
-                n = int(tool_arg) if tool_arg else 10
-            except ValueError:
-                n = 10
+            try: n = int(tool_arg)
+            except: n = 10
             _, result = self.github.list_commits(n=n)
             return result
 
@@ -205,85 +219,65 @@ class SidarAgent:
 
         # ── Web Arama araçları ─────────────────────
         if tool_name == "web_search":
-            if not tool_arg:
-                return "⚠ Arama sorgusu belirtilmedi."
+            if not tool_arg: return "⚠ Arama sorgusu belirtilmedi."
             _, result = self.web.search(tool_arg)
             return result
 
         if tool_name == "fetch_url":
-            if not tool_arg:
-                return "⚠ URL belirtilmedi."
+            if not tool_arg: return "⚠ URL belirtilmedi."
             _, result = self.web.fetch_url(tool_arg)
             return result
 
         if tool_name == "search_docs":
+            # Argümanı "lib konu" şeklinde bekliyoruz
             parts = tool_arg.split(" ", 1)
-            lib = parts[0] if parts else ""
+            lib = parts[0]
             topic = parts[1] if len(parts) > 1 else ""
-            if not lib:
-                return "⚠ Kütüphane adı belirtilmedi."
             _, result = self.web.search_docs(lib, topic)
             return result
 
         if tool_name == "search_stackoverflow":
-            if not tool_arg:
-                return "⚠ Arama sorgusu belirtilmedi."
             _, result = self.web.search_stackoverflow(tool_arg)
             return result
 
         # ── Paket Bilgi araçları ───────────────────
         if tool_name == "pypi":
-            if not tool_arg:
-                return "⚠ Paket adı belirtilmedi."
             _, result = self.pkg.pypi_info(tool_arg)
             return result
 
         if tool_name == "pypi_compare":
             parts = tool_arg.split("|", 1)
-            if len(parts) < 2:
-                return "⚠ Kullanım: TOOL:pypi_compare:<paket>|<mevcut_sürüm>"
+            if len(parts) < 2: return "⚠ Kullanım: paket|mevcut_sürüm"
             _, result = self.pkg.pypi_compare(parts[0].strip(), parts[1].strip())
             return result
 
         if tool_name == "npm":
-            if not tool_arg:
-                return "⚠ Paket adı belirtilmedi."
             _, result = self.pkg.npm_info(tool_arg)
             return result
 
         if tool_name == "gh_releases":
-            if not tool_arg:
-                return "⚠ Depo adı belirtilmedi (format: owner/repo)."
             _, result = self.pkg.github_releases(tool_arg)
             return result
 
         if tool_name == "gh_latest":
-            if not tool_arg:
-                return "⚠ Depo adı belirtilmedi (format: owner/repo)."
             _, result = self.pkg.github_latest_release(tool_arg)
             return result
 
         # ── RAG / Belge Deposu araçları ────────────
         if tool_name == "docs_search":
-            if not tool_arg:
-                return "⚠ Arama sorgusu belirtilmedi."
             _, result = self.docs.search(tool_arg)
             return result
 
         if tool_name == "docs_add":
             parts = tool_arg.split("|", 1)
-            if len(parts) < 2:
-                return "⚠ Kullanım: TOOL:docs_add:<başlık>|<url>"
-            title, url = parts[0].strip(), parts[1].strip()
-            _, result = self.docs.add_document_from_url(url, title=title)
+            if len(parts) < 2: return "⚠ Kullanım: başlık|url"
+            _, result = self.docs.add_document_from_url(parts[1].strip(), title=parts[0].strip())
             return result
 
         if tool_name == "docs_list":
             return self.docs.list_documents()
 
         if tool_name == "docs_delete":
-            if not tool_arg:
-                return "⚠ Belge ID'si belirtilmedi."
             return self.docs.delete_document(tool_arg)
 
         return None
@@ -299,7 +293,6 @@ class SidarAgent:
         lines.append(f"  GitHub     : {'Bağlı' if self.github.is_available() else 'Bağlı değil'}")
         lines.append(f"  GPU        : {'Mevcut' if self.health._gpu_available else 'Yok'}")
         lines.append(f"  WebSearch  : {'Aktif' if self.web.is_available() else 'Kurulu değil'}")
-        lines.append(f"  PackageInfo: Aktif (PyPI + npm + GitHub)")
         lines.append(f"  RAG        : {self.docs.status()}")
 
         m = self.code.get_metrics()
@@ -333,6 +326,3 @@ class SidarAgent:
             self.health.full_report(),
         ]
         return "\n".join(lines)
-
-    def __repr__(self) -> str:
-        return f"<SidarAgent v{self.VERSION} provider={self.cfg.AI_PROVIDER}>"

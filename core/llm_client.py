@@ -62,10 +62,13 @@ class LLMClient:
         stream: bool
     ) -> Union[str, Iterator[str]]:
         url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/chat"
+        
+        # JSON Modunu Zorla
         payload = {
             "model": model,
             "messages": messages,
             "stream": stream,
+            "format": "json",  # <-- YENİ: Ollama JSON modu
             "options": {"temperature": temperature},
         }
         
@@ -82,11 +85,11 @@ class LLMClient:
 
         except requests.exceptions.ConnectionError:
             logger.error("Ollama bağlantı hatası.")
-            msg = "[HATA] Ollama'ya bağlanılamadı. 'ollama serve' açık mı?"
+            msg = json.dumps({"tool": "final_answer", "argument": "[HATA] Ollama'ya bağlanılamadı. 'ollama serve' açık mı?", "thought": "Hata oluştu."})
             return iter([msg]) if stream else msg
         except Exception as exc:
             logger.error("Ollama hata: %s", exc)
-            msg = f"[HATA] Ollama: {exc}"
+            msg = json.dumps({"tool": "final_answer", "argument": f"[HATA] Ollama: {exc}", "thought": "Hata oluştu."})
             return iter([msg]) if stream else msg
 
     def _stream_ollama_response(self, url: str, payload: dict) -> Iterator[str]:
@@ -104,7 +107,7 @@ class LLMClient:
                         except json.JSONDecodeError:
                             continue
         except Exception as exc:
-            yield f"\n[HATA] Akış kesildi: {exc}"
+            yield json.dumps({"tool": "final_answer", "argument": f"\n[HATA] Akış kesildi: {exc}", "thought": "Hata"})
 
     # ─────────────────────────────────────────────
     #  GEMINI
@@ -119,11 +122,11 @@ class LLMClient:
         try:
             import google.generativeai as genai
         except ImportError:
-            msg = "[HATA] 'google-generativeai' kurulu değil."
+            msg = json.dumps({"tool": "final_answer", "argument": "[HATA] 'google-generativeai' kurulu değil.", "thought": "Paket eksik"})
             return iter([msg]) if stream else msg
 
         if not self.config.GEMINI_API_KEY:
-            msg = "[HATA] GEMINI_API_KEY ayarlanmamış."
+            msg = json.dumps({"tool": "final_answer", "argument": "[HATA] GEMINI_API_KEY ayarlanmamış.", "thought": "Key eksik"})
             return iter([msg]) if stream else msg
 
         genai.configure(api_key=self.config.GEMINI_API_KEY)
@@ -137,10 +140,14 @@ class LLMClient:
             else:
                 chat_messages.append(m)
 
+        # JSON Modunu Zorla
         model = genai.GenerativeModel(
             model_name=self.config.GEMINI_MODEL,
             system_instruction=system_text or None,
-            generation_config={"temperature": temperature},
+            generation_config={
+                "temperature": temperature,
+                "response_mime_type": "application/json"  # <-- YENİ: Gemini JSON modu
+            },
         )
 
         # Gemini history formatı
@@ -172,7 +179,7 @@ class LLMClient:
 
         except Exception as exc:
             logger.error("Gemini hata: %s", exc)
-            msg = f"[HATA] Gemini: {exc}"
+            msg = json.dumps({"tool": "final_answer", "argument": f"[HATA] Gemini: {exc}", "thought": "Hata"})
             return iter([msg]) if stream else msg
 
     def _stream_gemini_generator(self, response_stream) -> Iterator[str]:
@@ -182,7 +189,7 @@ class LLMClient:
                 if chunk.text:
                     yield chunk.text
         except Exception as exc:
-            yield f"\n[HATA] Gemini akış hatası: {exc}"
+            yield json.dumps({"tool": "final_answer", "argument": f"\n[HATA] Gemini akış hatası: {exc}", "thought": "Hata"})
 
     # ─────────────────────────────────────────────
     #  YARDIMCILAR
