@@ -32,13 +32,15 @@ dependencies:
       # ── GitHub Entegrasyonu ───────────────────
       - PyGithub>=2.1.0
 
-      # ── Web Arama (Yeni) ──────────────────────
-      # DuckDuckGo — API key gerektirmez
+      # ── Web Arama ─────────────────────────────
       - duckduckgo-search>=6.1.0
 
-      # ── RAG — Belge Deposu (Yeni) ─────────────
-      # BM25 arama motoru; kurulu değilse keyword search devreye girer
+      # ── RAG (Vektör & BM25) ───────────────────
       - rank-bm25>=0.2.2
+      # ChromaDB ve bağımlılıkları (Hafif vektör DB)
+      - chromadb>=0.4.0
+      # Vektör embed işlemleri için
+      - sentence-transformers>=2.2.0
 
       # ── Geliştirme & Test ─────────────────────
       - pytest>=7.4.0
