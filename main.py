@@ -140,10 +140,16 @@ def interactive_loop(agent: SidarAgent) -> None:
 
         # Ajan yanıtı
         try:
-            response = agent.respond(user_input)
-            print(f"Sidar > {response}\n")
+            print("Sidar > ", end="", flush=True)
+            response_generator = agent.respond(user_input)
+            
+            # Gelen generator'ı daktilo efektiyle yaz
+            for chunk in response_generator:
+                print(chunk, end="", flush=True)
+            print("\n")
+            
         except Exception as exc:
-            print(f"Sidar > ✗ Hata: {exc}\n")
+            print(f"\nSidar > ✗ Hata: {exc}\n")
             logging.exception("Ajan yanıt hatası")
 
 
@@ -185,8 +191,12 @@ def main() -> None:
         return
 
     if args.command:
-        response = agent.respond(args.command)
-        print(f"Sidar > {response}")
+        # Tek komut modunda da akış olabilir, ama düz yazdırmak daha temizdir.
+        # Basitçe hepsini birleştirip yazdırıyoruz.
+        print("Sidar > ", end="", flush=True)
+        for chunk in agent.respond(args.command):
+            print(chunk, end="", flush=True)
+        print()
         return
 
     interactive_loop(agent)

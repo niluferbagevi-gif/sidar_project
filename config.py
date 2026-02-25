@@ -15,8 +15,11 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 TEMP_DIR = BASE_DIR / "temp"
 LOGS_DIR = BASE_DIR / "logs"
+DATA_DIR = BASE_DIR / "data"  # Veri klasörü eklendi
+
 TEMP_DIR.mkdir(exist_ok=True)
 LOGS_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 
 class Config:
@@ -37,16 +40,13 @@ class Config:
     # ─────────────────────────────────────────────
     #  ERİŞİM SEVİYESİ (OpenClaw Sistemi)
     # ─────────────────────────────────────────────
-    # restricted : Salt okunur, denetim ve analiz; yazma işlemi yok
-    # sandbox    : Serbest okuma; yalnızca /temp dizinine yazma (varsayılan güvenli mod)
-    # full       : Terminal komutları dahil tam erişim
     ACCESS_LEVEL: str = os.getenv("ACCESS_LEVEL", "sandbox")
 
     # ─────────────────────────────────────────────
     #  GITHUB
     # ─────────────────────────────────────────────
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
-    GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")          # örn: "kullanici/repo"
+    GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")
 
     # ─────────────────────────────────────────────
     #  DONANIM
@@ -58,35 +58,38 @@ class Config:
     # ─────────────────────────────────────────────
     MAX_MEMORY_TURNS: int = int(os.getenv("MAX_MEMORY_TURNS", "20"))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    RESPONSE_LANGUAGE: str = os.getenv("RESPONSE_LANGUAGE", "tr")  # "tr" | "en"
+    RESPONSE_LANGUAGE: str = os.getenv("RESPONSE_LANGUAGE", "tr")
 
     # ─────────────────────────────────────────────
-    #  DIZINLER
+    #  DOSYA YOLLARI
     # ─────────────────────────────────────────────
     BASE_DIR: Path = BASE_DIR
     TEMP_DIR: Path = TEMP_DIR
     LOGS_DIR: Path = LOGS_DIR
+    
+    # Kalıcı bellek dosyası
+    MEMORY_FILE: Path = DATA_DIR / "memory.json"
 
     # ─────────────────────────────────────────────
     #  ReAct DÖNGÜSÜ
     # ─────────────────────────────────────────────
     MAX_REACT_STEPS: int = int(os.getenv("MAX_REACT_STEPS", "10"))
-    REACT_TIMEOUT: int = int(os.getenv("REACT_TIMEOUT", "60"))   # saniye
+    REACT_TIMEOUT: int = int(os.getenv("REACT_TIMEOUT", "60"))
 
     # ─────────────────────────────────────────────
     #  WEB ARAMA
     # ─────────────────────────────────────────────
     WEB_SEARCH_MAX_RESULTS: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
-    WEB_FETCH_TIMEOUT: int = int(os.getenv("WEB_FETCH_TIMEOUT", "15"))    # saniye
+    WEB_FETCH_TIMEOUT: int = int(os.getenv("WEB_FETCH_TIMEOUT", "15"))
     WEB_FETCH_MAX_CHARS: int = int(os.getenv("WEB_FETCH_MAX_CHARS", "4000"))
 
     # ─────────────────────────────────────────────
     #  PAKET BİLGİ
     # ─────────────────────────────────────────────
-    PACKAGE_INFO_TIMEOUT: int = int(os.getenv("PACKAGE_INFO_TIMEOUT", "12"))  # saniye
+    PACKAGE_INFO_TIMEOUT: int = int(os.getenv("PACKAGE_INFO_TIMEOUT", "12"))
 
     # ─────────────────────────────────────────────
     #  RAG — Belge Deposu
     # ─────────────────────────────────────────────
     RAG_DIR: Path = BASE_DIR / os.getenv("RAG_DIR", "data/rag")
-    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))   # arama sonucu sayısı
+    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))

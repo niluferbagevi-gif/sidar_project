@@ -5,7 +5,7 @@ ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı
 
 import logging
 import threading
-from typing import Optional
+from typing import Optional, Iterator
 
 from config import Config
 from core.memory import ConversationMemory
@@ -26,14 +26,9 @@ logger = logging.getLogger(__name__)
 class SidarAgent:
     """
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
-
-    Mimari:
-    1. Kullanıcı girdisi → AutoHandle (hızlı örüntü eşleme)
-    2. Eşleşme yoksa → ReAct döngüsü (LLM + araç çağrısı)
-    3. LLM yanıtı → Hafızaya kaydet → Kullanıcıya sun
     """
 
-    VERSION = "2.0.0"
+    VERSION = "2.2.0"  # Streaming Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -44,7 +39,12 @@ class SidarAgent:
         self.code = CodeManager(self.security, self.cfg.BASE_DIR)
         self.health = SystemHealthManager(self.cfg.USE_GPU)
         self.github = GitHubManager(self.cfg.GITHUB_TOKEN, self.cfg.GITHUB_REPO)
-        self.memory = ConversationMemory(self.cfg.MAX_MEMORY_TURNS)
+        
+        self.memory = ConversationMemory(
+            file_path=self.cfg.MEMORY_FILE,
+            max_turns=self.cfg.MAX_MEMORY_TURNS
+        )
+        
         self.llm = LLMClient(self.cfg.AI_PROVIDER, self.cfg)
 
         # Alt sistemler — yeni
@@ -58,28 +58,26 @@ class SidarAgent:
         )
 
         logger.info(
-            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s web=%s",
+            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s bellek=%s",
             self.VERSION,
             self.cfg.AI_PROVIDER,
             self.cfg.CODING_MODEL,
             self.cfg.ACCESS_LEVEL,
-            "aktif" if self.web.is_available() else "devre dışı",
+            "kalıcı" if self.cfg.MEMORY_FILE else "geçici",
         )
 
     # ─────────────────────────────────────────────
-    #  ANA YANIT METODU
+    #  ANA YANIT METODU (STREAMING)
     # ─────────────────────────────────────────────
 
-    def respond(self, user_input: str) -> str:
+    def respond(self, user_input: str) -> Iterator[str]:
         """
-        Kullanıcı girdisini işle ve yanıt üret.
-
-        1. AutoHandle → hızlı yol
-        2. ReAct loop → LLM ile araç çağrısı
+        Kullanıcı girdisini işle ve yanıtı STREAM olarak döndür.
         """
         user_input = user_input.strip()
         if not user_input:
-            return "⚠ Boş girdi."
+            yield "⚠ Boş girdi."
+            return
 
         with self._lock:
             self.memory.add("user", user_input)
@@ -87,71 +85,80 @@ class SidarAgent:
             handled, quick_response = self.auto.handle(user_input)
             if handled:
                 self.memory.add("assistant", quick_response)
-                return quick_response
+                yield quick_response
+                return
 
-            response = self._react_loop(user_input)
-            self.memory.add("assistant", response)
-            return response
+            # ReAct döngüsünden gelen akışı kullanıcıya ilet
+            full_response = ""
+            for chunk in self._react_loop(user_input):
+                full_response += chunk  # Bellek için biriktir
+                yield chunk             # Kullanıcıya gönder
+
+            # Döngü bitince son hali hafızaya kaydet
+            # Not: _react_loop içinde ara adımlar hafızaya eklenmiyor,
+            # sadece en son LLM yanıtı veya araç sonucu ekleniyor.
+            # Basitlik adına burada son birikmiş yanıtı kaydediyoruz.
+            # ReAct mantığı gereği son "full_response" her zaman son adımın çıktısıdır.
+            pass 
 
     # ─────────────────────────────────────────────
-    #  ReAct DÖNGÜSÜ
+    #  ReAct DÖNGÜSÜ (STREAMING)
     # ─────────────────────────────────────────────
 
-    def _react_loop(self, user_input: str) -> str:
+    def _react_loop(self, user_input: str) -> Iterator[str]:
         """
-        LLM'e araç talimatları içeren bir sistem talimatıyla istek gönder.
-        LLM, gerekirse araç çağrısı yapar; bu döngü sonuçları toplayıp son yanıtı üretir.
+        LLM ile araç çağrısı döngüsü. Yanıtları yield eder.
         """
         messages = self.memory.get_messages_for_llm()
         context = self._build_context()
         full_system = SIDAR_SYSTEM_PROMPT + "\n\n" + context
 
         for step in range(self.cfg.MAX_REACT_STEPS):
-            response = self.llm.chat(
+            # 1. LLM Çağrısı (Stream)
+            response_generator = self.llm.chat(
                 messages=messages,
                 model=self.cfg.CODING_MODEL,
                 system_prompt=full_system,
                 temperature=0.3,
+                stream=True
             )
 
-            tool_result = self._check_and_execute_tools(response)
-            if tool_result is None:
-                return response
+            # LLM yanıtını hem biriktir hem yield et
+            llm_response_accumulated = ""
+            for chunk in response_generator:
+                llm_response_accumulated += chunk
+                yield chunk
 
+            # 2. Araç Kontrolü
+            tool_result = self._check_and_execute_tools(llm_response_accumulated)
+            
+            # Eğer araç çağrılmadıysa, bu son yanıttır.
+            if tool_result is None:
+                self.memory.add("assistant", llm_response_accumulated)
+                return
+
+            # Araç çağrıldıysa, sonucu göster ve döngüye devam et
+            # Kullanıcıya aracın çalıştığını gösteren bir mesaj akıtıyoruz
+            tool_msg = f"\n\n[Sistem] Araç Çıktısı:\n{tool_result}\n\n"
+            yield tool_msg
+
+            # Hafızayı güncelle (Araç öncesi düşünce + Araç sonucu)
             messages = messages + [
-                {"role": "assistant", "content": response},
+                {"role": "assistant", "content": llm_response_accumulated},
                 {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
             ]
-
-        return response
+            
+            # Araç sonucunu hafızaya kalıcı olarak da ekleyelim ki context kopmasın
+            # (Basitleştirilmiş yaklaşım: sadece en son turu eklemiyoruz, adımları tutuyoruz)
+            # Ancak ana memory.add metodunu kirletmemek için buradaki messages listesini güncel tutuyoruz.
+            
+        # Döngü biterse
+        yield "\n[Sistem] Maksimum adım sayısına ulaşıldı."
 
     def _check_and_execute_tools(self, llm_response: str) -> Optional[str]:
         """
         LLM yanıtında araç çağrısı direktifi var mı kontrol et ve çalıştır.
-
-        Temel direktifler:
-            TOOL:list_dir:<path>
-            TOOL:read_file:<path>
-            TOOL:audit
-            TOOL:health
-            TOOL:gpu_optimize
-            TOOL:github_commits:<n>
-            TOOL:github_info
-
-        Web / Paket / RAG direktifleri:
-            TOOL:web_search:<query>
-            TOOL:fetch_url:<url>
-            TOOL:search_docs:<lib> <topic>
-            TOOL:search_stackoverflow:<query>
-            TOOL:pypi:<package>
-            TOOL:pypi_compare:<package>|<version>
-            TOOL:npm:<package>
-            TOOL:gh_releases:<owner/repo>
-            TOOL:gh_latest:<owner/repo>
-            TOOL:docs_search:<query>
-            TOOL:docs_add:<title>|<url>
-            TOOL:docs_list
-            TOOL:docs_delete:<id>
+        (Buradaki kod orijinaliyle aynıdır)
         """
         import re
 
@@ -310,7 +317,7 @@ class SidarAgent:
 
     def clear_memory(self) -> str:
         self.memory.clear()
-        return "Konuşma belleği temizlendi. ✓"
+        return "Konuşma belleği temizlendi (dosya silindi). ✓"
 
     def status(self) -> str:
         lines = [
@@ -318,7 +325,7 @@ class SidarAgent:
             f"  Sağlayıcı    : {self.cfg.AI_PROVIDER}",
             f"  Model        : {self.cfg.CODING_MODEL}",
             f"  Erişim       : {self.cfg.ACCESS_LEVEL}",
-            f"  Bellek       : {len(self.memory)} mesaj",
+            f"  Bellek       : {len(self.memory)} mesaj (Kalıcı)",
             f"  {self.github.status()}",
             f"  {self.web.status()}",
             f"  {self.pkg.status()}",

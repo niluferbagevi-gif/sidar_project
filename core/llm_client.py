@@ -6,7 +6,7 @@ Ollama ve Google Gemini API entegrasyonu.
 import json
 import logging
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Iterator, Union
 
 logger = logging.getLogger(__name__)
 
@@ -32,26 +32,21 @@ class LLMClient:
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         temperature: float = 0.3,
-    ) -> str:
+        stream: bool = False,
+    ) -> Union[str, Iterator[str]]:
         """
         Sohbet tamamlama isteği gönder.
 
         Args:
-            messages      : [{"role": "user", "content": "..."}, ...]
-            model         : None ise Config.CODING_MODEL kullanılır
-            system_prompt : Varsa başa eklenir
-            temperature   : Yanıt yaratıcılığı (0-1)
-
-        Returns:
-            LLM yanıtı (str)
+            stream: True ise yanıt parça parça (Iterator) döner.
         """
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + list(messages)
 
         if self.provider == "ollama":
-            return self._ollama_chat(messages, model or self.config.CODING_MODEL, temperature)
+            return self._ollama_chat(messages, model or self.config.CODING_MODEL, temperature, stream)
         elif self.provider == "gemini":
-            return self._gemini_chat(messages, temperature)
+            return self._gemini_chat(messages, temperature, stream)
         else:
             raise ValueError(f"Bilinmeyen AI sağlayıcısı: {self.provider}")
 
@@ -64,25 +59,52 @@ class LLMClient:
         messages: List[Dict[str, str]],
         model: str,
         temperature: float,
-    ) -> str:
+        stream: bool
+    ) -> Union[str, Iterator[str]]:
         url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/chat"
         payload = {
             "model": model,
             "messages": messages,
-            "stream": False,
+            "stream": stream,
             "options": {"temperature": temperature},
         }
+        
         try:
+            # STREAM MODU
+            if stream:
+                return self._stream_ollama_response(url, payload)
+            
+            # NORMAL MOD
             resp = requests.post(url, json=payload, timeout=120)
             resp.raise_for_status()
             data = resp.json()
             return data.get("message", {}).get("content", "")
+
         except requests.exceptions.ConnectionError:
-            logger.error("Ollama bağlantı hatası. Ollama çalışıyor mu?")
-            return "[HATA] Ollama'ya bağlanılamadı. 'ollama serve' komutunu çalıştırın."
+            logger.error("Ollama bağlantı hatası.")
+            msg = "[HATA] Ollama'ya bağlanılamadı. 'ollama serve' açık mı?"
+            return iter([msg]) if stream else msg
         except Exception as exc:
             logger.error("Ollama hata: %s", exc)
-            return f"[HATA] Ollama: {exc}"
+            msg = f"[HATA] Ollama: {exc}"
+            return iter([msg]) if stream else msg
+
+    def _stream_ollama_response(self, url: str, payload: dict) -> Iterator[str]:
+        """Ollama stream yanıtını parçalar halinde yield eder."""
+        try:
+            with requests.post(url, json=payload, stream=True, timeout=120) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if line:
+                        try:
+                            body = json.loads(line)
+                            chunk = body.get("message", {}).get("content", "")
+                            if chunk:
+                                yield chunk
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as exc:
+            yield f"\n[HATA] Akış kesildi: {exc}"
 
     # ─────────────────────────────────────────────
     #  GEMINI
@@ -92,14 +114,17 @@ class LLMClient:
         self,
         messages: List[Dict[str, str]],
         temperature: float,
-    ) -> str:
+        stream: bool
+    ) -> Union[str, Iterator[str]]:
         try:
-            import google.generativeai as genai  # type: ignore
+            import google.generativeai as genai
         except ImportError:
-            return "[HATA] 'google-generativeai' paketi kurulu değil. pip install google-generativeai"
+            msg = "[HATA] 'google-generativeai' kurulu değil."
+            return iter([msg]) if stream else msg
 
         if not self.config.GEMINI_API_KEY:
-            return "[HATA] GEMINI_API_KEY ayarlanmamış."
+            msg = "[HATA] GEMINI_API_KEY ayarlanmamış."
+            return iter([msg]) if stream else msg
 
         genai.configure(api_key=self.config.GEMINI_API_KEY)
 
@@ -118,7 +143,7 @@ class LLMClient:
             generation_config={"temperature": temperature},
         )
 
-        # Mesajları Gemini formatına dönüştür
+        # Gemini history formatı
         history = []
         last_user = None
         for m in chat_messages:
@@ -132,21 +157,38 @@ class LLMClient:
 
         if not last_user and chat_messages:
             last_user = chat_messages[-1]["content"]
+        
+        prompt = last_user or "Merhaba"
 
         try:
             chat_session = model.start_chat(history=history[:-1] if history else [])
-            response = chat_session.send_message(last_user or "Merhaba")
-            return response.text
+            
+            if stream:
+                response_stream = chat_session.send_message(prompt, stream=True)
+                return self._stream_gemini_generator(response_stream)
+            else:
+                response = chat_session.send_message(prompt)
+                return response.text
+
         except Exception as exc:
             logger.error("Gemini hata: %s", exc)
-            return f"[HATA] Gemini: {exc}"
+            msg = f"[HATA] Gemini: {exc}"
+            return iter([msg]) if stream else msg
+
+    def _stream_gemini_generator(self, response_stream) -> Iterator[str]:
+        """Gemini stream yanıtını dönüştürür."""
+        try:
+            for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as exc:
+            yield f"\n[HATA] Gemini akış hatası: {exc}"
 
     # ─────────────────────────────────────────────
     #  YARDIMCILAR
     # ─────────────────────────────────────────────
 
     def list_ollama_models(self) -> List[str]:
-        """Mevcut Ollama modellerini listele."""
         url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/tags"
         try:
             resp = requests.get(url, timeout=10)
@@ -157,7 +199,6 @@ class LLMClient:
             return []
 
     def is_ollama_available(self) -> bool:
-        """Ollama sunucusunun çalışıp çalışmadığını kontrol et."""
         try:
             url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/tags"
             requests.get(url, timeout=5)
