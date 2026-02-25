@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  sidar-ai:
+    build: .
+    container_name: sidar_agent
+    restart: unless-stopped
+    
+    # Kaynak sınırlamaları (İsteğe bağlı - Güvenlik için)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    
+    # Ortam değişkenleri
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      # BURASI ÖNEMLİ: Docker içindeyken URL'i otomatik değiştiriyoruz.
+      - OLLAMA_URL=http://host.docker.internal:11434/api
+      # Host makinedeki Ollama'ya erişmek için "host.docker.internal" kullanılır.
+      # Linux kullanıcıları için "network_mode: host" gerekebilir.
+      
+    # Dosya sistemi eşlemeleri (Kalıcılık için)
+    volumes:
+      - ./data:/app/data         # Bellek ve RAG veritabanı
+      - ./logs:/app/logs         # Log dosyaları
+      - ./temp:/app/temp         # Geçici çalışma alanı
+      - ./.env:/app/.env         # Gizli anahtarlar
+      
+    # Ağ ayarları
+    # Linux kullanıyorsanız, yerel Ollama'ya erişmek için aşağıdaki satırı açın:
+    # network_mode: "host"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Etkileşimli mod için (Terminal girişini aktif eder)
+    stdin_open: true
+    tty: true
