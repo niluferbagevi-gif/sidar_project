@@ -1,44 +1,13 @@
 
-3. Geliştirilmesi Gereken Alanlar (Öneriler)
-Kod tabanını inceledikten sonra projenin kararlılığını ve yeteneklerini artırmak için aşağıdaki geliştirmeleri öneriyorum:
+B. Özellik Eklentileri
+Diff/Patch Mekanizması (Dosya Düzenleme):
 
-🚀 Kritik Geliştirmeler
-1. Kalıcı Bellek (Persistent Memory)
+Tespit: CodeManager dosyayı tamamen yeniden yazıyor (write_file). 500 satırlık bir dosyada tek satır değiştirmek için tüm dosyayı tekrar yazmak token israfıdır ve hata riskini artırır.
 
-Mevcut Durum: Bellek ConversationMemory sınıfında bir listede tutuluyor.
+Öneri: Ajanın sadece değişen satırları (Unified Diff formatında) belirttiği bir apply_patch aracı eklenmelidir.
 
-Öneri: Konuşma geçmişini yerel bir veritabanına (SQLite) veya JSON dosyasına kaydeden bir yapı kurulmalı. Böylece main.py yeniden başlatıldığında önceki bağlam (context) geri yüklenebilir.
+Sandbox Kod Çalıştırma (Code Execution):
 
-2. Akış (Streaming) Desteği
+Tespit: Şu an kod çalıştırılamıyor, sadece okunup yazılıyor. security.py içinde terminal yetkisi var ama güvenli kod çalıştırma (repl) yok.
 
-Mevcut Durum: core/llm_client.py request atıp tam yanıtı bekliyor.
-
-Öneri: Kullanıcı deneyimini iyileştirmek için stream=True parametresi eklenmeli ve yanıtlar kelime kelime ekrana yazdırılmalıdır (daktilo efekti). Ollama ve Gemini API'leri bunu destekler.
-
-3. Gelişmiş RAG (Vektör Tabanlı Arama)
-
-Mevcut Durum: rank_bm25 kullanılıyor. Bu, anahtar kelime eşleşmesine dayalıdır.
-
-Öneri: ChromaDB veya FAISS gibi hafif bir vektör veritabanı entegre edilerek "anlamsal arama" (semantic search) yeteneği kazandırılabilir. Bu sayede "hata ayıklama ile ilgili notlar" dendiğinde içinde "debug" kelimesi geçmese bile ilgili dökümanlar bulunabilir.
-
-🛠 Mimari ve Kod İyileştirmeleri
-4. Docker ile Tam İzolasyon
-
-Mevcut Durum: SecurityManager sadece dosya yolu kontrolü yapıyor.
-
-Öneri: Kod çalıştırma (code execution) yetenekleri eklenecekse, projenin bir Docker konteyneri içinde çalıştırılması güvenlik açısından en doğrusudur. AutoHandle içindeki kod çalıştırma riskleri böylece izole edilir.
-
-5. Yapılandırılmış Çıktı (Structured Output)
-
-Mevcut Durum: Ajan, TOOL:command:arg formatında string (metin) üreterek araç çağırıyor.
-
-Öneri: Modellerin (özellikle Gemini ve yeni Ollama modellerinin) "Function Calling" veya JSON modlarını kullanmak, araç çağırma hatalarını (hallucination) azaltacaktır. Regex ile parse etmek yerine yapısal JSON çıktısı tercih edilmelidir.
-
-6. Çoklu Dosya Düzenleme (Diff/Patch)
-
-Mevcut Durum: CodeManager dosyayı tamamen yeniden yazar.
-
-Öneri: Büyük dosyalar için sadece değişen satırları uygulayan (unified diff formatı gibi) bir patch mekanizması eklenmelidir. Bu, token tasarrufu sağlar ve hata riskini azaltır.
-
-🧪 Test ve Kalite
-Entegrasyon Testleri: tests/test_sidar.py şu an birim testlerine odaklanmış. Gerçek bir Ollama sunucusu veya mock (taklit) edilmiş LLM yanıtları ile tam bir senaryo testi (End-to-End) eklenmelidir.
+Öneri: Docker içinde ayrı bir, izole edilmiş Python REPL (Read-Eval-Print Loop) oturumu başlatılarak, ajanın yazdığı kodu test etmesine izin verilebilir.
