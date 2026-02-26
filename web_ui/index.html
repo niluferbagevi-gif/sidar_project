@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SİDAR — Yazılım Mühendisi AI</title>
+
+  <!-- Highlight.js — kod blokları renklendirme -->
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <!-- Marked.js — Markdown render -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+
+  <style>
+    /* ── Reset & Kök değişkenler ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --bg2:       #161b22;
+      --bg3:       #21262d;
+      --border:    #30363d;
+      --text:      #c9d1d9;
+      --text-dim:  #8b949e;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --red:       #f85149;
+      --yellow:    #e3b341;
+      --user-bg:   #1c2d3e;
+      --sidar-bg:  #161b22;
+      --radius:    8px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    /* ── Ana düzen ─────────────────────────────────────────── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Başlık (Header) ───────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 13px;
+      color: #fff;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+    }
+
+    .logo-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+    .logo-sub  { font-size: 11px; color: var(--text-dim); }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    .btn {
+      padding: 6px 13px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text-dim);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color .15s, color .15s;
+      white-space: nowrap;
+    }
+    .btn:hover           { border-color: var(--accent); color: var(--accent); }
+    .btn-danger:hover    { border-color: var(--red);    color: var(--red);    }
+
+    /* ── Mesaj alanı ───────────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0 16px;
+      scroll-behavior: smooth;
+    }
+    #messages::-webkit-scrollbar       { width: 5px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Mesaj balonu ──────────────────────────────────────── */
+    .message {
+      padding: 14px 20px;
+      animation: fadeIn .18s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    .message-user  { background: var(--user-bg);  border-left: 3px solid var(--accent); }
+    .message-sidar { background: var(--sidar-bg); border-left: 3px solid var(--green);  }
+
+    .msg-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .badge-user  { color: var(--accent); }
+    .badge-sidar { color: var(--green);  }
+
+    /* Mesaj içeriği (Markdown render sonrası) */
+    .msg-body { color: var(--text); word-break: break-word; }
+
+    .msg-body p              { margin-bottom: 10px; }
+    .msg-body p:last-child   { margin-bottom: 0; }
+    .msg-body h1, .msg-body h2, .msg-body h3 { margin: 14px 0 6px; color: var(--text); }
+    .msg-body ul, .msg-body ol { padding-left: 22px; margin: 6px 0; }
+    .msg-body li             { margin: 3px 0; }
+    .msg-body a              { color: var(--accent); text-decoration: none; }
+    .msg-body a:hover        { text-decoration: underline; }
+
+    .msg-body blockquote {
+      border-left: 3px solid var(--border);
+      padding-left: 12px;
+      color: var(--text-dim);
+      margin: 8px 0;
+    }
+
+    /* İnline kod */
+    .msg-body :not(pre) > code {
+      background: var(--bg3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 13px;
+      color: #e6edf3;
+    }
+
+    /* Kod bloğu */
+    .msg-body pre {
+      background: var(--bg3) !important;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    .msg-body pre code {
+      background: transparent !important;
+      padding: 0;
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    /* Tablo */
+    .msg-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0;
+      font-size: 13px;
+    }
+    .msg-body th, .msg-body td {
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      text-align: left;
+    }
+    .msg-body th { background: var(--bg3); color: var(--text-dim); }
+
+    /* Sistem çıktı satırları (araç sonuçları vb.) */
+    .msg-body .sys-line {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      margin: 6px 0;
+    }
+
+    /* Streaming sırasında ham metin gösterimi */
+    .streaming-text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+    }
+
+    /* Yanıp sönen imleç */
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--green);
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Karşılama ekranı ──────────────────────────────────── */
+    #welcome {
+      text-align: center;
+      padding: 56px 20px 40px;
+      color: var(--text-dim);
+    }
+
+    .welcome-logo {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: 5px;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .welcome-sub {
+      font-size: 15px;
+      color: var(--text-dim);
+      margin-bottom: 36px;
+    }
+
+    .quick-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-width: 580px;
+      margin: 0 auto;
+    }
+
+    .quick-btn {
+      padding: 8px 14px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-dim);
+      transition: border-color .15s, color .15s;
+    }
+    .quick-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Alt çubuk (input) ─────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 14px 20px 16px;
+      flex-shrink: 0;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #input-area {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      resize: none;
+      min-height: 44px;
+      max-height: 200px;
+      overflow-y: auto;
+      outline: none;
+      line-height: 1.5;
+      transition: border-color .15s;
+    }
+    #input-area:focus       { border-color: var(--accent); }
+    #input-area::placeholder { color: var(--text-dim); }
+
+    #send-btn {
+      padding: 10px 22px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      white-space: nowrap;
+      height: 44px;
+      transition: opacity .15s;
+    }
+    #send-btn:hover    { opacity: .85; }
+    #send-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    .input-hint {
+      margin-top: 7px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── Durum Modalı ──────────────────────────────────────── */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+
+    .modal-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 460px;
+      width: 92%;
+    }
+    .modal-box h3 { font-size: 15px; margin-bottom: 14px; }
+
+    .stat-grid { display: grid; gap: 6px; }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 12px;
+      background: var(--bg3);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .stat-label { color: var(--text-dim); }
+    .stat-val   { color: var(--text); font-weight: 500; }
+    .ok   { color: var(--green); }
+    .warn { color: var(--yellow); }
+
+    .modal-close { margin-top: 14px; width: 100%; }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 560px) {
+      .header-actions .btn:first-child { display: none; }
+      .welcome-logo { font-size: 32px; }
+      #welcome { padding: 36px 16px 28px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">SI</div>
+      <div>
+        <div class="logo-name">SİDAR</div>
+        <div class="logo-sub">Yazılım Mimarı &amp; Baş Mühendis AI</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" onclick="openStatus()">⚡ Durum</button>
+      <button class="btn btn-danger" onclick="clearMemory()">🗑 Belleği Temizle</button>
+    </div>
+  </header>
+
+  <!-- ── Mesaj alanı ── -->
+  <div id="messages">
+    <div id="welcome">
+      <div class="welcome-logo">SİDAR</div>
+      <div class="welcome-sub">Yazılım Mimarı &amp; Baş Mühendis AI — sormak için yaz</div>
+      <div class="quick-grid">
+        <button class="quick-btn" onclick="sendQuick('Proje dizinini listele')">📁 Dizini Listele</button>
+        <button class="quick-btn" onclick="sendQuick('Sistem sağlık raporu ver')">💻 Sistem Sağlığı</button>
+        <button class="quick-btn" onclick="sendQuick('Projeyi denetle ve hataları raporla')">🔍 Proje Denetimi</button>
+        <button class="quick-btn" onclick="sendQuick('Son 10 commit\'i listele')">📝 Son Commitler</button>
+        <button class="quick-btn" onclick="sendQuick('web\'de ara: Python async best practices 2024')">🌐 Web Araması</button>
+        <button class="quick-btn" onclick="sendQuick('pypi: fastapi')">📦 PyPI Bilgisi</button>
+        <button class="quick-btn" onclick="sendQuick('Erişim seviyesi ve güvenlik durumunu göster')">🔒 Güvenlik Durumu</button>
+        <button class="quick-btn" onclick="sendQuick('Belge deposunu listele')">📚 RAG Belgeler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Input alanı ── -->
+  <footer>
+    <div class="input-row">
+      <textarea
+        id="input-area"
+        placeholder="Sidar'a bir şey sor... (Enter: gönder, Shift+Enter: yeni satır)"
+        rows="1"
+      ></textarea>
+      <button id="send-btn" onclick="sendMessage()">Gönder</button>
+    </div>
+    <div class="input-hint">Enter ile gönder &nbsp;·&nbsp; Shift+Enter ile yeni satır</div>
+  </footer>
+
+</div><!-- .app -->
+
+<!-- ── Durum Modalı ── -->
+<div class="modal-bg" id="status-modal" onclick="modalBgClick(event)">
+  <div class="modal-box">
+    <h3>⚡ Sistem Durumu</h3>
+    <div class="stat-grid" id="stat-grid">
+      <div class="stat-row"><span class="stat-label">Yükleniyor…</span></div>
+    </div>
+    <button class="btn modal-close" onclick="closeStatus()">Kapat</button>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════
+   Marked.js yapılandırması
+   ════════════════════════════════════════════ */
+marked.setOptions({ breaks: true, gfm: true });
+
+/* ════════════════════════════════════════════
+   Global durum
+   ════════════════════════════════════════════ */
+let isStreaming  = false;
+let msgCounter   = 0;
+
+/* ════════════════════════════════════════════
+   Textarea otomatik boyutlandırma
+   ════════════════════════════════════════════ */
+const textarea = document.getElementById('input-area');
+
+textarea.addEventListener('input', () => {
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+});
+
+textarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+/* ════════════════════════════════════════════
+   Karşılama ekranı
+   ════════════════════════════════════════════ */
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function sendQuick(text) {
+  textarea.value = text;
+  sendMessage();
+}
+
+/* ════════════════════════════════════════════
+   Mesaj render yardımcıları
+   ════════════════════════════════════════════ */
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+
+function scrollBottom() {
+  const msgs = document.getElementById('messages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* Kullanıcı mesajı ekle */
+function appendUser(text) {
+  hideWelcome();
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'message message-user';
+  el.innerHTML = `
+    <div class="msg-header"><span class="badge-user">👤 Sen</span></div>
+    <div class="msg-body" style="white-space:pre-wrap">${escHtml(text)}</div>`;
+  msgs.appendChild(el);
+  scrollBottom();
+}
+
+/* Sidar mesajı placeholder oluştur (streaming için) */
+function createSidarMsg() {
+  const msgs = document.getElementById('messages');
+  const id   = `m${++msgCounter}`;
+  const el   = document.createElement('div');
+  el.className = 'message message-sidar';
+  el.id = id;
+  el.innerHTML = `
+    <div class="msg-header"><span class="badge-sidar">⚡ Sidar</span></div>
+    <div class="msg-body">
+      <span class="streaming-text" id="${id}-txt"></span><span class="cursor" id="${id}-cur"></span>
+    </div>`;
+  msgs.appendChild(el);
+  scrollBottom();
+  return id;
+}
+
+/* Streaming sırasında ham metni göster */
+function updateStreaming(id, rawText) {
+  const span = document.getElementById(`${id}-txt`);
+  if (span) span.textContent = rawText;
+  scrollBottom();
+}
+
+/* Streaming bitti → Markdown render et */
+function finalizeMsg(id, rawText) {
+  const el  = document.getElementById(id);
+  if (!el) return;
+
+  const body   = el.querySelector('.msg-body');
+  const cursor = document.getElementById(`${id}-cur`);
+  if (cursor) cursor.remove();
+
+  // Markdown render
+  body.innerHTML = marked.parse(rawText || '*(yanıt alınamadı)*');
+
+  // Syntax highlight
+  body.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+
+  scrollBottom();
+}
+
+/* ════════════════════════════════════════════
+   Mesaj gönderme (SSE streaming)
+   ════════════════════════════════════════════ */
+async function sendMessage() {
+  if (isStreaming) return;
+
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  textarea.value = '';
+  textarea.style.height = 'auto';
+
+  isStreaming = true;
+  document.getElementById('send-btn').disabled = true;
+
+  appendUser(text);
+  const msgId = createSidarMsg();
+
+  let accumulated = '';
+
+  try {
+    const response = await fetch('/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ message: text }),
+    });
+
+    if (!response.ok) {
+      finalizeMsg(msgId, `[HTTP Hatası] ${response.status}`);
+      return;
+    }
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Tamamlanmamış satırı tut
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.done) { break; }
+          if (parsed.chunk) {
+            accumulated += parsed.chunk;
+            updateStreaming(msgId, accumulated);
+          }
+        } catch { /* JSON parse skip */ }
+      }
+    }
+  } catch (err) {
+    accumulated += `\n\n[Bağlantı Hatası] ${err.message}`;
+  } finally {
+    finalizeMsg(msgId, accumulated);
+    isStreaming = false;
+    document.getElementById('send-btn').disabled = false;
+    textarea.focus();
+  }
+}
+
+/* ════════════════════════════════════════════
+   Durum Modalı
+   ════════════════════════════════════════════ */
+async function openStatus() {
+  document.getElementById('status-modal').classList.add('open');
+  const grid = document.getElementById('stat-grid');
+  grid.innerHTML = '<div class="stat-row"><span class="stat-label">Yükleniyor…</span></div>';
+
+  try {
+    const res  = await fetch('/status');
+    const data = await res.json();
+
+    const row = (label, value, cls='') =>
+      `<div class="stat-row">
+        <span class="stat-label">${label}</span>
+        <span class="stat-val ${cls}">${value}</span>
+      </div>`;
+
+    grid.innerHTML = [
+      row('Sürüm',           `v${data.version}`),
+      row('AI Sağlayıcı',   `${data.provider} / ${data.model}`),
+      row('Erişim Seviyesi', data.access_level.toUpperCase()),
+      row('Bellek',          `${data.memory_count} mesaj`),
+      row('GitHub',   data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
+      row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
+      row('RAG',       data.rag_status),
+      row('Paket Bilgi', '✓ PyPI + npm + GitHub', 'ok'),
+    ].join('');
+
+  } catch (err) {
+    grid.innerHTML =
+      `<div class="stat-row"><span class="stat-label">Bağlantı hatası: ${escHtml(err.message)}</span></div>`;
+  }
+}
+
+function closeStatus() {
+  document.getElementById('status-modal').classList.remove('open');
+}
+
+function modalBgClick(e) {
+  if (e.target === document.getElementById('status-modal')) closeStatus();
+}
+
+/* ════════════════════════════════════════════
+   Bellek Temizle
+   ════════════════════════════════════════════ */
+async function clearMemory() {
+  if (!confirm('Konuşma belleği temizlenecek. Devam edilsin mi?')) return;
+
+  try {
+    await fetch('/clear', { method: 'POST' });
+  } catch { /* ignore */ }
+
+  // Mesajları ve karşılama ekranını sıfırla
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = `
+    <div id="welcome">
+      <div class="welcome-logo">SİDAR</div>
+      <div class="welcome-sub">Yazılım Mimarı &amp; Baş Mühendis AI — sormak için yaz</div>
+      <div class="quick-grid">
+        <button class="quick-btn" onclick="sendQuick('Proje dizinini listele')">📁 Dizini Listele</button>
+        <button class="quick-btn" onclick="sendQuick('Sistem sağlık raporu ver')">💻 Sistem Sağlığı</button>
+        <button class="quick-btn" onclick="sendQuick('Projeyi denetle ve hataları raporla')">🔍 Proje Denetimi</button>
+        <button class="quick-btn" onclick="sendQuick('Son 10 commit\\'i listele')">📝 Son Commitler</button>
+        <button class="quick-btn" onclick="sendQuick('web\\'de ara: Python async best practices 2024')">🌐 Web Araması</button>
+        <button class="quick-btn" onclick="sendQuick('pypi: fastapi')">📦 PyPI Bilgisi</button>
+        <button class="quick-btn" onclick="sendQuick('Erişim seviyesi ve güvenlik durumunu göster')">🔒 Güvenlik Durumu</button>
+        <button class="quick-btn" onclick="sendQuick('Belge deposunu listele')">📚 RAG Belgeler</button>
+      </div>
+    </div>`;
+}
+
+/* ── Başlangıç odağı ── */
+textarea.focus();
+</script>
+</body>
+</html>

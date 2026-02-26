@@ -94,3 +94,9 @@ class Config:
     # ─────────────────────────────────────────────
     RAG_DIR: Path = BASE_DIR / os.getenv("RAG_DIR", "data/rag")
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))
+
+    # ─────────────────────────────────────────────
+    #  WEB ARAYÜZÜ
+    # ─────────────────────────────────────────────
+    WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
+    WEB_PORT: int = int(os.getenv("WEB_PORT", "7860"))
