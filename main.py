@@ -76,7 +76,6 @@ Doğrudan Komutlar (serbest metin):
   docs ara: <sorgu>                → Belge deposunda ara
   belge ekle <url>                 → URL'den belge ekle
   stackoverflow: <sorgu>           → Stack Overflow araması
-  stackoverflow: <sorgu>           → Stack Overflow araması
 """
 
 

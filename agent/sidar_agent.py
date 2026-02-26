@@ -7,7 +7,7 @@ import logging
 import threading
 import json
 import re
-from typing import Optional, Iterator, Dict, Any
+from typing import Optional, Iterator, Dict
 
 from config import Config
 from core.memory import ConversationMemory
@@ -132,7 +132,6 @@ class SidarAgent:
                 
                 tool_name = action_data.get("tool")
                 tool_arg = action_data.get("argument", "")
-                thought = action_data.get("thought", "")
 
                 if tool_name == "final_answer":
                     self.memory.add("assistant", tool_arg)

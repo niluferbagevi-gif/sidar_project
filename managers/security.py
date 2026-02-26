@@ -90,7 +90,7 @@ class SecurityManager:
         perms = []
         perms.append("Okuma: ✓")
         perms.append(f"Yazma: {'✓ (tam)' if self.level == FULL else ('✓ (yalnızca /temp)' if self.level == SANDBOX else '✗')}")
-        perms.append(f"Terminal: {'✓' if self.level == FULL else '✗'}")
+        perms.append(f"Kod Çalıştırma: {'✓' if self.level >= SANDBOX else '✗'} | Terminal (Shell): {'✓' if self.level == FULL else '✗'}")
         return (
             f"[OpenClaw] Erişim Seviyesi: {self.level_name.upper()}\n"
             + "\n".join(f"  {p}" for p in perms)
