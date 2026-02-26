@@ -3,6 +3,10 @@ Sidar Project - Ajan Tanımları
 Sidar'ın karakter profili ve sistem talimatı.
 """
 
+# Geriye dönük uyumluluk için anahtar kelimeler
+SIDAR_KEYS = ["sidar", "sidar ai", "asistan", "yardımcı", "mühendis"]
+SIDAR_WAKE_WORDS = ["sidar", "hey sidar", "sidar ai"]
+
 SIDAR_SYSTEM_PROMPT = """Sen SİDAR'sın — Yazılım Mimarı ve Baş Mühendis.
 
 ## KİŞİLİK
