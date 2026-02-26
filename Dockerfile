@@ -48,9 +48,13 @@ RUN useradd -m sidar && \
     chown -R sidar:sidar /app
 USER sidar
 
-# Sağlık kontrolü
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD ps aux | grep "[p]ython main.py" || exit 1
+# Web arayüzü için port aç (python web_server.py ile kullanılır)
+EXPOSE 7860
 
-# Başlatma komutu
+# Sağlık kontrolü (CLI veya web sunucusu çalışıyorsa geçer)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD ps aux | grep "[p]ython" || exit 1
+
+# Varsayılan başlatma komutu (CLI modu)
+# Web arayüzü için: docker run ... python web_server.py
 ENTRYPOINT ["python", "main.py"]

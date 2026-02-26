@@ -33,20 +33,23 @@ class LLMClient:
         system_prompt: Optional[str] = None,
         temperature: float = 0.3,
         stream: bool = False,
+        json_mode: bool = True,
     ) -> Union[str, Iterator[str]]:
         """
         Sohbet tamamlama isteği gönder.
 
         Args:
-            stream: True ise yanıt parça parça (Iterator) döner.
+            stream   : True ise yanıt parça parça (Iterator) döner.
+            json_mode: True ise modeli JSON çıktıya zorlar (ReAct döngüsü için).
+                       Özetleme gibi düz metin gereken çağrılarda False geçin.
         """
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + list(messages)
 
         if self.provider == "ollama":
-            return self._ollama_chat(messages, model or self.config.CODING_MODEL, temperature, stream)
+            return self._ollama_chat(messages, model or self.config.CODING_MODEL, temperature, stream, json_mode)
         elif self.provider == "gemini":
-            return self._gemini_chat(messages, temperature, stream)
+            return self._gemini_chat(messages, temperature, stream, json_mode)
         else:
             raise ValueError(f"Bilinmeyen AI sağlayıcısı: {self.provider}")
 
@@ -59,18 +62,21 @@ class LLMClient:
         messages: List[Dict[str, str]],
         model: str,
         temperature: float,
-        stream: bool
+        stream: bool,
+        json_mode: bool = True,
     ) -> Union[str, Iterator[str]]:
         url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/chat"
-        
-        # JSON Modunu Zorla
+
         payload = {
             "model": model,
             "messages": messages,
             "stream": stream,
-            "format": "json",
             "options": {"temperature": temperature},
         }
+        # JSON modu yalnızca ReAct döngüsü için zorunlu; özetleme gibi
+        # düz metin gereken çağrılarda atlanır.
+        if json_mode:
+            payload["format"] = "json"
         
         timeout = getattr(self.config, "REACT_TIMEOUT", 120)
         try:
@@ -118,7 +124,8 @@ class LLMClient:
         self,
         messages: List[Dict[str, str]],
         temperature: float,
-        stream: bool
+        stream: bool,
+        json_mode: bool = True,
     ) -> Union[str, Iterator[str]]:
         try:
             import google.generativeai as genai
@@ -141,14 +148,14 @@ class LLMClient:
             else:
                 chat_messages.append(m)
 
-        # JSON Modunu Zorla
+        gen_config = {"temperature": temperature}
+        if json_mode:
+            gen_config["response_mime_type"] = "application/json"
+
         model = genai.GenerativeModel(
             model_name=self.config.GEMINI_MODEL,
             system_instruction=system_text or None,
-            generation_config={
-                "temperature": temperature,
-                "response_mime_type": "application/json"
-            },
+            generation_config=gen_config,
         )
 
         # Gemini history formatı

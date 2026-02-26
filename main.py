@@ -176,15 +176,18 @@ def main() -> None:
 
     _setup_logging(args.log)
 
-    # Config override
+    # Config nesnesini oluştur; CLI flag'leri instance attribute olarak
+    # doğrudan override et. os.environ üzerinden override ÇALIŞMAZ çünkü
+    # Config sınıf attribute'ları module import anında bir kez değerlendirilir.
+    cfg = Config()
     if args.level:
-        os.environ["ACCESS_LEVEL"] = args.level
+        cfg.ACCESS_LEVEL = args.level
     if args.provider:
-        os.environ["AI_PROVIDER"] = args.provider
+        cfg.AI_PROVIDER = args.provider
     if args.model:
-        os.environ["CODING_MODEL"] = args.model
+        cfg.CODING_MODEL = args.model
 
-    agent = SidarAgent()
+    agent = SidarAgent(cfg)
 
     if args.status:
         print(agent.status())

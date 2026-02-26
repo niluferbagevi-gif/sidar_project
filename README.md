@@ -202,8 +202,6 @@ Web arayüzü özellikleri:
 
 ### 💻 Terminal (CLI) Modu
 
-### İnteraktif Mod
-
 ```bash
 python main.py
 ```
