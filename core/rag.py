@@ -31,18 +31,19 @@ class DocumentStore:
     CHUNK_SIZE = 1000  # Karakter
     CHUNK_OVERLAP = 200 # Karakter
 
-    def __init__(self, store_dir: Path) -> None:
+    def __init__(self, store_dir: Path, top_k: int = 3) -> None:
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self.index_file = self.store_dir / "index.json"
-        
+        self.default_top_k = top_k
+
         # Meta verileri yükle
         self._index: Dict[str, Dict] = self._load_index()
-        
+
         # Arama motorlarını başlat
         self._bm25_available = self._check_import("rank_bm25")
         self._chroma_available = self._check_import("chromadb")
-        
+
         self.chroma_client = None
         self.collection = None
 
@@ -295,11 +296,14 @@ class DocumentStore:
     #  ARAMA (HİBRİT)
     # ─────────────────────────────────────────────
 
-    def search(self, query: str, top_k: int = 3) -> Tuple[bool, str]:
+    def search(self, query: str, top_k: int = None) -> Tuple[bool, str]:
         """
         Sorguya göre en ilgili belgeleri bul.
         Öncelik: ChromaDB (Vektör) -> BM25 -> Keyword
+        top_k verilmezse __init__'teki default_top_k kullanılır.
         """
+        if top_k is None:
+            top_k = self.default_top_k
         if not self._index:
             return False, (
                 "⚠ Belge deposu boş. "

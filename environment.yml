@@ -18,7 +18,6 @@ dependencies:
       # ── Temel ─────────────────────────────────
       - python-dotenv>=1.0.0
       - requests>=2.31.0
-      - colorama>=0.4.6
 
       # ── Sistem İzleme ─────────────────────────
       - psutil>=5.9.5

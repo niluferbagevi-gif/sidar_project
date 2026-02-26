@@ -52,7 +52,7 @@ class SidarAgent:
         # Alt sistemler — yeni
         self.web = WebSearchManager(self.cfg)
         self.pkg = PackageInfoManager(self.cfg)
-        self.docs = DocumentStore(self.cfg.RAG_DIR)
+        self.docs = DocumentStore(self.cfg.RAG_DIR, top_k=self.cfg.RAG_TOP_K)
 
         self.auto = AutoHandle(
             self.code, self.health, self.github, self.memory,
@@ -74,24 +74,34 @@ class SidarAgent:
     def respond(self, user_input: str) -> Iterator[str]:
         """
         Kullanıcı girdisini işle ve yanıtı STREAM olarak döndür.
+        Lock yalnızca bellek/auto-handle kontrolü için kısa tutulur;
+        generator tüketimi lock dışında gerçekleşir.
         """
         user_input = user_input.strip()
         if not user_input:
             yield "⚠ Boş girdi."
             return
 
+        # Bellek yazma ve hızlı eşleme kilitli bölgede yapılır
         with self._lock:
             self.memory.add("user", user_input)
-
             handled, quick_response = self.auto.handle(user_input)
             if handled:
                 self.memory.add("assistant", quick_response)
-                yield quick_response
-                return
 
-            # ReAct döngüsünden gelen akışı kullanıcıya ilet
-            for chunk in self._react_loop(user_input):
-                yield chunk
+        # Lock serbest bırakıldı — yield ve generator lock dışında
+        if handled:
+            yield quick_response
+            return
+
+        # Bellek eşiği dolmak üzereyse özetleme tetikle
+        if self.memory.needs_summarization():
+            yield "\n[Sistem] Konuşma belleği sıkıştırılıyor...\n"
+            self._summarize_memory()
+
+        # ReAct döngüsünü akıştır
+        for chunk in self._react_loop(user_input):
+            yield chunk
 
     # ─────────────────────────────────────────────
     #  ReAct DÖNGÜSÜ (JSON PARSING)
@@ -155,11 +165,17 @@ class SidarAgent:
                     {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
                 ]
             
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as je:
                 yield "\n\n[Sistem Hatası] Model geçersiz JSON üretti. Tekrar deneniyor...\n"
+                error_feedback = (
+                    f"[Sistem Hatası] Yanıtın geçerli bir JSON değil.\n"
+                    f"Hata: {je.msg} (satır {je.lineno})\n\n"
+                    f"Ürettiğin yanıt (ilk 300 karakter):\n{llm_response_accumulated[:300]}\n\n"
+                    f'Beklenen format: {{"thought": "...", "tool": "araç_adı", "argument": "argüman"}}'
+                )
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
-                    {"role": "user", "content": "[Sistem Hatası] Yanıtın geçerli bir JSON değil."}
+                    {"role": "user", "content": error_feedback},
                 ]
             except Exception as exc:
                  yield f"\n\n[Sistem Hatası] Beklenmeyen hata: {exc}\n"
@@ -315,6 +331,40 @@ class SidarAgent:
             lines.append(f"  Son dosya  : {last_file}")
 
         return "\n".join(lines)
+
+    # ─────────────────────────────────────────────
+    #  BELLEK ÖZETLEME
+    # ─────────────────────────────────────────────
+
+    def _summarize_memory(self) -> None:
+        """
+        Konuşma geçmişini LLM ile özetler ve belleği sıkıştırır.
+        Başarısız olursa sessizce geçer; bellek mevcut haliyle sürer.
+        """
+        history = self.memory.get_history()
+        if len(history) < 4:
+            return
+
+        turns_text = "\n".join(
+            f"{t['role'].upper()}: {t['content'][:400]}"
+            for t in history
+        )
+        summarize_prompt = (
+            "Aşağıdaki konuşmayı kısa ve bilgilendirici şekilde özetle. "
+            "Teknik detayları, dosya adlarını ve kod kararlarını koru:\n\n"
+            + turns_text
+        )
+        try:
+            summary = self.llm.chat(
+                messages=[{"role": "user", "content": summarize_prompt}],
+                model=self.cfg.CODING_MODEL,
+                temperature=0.1,
+                stream=False,
+            )
+            self.memory.apply_summary(str(summary))
+            logger.info("Bellek özetlendi (%d → 2 mesaj).", len(history))
+        except Exception as exc:
+            logger.warning("Bellek özetleme başarısız: %s", exc)
 
     # ─────────────────────────────────────────────
     #  YARDIMCI METODLAR

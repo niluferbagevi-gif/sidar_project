@@ -68,7 +68,7 @@ class LLMClient:
             "model": model,
             "messages": messages,
             "stream": stream,
-            "format": "json",  # <-- YENİ: Ollama JSON modu
+            "format": "json",
             "options": {"temperature": temperature},
         }
         
@@ -146,7 +146,7 @@ class LLMClient:
             system_instruction=system_text or None,
             generation_config={
                 "temperature": temperature,
-                "response_mime_type": "application/json"  # <-- YENİ: Gemini JSON modu
+                "response_mime_type": "application/json"
             },
         )
 

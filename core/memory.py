@@ -111,6 +111,40 @@ class ConversationMemory:
             return self._last_file
 
     # ─────────────────────────────────────────────
+    #  ÖZETLEME DESTEĞİ
+    # ─────────────────────────────────────────────
+
+    def needs_summarization(self) -> bool:
+        """
+        Bellek penceresinin %80'i dolduğunda özetleme sinyali ver.
+        Örn: max_turns=20 → eşik = 32 mesaj (20 * 2 * 0.8)
+        """
+        with self._lock:
+            threshold = int(self.max_turns * 2 * 0.8)
+            return len(self._turns) >= threshold
+
+    def apply_summary(self, summary_text: str) -> None:
+        """
+        Tüm konuşma geçmişini özetle değiştir; belleği sıkıştırır.
+        2 mesaj (user + assistant özet çifti) kalır, eskiler silinir.
+        """
+        with self._lock:
+            self._turns = [
+                {
+                    "role": "user",
+                    "content": "[Önceki konuşmaların özeti istendi]",
+                    "timestamp": time.time(),
+                },
+                {
+                    "role": "assistant",
+                    "content": f"[KONUŞMA ÖZETİ]\n{summary_text}",
+                    "timestamp": time.time(),
+                },
+            ]
+            self._save()
+        logger.info("Konuşma belleği özetleme ile sıkıştırıldı.")
+
+    # ─────────────────────────────────────────────
     #  YARDIMCILAR
     # ─────────────────────────────────────────────
 
