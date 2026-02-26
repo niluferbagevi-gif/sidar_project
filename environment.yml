@@ -9,6 +9,7 @@ dependencies:
   - pip
   - git
   - setuptools
+  - wheel
   - packaging
   - cudatoolkit=11.8
   - pytorch-cuda=11.8
@@ -18,6 +19,11 @@ dependencies:
       # ── Temel ─────────────────────────────────
       - python-dotenv>=1.0.0
       - requests>=2.31.0
+      - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
+
+      # ── Asenkron Geçiş ve Veri Doğrulama ──────
+      - httpx>=0.25.0  # Asenkron WebSearchManager ve LLMClient (.note önerisi)
+      - pydantic>=2.4.0  # Yapısal çıktı ve hata yönetimi için (.note önerisi)
 
       # ── Sistem İzleme ─────────────────────────
       - psutil>=5.9.5

@@ -109,7 +109,9 @@ class SidarAgent:
 
     def _react_loop(self, user_input: str) -> Iterator[str]:
         """
-        LLM ile araç çağrısı döngüsü. Yanıtları yield eder.
+        LLM ile araç çağrısı döngüsü.
+        Kullanıcıya yalnızca nihai yanıt metni döndürülür; ara JSON/araç
+        çıktıları arka planda işlenir.
         """
         messages = self.memory.get_messages_for_llm()
         context = self._build_context()
@@ -125,11 +127,10 @@ class SidarAgent:
                 stream=True
             )
 
-            # LLM yanıtını biriktir
+            # LLM yanıtını biriktir (ara JSON çıktısı kullanıcıya akıtılmaz)
             llm_response_accumulated = ""
             for chunk in response_generator:
                 llm_response_accumulated += chunk
-                yield chunk
 
             # 2. JSON Ayrıştırma ve Araç Kontrolü
             try:
@@ -145,20 +146,18 @@ class SidarAgent:
 
                 if tool_name == "final_answer":
                     self.memory.add("assistant", tool_arg)
+                    yield str(tool_arg)
                     return
 
                 # Aracı çalıştır
                 tool_result = self._execute_tool(tool_name, tool_arg)
                 
                 if tool_result is None:
-                    yield f"\n\n[Sistem] Geçersiz araç çağrısı: {tool_name}\n"
                     messages = messages + [
                          {"role": "assistant", "content": llm_response_accumulated},
                          {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya JSON hatalı."}
                     ]
                     continue
-
-                yield f"\n\n[Sistem] Araç Çıktısı ({tool_name}):\n{tool_result}\n\n"
 
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
@@ -166,7 +165,7 @@ class SidarAgent:
                 ]
             
             except json.JSONDecodeError as je:
-                yield "\n\n[Sistem Hatası] Model geçersiz JSON üretti. Tekrar deneniyor...\n"
+                logger.warning("Model geçersiz JSON üretti, tekrar deneniyor: %s", je)
                 error_feedback = (
                     f"[Sistem Hatası] Yanıtın geçerli bir JSON değil.\n"
                     f"Hata: {je.msg} (satır {je.lineno})\n\n"
@@ -178,10 +177,11 @@ class SidarAgent:
                     {"role": "user", "content": error_feedback},
                 ]
             except Exception as exc:
-                 yield f"\n\n[Sistem Hatası] Beklenmeyen hata: {exc}\n"
+                 logger.exception("ReAct döngüsünde beklenmeyen hata: %s", exc)
+                 yield "Üzgünüm, yanıt üretirken beklenmeyen bir hata oluştu."
                  return
             
-        yield "\n[Sistem] Maksimum adım sayısına ulaşıldı."
+        yield "Üzgünüm, bu istek için güvenilir bir sonuca ulaşamadım."
 
     def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
         """
