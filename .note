@@ -1,4 +1,84 @@
 
+
+
+Sidar projemizdeki dosyaların hepsini inceleyerek eksiksiz bir rapor oluştur. ayrıca geliştirilmesi gereken yerler var ise ayrıca belirt
+
+1. Asenkron Yapıya Geçiş (Öncelikli)
+Mevcut Durum: WebSearchManager ve LLMClient senkron (requests kütüphanesi) çalışıyor. Web araması yapılırken veya büyük bir model yanıt verirken arayüz donabilir.
+Öneri:
+requests yerine httpx veya aiohttp kütüphanesine geçilmeli.
+SidarAgent.respond metodu async def yapılmalı ve main.py içinde asyncio.run() ile çağrılmalı.
+
+yukarıda belirttiğin eklentiyi geliştirmeyi projemize ekleyip , ilgili dosyaların son güncel eksiksiz tam dosyayı paylaş
+
+
+
+
+
+
+🚀 3. Kritik Eksikler ve Geliştirme Önerileri
+Projenizdeki .note dosyasında belirtilen eksikliklere katılıyor ve bunlara ek olarak kod analizi sonucunda tespit ettiğim teknik iyileştirmeleri aşağıda sunuyorum:
+
+1. Asenkron Yapıya Geçiş (Öncelikli)
+Mevcut Durum: WebSearchManager ve LLMClient senkron (requests kütüphanesi) çalışıyor. Web araması yapılırken veya büyük bir model yanıt verirken arayüz donabilir.
+
+Öneri:
+
+requests yerine httpx veya aiohttp kütüphanesine geçilmeli.
+
+SidarAgent.respond metodu async def yapılmalı ve main.py içinde asyncio.run() ile çağrılmalı.
+
+2. Bellek Yönetimi ve Özetleme (Summarization)
+Mevcut Durum: ConversationMemory sadece son N turu tutuyor. Eski konuşmalar siliniyor.
+
+Öneri:
+
+Özetleyici Bellek: Konuşma geçmişi sınır değere ulaştığında (örn: 20 tur), eski mesajlar silinmek yerine LLM tarafından özetlenip (Summary) System Prompt içine "Önceki Bağlam" olarak eklenmeli.
+
+Vektör Bellek: Uzun süreli proje hafızası için eski konuşmalar da RAG sistemine (chroma_db) otomatik olarak gömülmeli.
+
+3. Yapısal Çıktı (Structured Output / Function Calling)
+Mevcut Durum: Modelden ham metin olarak JSON üretmesi isteniyor ve Regex/JSON parser ile okunuyor. Bu yöntem, model karmaşıklaştıkça hata yapmaya meyillidir (örn: Markdown backtick eklemesi).
+
+Öneri:
+
+Ollama ve Gemini'nin yerel "Function Calling" (Tool Use) API'ları destekleniyorsa bunlara geçilmeli.
+
+Eğer Prompt bazlı gidilecekse, çıktıları doğrulamak için Pydantic kütüphanesi kullanılmalı. Modelin çıktısının belirli bir şemaya uyup uymadığı kod seviyesinde garanti altına alınmalı.
+
+4. Kod Çalıştırma Güvenliği (Code Execution Sandbox)
+Mevcut Durum: execute_code aracı, kodu subprocess ile ana makinede (veya Docker konteynerinin içinde) çalıştırıyor.
+
+Risk: Ajan, os.system("rm -rf /") gibi komutlar denerse (yetkisi varsa) konteyneri veya sistemi bozabilir.
+
+Öneri:
+
+Kod çalıştırma işlemi için E2B gibi izole sandbox servisleri veya tamamen ağ erişimi kısıtlanmış, geçici (ephemeral) ayrı bir Docker konteyneri kullanılmalı.
+
+5. Web Arama Modülünün Güçlendirilmesi
+Mevcut Durum: DuckDuckGo kullanılıyor. Bazen hız sınırı (rate limit) verebilir.
+
+Öneri:
+
+Alternatif olarak Tavily API veya Google Custom Search API desteği eklenebilir. Bu servisler özellikle kod ve teknik doküman aramalarında daha kararlı sonuçlar verir.
+
+6. Test Kapsamı
+Mevcut Durum: tests/test_sidar.py temel fonksiyonları test ediyor.
+
+Öneri:
+
+RAG sistemi için entegrasyon testleri eklenmeli (Gerçekten doğru dokümanı getiriyor mu?).
+
+Farklı LLM modelleri (Qwen, Llama3, Gemini) ile "Prompt Dayanıklılık Testleri" yapılmalı.
+
+
+
+
+
+
+
+
+
 3. Tespit Edilen Kritik Eksikler ve Geliştirme Önerileri
 Dosyalarınız arasında bulunan .note dosyasındaki notlar ve kod analizi sonucunda aşağıdaki geliştirme planını öneriyorum:
 

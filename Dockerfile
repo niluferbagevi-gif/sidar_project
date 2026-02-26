@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 # Meta veriler
 LABEL maintainer="Sidar AI Project"
-LABEL version="2.2.0"
+LABEL version="2.3.2"
 LABEL description="Yazılım Mühendisi AI Asistanı - Docker İzolasyonu"
 
 # Çevresel değişkenler

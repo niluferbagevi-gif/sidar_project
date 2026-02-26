@@ -50,7 +50,7 @@ BANNER = r"""
  ║  ╚════██║██║██║  ██║██╔══██║██╔══██╗         ║
  ║  ███████║██║██████╔╝██║  ██║██║  ██║         ║
  ║  ╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝         ║
- ║  Yazılım Mimarı & Baş Mühendis AI  v1.0.0   ║
+ ║  Yazılım Mimarı & Baş Mühendis AI  v2.3.2   ║
  ╚══════════════════════════════════════════════╝
 """
 
@@ -75,7 +75,7 @@ Doğrudan Komutlar (serbest metin):
   github releases: <owner/repo>    → GitHub release listesi
   docs ara: <sorgu>                → Belge deposunda ara
   belge ekle <url>                 → URL'den belge ekle
-  docs ara: <sorgu>                → Depoda arama
+  stackoverflow: <sorgu>           → Stack Overflow araması
   stackoverflow: <sorgu>           → Stack Overflow araması
 """
 
