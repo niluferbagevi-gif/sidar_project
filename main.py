@@ -138,16 +138,17 @@ def interactive_loop(agent: SidarAgent) -> None:
             print(agent.docs.list_documents())
             continue
 
-        # Ajan yanıtı
+        # Ajan yanıtı — respond() async generator olduğu için asyncio.run() gerekli
         try:
             print("Sidar > ", end="", flush=True)
-            response_generator = agent.respond(user_input)
-            
-            # Gelen generator'ı daktilo efektiyle yaz
-            for chunk in response_generator:
-                print(chunk, end="", flush=True)
-            print("\n")
-            
+
+            async def _stream(msg: str) -> None:
+                async for chunk in agent.respond(msg):
+                    print(chunk, end="", flush=True)
+                print("\n")
+
+            asyncio.run(_stream(user_input))
+
         except Exception as exc:
             print(f"\nSidar > ✗ Hata: {exc}\n")
             logging.exception("Ajan yanıt hatası")
@@ -194,12 +195,14 @@ def main() -> None:
         return
 
     if args.command:
-        # Tek komut modunda da akış olabilir, ama düz yazdırmak daha temizdir.
-        # Basitçe hepsini birleştirip yazdırıyoruz.
-        print("Sidar > ", end="", flush=True)
-        for chunk in agent.respond(args.command):
-            print(chunk, end="", flush=True)
-        print()
+        # respond() async generator olduğu için asyncio.run() ile çalıştırılır
+        async def _run_command() -> None:
+            print("Sidar > ", end="", flush=True)
+            async for chunk in agent.respond(args.command):
+                print(chunk, end="", flush=True)
+            print()
+
+        asyncio.run(_run_command())
         return
 
     interactive_loop(agent)
