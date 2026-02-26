@@ -80,6 +80,11 @@ class Config:
     # ─────────────────────────────────────────────
     #  WEB ARAMA
     # ─────────────────────────────────────────────
+    SEARCH_ENGINE: str = os.getenv("SEARCH_ENGINE", "auto") # auto, duckduckgo, tavily, google
+    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    GOOGLE_SEARCH_API_KEY: str = os.getenv("GOOGLE_SEARCH_API_KEY", "")
+    GOOGLE_SEARCH_CX: str = os.getenv("GOOGLE_SEARCH_CX", "")
+
     WEB_SEARCH_MAX_RESULTS: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
     WEB_FETCH_TIMEOUT: int = int(os.getenv("WEB_FETCH_TIMEOUT", "15"))
     WEB_FETCH_MAX_CHARS: int = int(os.getenv("WEB_FETCH_MAX_CHARS", "4000"))

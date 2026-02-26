@@ -1,6 +1,6 @@
 """
 Sidar Project - Web Arama Yöneticisi
-DuckDuckGo arama motoru ve URL içerik çekme (Asenkron).
+Tavily, Google Custom Search ve DuckDuckGo motorları ile asenkron web araması.
 """
 
 import logging
@@ -15,109 +15,186 @@ logger = logging.getLogger(__name__)
 
 class WebSearchManager:
     """
-    DuckDuckGo ile gerçek zamanlı web araması ve URL içerik çekme.
-    Tamamen asenkron (async/await) mimariye uyumludur.
-
-    Gereksinim: pip install duckduckgo-search httpx
+    Gelişmiş, çoklu motor destekli ve asenkron web arama yöneticisi.
+    DuckDuckGo, Tavily ve Google Custom Search API'lerini destekler.
     """
 
-    # Varsayılan değerler (Config verilmezse kullanılır)
     MAX_RESULTS = 5
     FETCH_TIMEOUT = 15  # saniye
     FETCH_MAX_CHARS = 4000
 
     def __init__(self, config=None) -> None:
         if config is not None:
+            self.engine = getattr(config, "SEARCH_ENGINE", "auto").lower()
+            self.tavily_key = getattr(config, "TAVILY_API_KEY", "")
+            self.google_key = getattr(config, "GOOGLE_SEARCH_API_KEY", "")
+            self.google_cx = getattr(config, "GOOGLE_SEARCH_CX", "")
+            
             self.MAX_RESULTS = getattr(config, "WEB_SEARCH_MAX_RESULTS", self.MAX_RESULTS)
             self.FETCH_TIMEOUT = getattr(config, "WEB_FETCH_TIMEOUT", self.FETCH_TIMEOUT)
             self.FETCH_MAX_CHARS = getattr(config, "WEB_FETCH_MAX_CHARS", self.FETCH_MAX_CHARS)
-        self._available = self._check_availability()
+        else:
+            self.engine = "auto"
+            self.tavily_key = ""
+            self.google_key = ""
+            self.google_cx = ""
 
-    # ─────────────────────────────────────────────
-    #  DURUM
-    # ─────────────────────────────────────────────
+        self._ddg_available = self._check_ddg()
 
-    def _check_availability(self) -> bool:
+    def _check_ddg(self) -> bool:
         try:
             from duckduckgo_search import AsyncDDGS  # noqa: F401
             return True
         except ImportError:
-            logger.warning(
-                "duckduckgo-search kurulu değil veya sürümü eski. "
-                "Kurmak/Güncellemek için: pip install -U duckduckgo-search httpx"
-            )
             return False
 
     def is_available(self) -> bool:
-        return self._available
+        """En az bir arama motoru çalışabilir durumda mı?"""
+        return self._ddg_available or bool(self.tavily_key) or bool(self.google_key and self.google_cx)
 
     def status(self) -> str:
-        state = "Aktif (Asenkron)" if self._available else "duckduckgo-search kurulu değil"
-        return f"WebSearch: {state}"
+        engines = []
+        if self.tavily_key: engines.append("Tavily")
+        if self.google_key and self.google_cx: engines.append("Google")
+        if self._ddg_available: engines.append("DuckDuckGo")
+        
+        if not engines:
+            return "WebSearch: Kurulu veya yapılandırılmış motor yok."
+            
+        return f"WebSearch: Aktif (Mod: {self.engine.upper()}) | {', '.join(engines)}"
 
     # ─────────────────────────────────────────────
-    #  WEB ARAMA (ASYNC)
+    #  ANA ARAMA YÖNLENDİRİCİ (ASYNC)
     # ─────────────────────────────────────────────
 
     async def search(self, query: str, max_results: int = None) -> Tuple[bool, str]:
         """
-        DuckDuckGo'da asenkron metin araması yap.
-
-        Args:
-            query      : Arama sorgusu
-            max_results: Maksimum sonuç sayısı (varsayılan MAX_RESULTS)
-
-        Returns:
-            (başarı, biçimlendirilmiş_sonuç)
+        Belirlenen motora veya fallback (yedek) mantığına göre arama yapar.
         """
-        if not self._available:
-            return False, (
-                "⚠ Web arama mevcut değil. "
-                "Kurmak için: pip install duckduckgo-search"
-            )
-
         n = max_results or self.MAX_RESULTS
+
+        # Sadece belirli bir motor istenmişse
+        if self.engine == "tavily" and self.tavily_key:
+            return await self._search_tavily(query, n)
+        elif self.engine == "google" and self.google_key and self.google_cx:
+            return await self._search_google(query, n)
+        elif self.engine == "duckduckgo" and self._ddg_available:
+            return await self._search_duckduckgo(query, n)
+        
+        # AUTO MODU VEYA FALLBACK: Tavily -> Google -> DuckDuckGo
+        if self.tavily_key:
+            ok, res = await self._search_tavily(query, n)
+            if ok and "sonuç bulunamadı" not in res.lower() and "[HATA]" not in res:
+                return ok, res
+        
+        if self.google_key and self.google_cx:
+            ok, res = await self._search_google(query, n)
+            if ok and "sonuç bulunamadı" not in res.lower() and "[HATA]" not in res:
+                return ok, res
+        
+        if self._ddg_available:
+            return await self._search_duckduckgo(query, n)
+        
+        return False, "⚠ Web arama yapılamadı. API anahtarları veya duckduckgo-search paketi eksik."
+
+    # ─────────────────────────────────────────────
+    #  MOTORLAR
+    # ─────────────────────────────────────────────
+
+    async def _search_tavily(self, query: str, n: int) -> Tuple[bool, str]:
+        url = "https://api.tavily.com/search"
+        payload = {
+            "api_key": self.tavily_key,
+            "query": query,
+            "search_depth": "basic",
+            "include_answer": False,
+            "max_results": n
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+            results = data.get("results", [])
+            if not results:
+                return True, f"'{query}' için Tavily'de sonuç bulunamadı."
+
+            lines = [f"[Web Arama (Tavily): {query}]", ""]
+            for i, r in enumerate(results, 1):
+                title = r.get("title", "Başlıksız")
+                body = r.get("content", "")[:300].rstrip()
+                href = r.get("url", "")
+                lines.append(f"{i}. **{title}**")
+                if body: lines.append(f"   {body}")
+                lines.append(f"   → {href}\n")
+
+            return True, "\n".join(lines)
+        except Exception as exc:
+            logger.warning("Tavily API hatası: %s", exc)
+            return False, f"[HATA] Tavily: {exc}"
+
+    async def _search_google(self, query: str, n: int) -> Tuple[bool, str]:
+        url = "https://customsearch.googleapis.com/customsearch/v1"
+        params = {
+            "key": self.google_key,
+            "cx": self.google_cx,
+            "q": query,
+            "num": min(n, 10)  # Google Search API tek seferde max 10 sonuç verir
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+
+            items = data.get("items", [])
+            if not items:
+                return True, f"'{query}' için Google'da sonuç bulunamadı."
+
+            lines = [f"[Web Arama (Google): {query}]", ""]
+            for i, r in enumerate(items, 1):
+                title = r.get("title", "Başlıksız")
+                body = r.get("snippet", "")[:300].rstrip()
+                href = r.get("link", "")
+                lines.append(f"{i}. **{title}**")
+                if body: lines.append(f"   {body}")
+                lines.append(f"   → {href}\n")
+
+            return True, "\n".join(lines)
+        except Exception as exc:
+            logger.warning("Google API hatası: %s", exc)
+            return False, f"[HATA] Google Search: {exc}"
+
+    async def _search_duckduckgo(self, query: str, n: int) -> Tuple[bool, str]:
         try:
             from duckduckgo_search import AsyncDDGS
-
             async with AsyncDDGS() as ddgs:
-                # AsyncDDGS kütüphanesinde arama işlemi için text metodunu await ediyoruz
                 results = await ddgs.text(query, max_results=n)
 
             if not results:
-                return True, f"'{query}' için sonuç bulunamadı."
+                return True, f"'{query}' için DuckDuckGo'da sonuç bulunamadı."
 
-            lines = [f"[Web Arama: {query}]", ""]
+            lines = [f"[Web Arama (DuckDuckGo): {query}]", ""]
             for i, r in enumerate(results, 1):
                 title = r.get("title", "Başlıksız")
-                body = (r.get("body") or "")[:250].rstrip()
+                body = (r.get("body") or "")[:300].rstrip()
                 href = r.get("href", "")
                 lines.append(f"{i}. **{title}**")
-                if body:
-                    lines.append(f"   {body}")
-                lines.append(f"   → {href}")
-                lines.append("")
+                if body: lines.append(f"   {body}")
+                lines.append(f"   → {href}\n")
 
             return True, "\n".join(lines)
-
         except Exception as exc:
-            logger.error("Web arama hatası: %s", exc)
-            return False, f"[HATA] Web arama: {exc}"
+            logger.warning("DuckDuckGo hatası: %s", exc)
+            return False, f"[HATA] DuckDuckGo: {exc}"
 
     # ─────────────────────────────────────────────
     #  URL İÇERİĞİ ÇEKME (ASYNC)
     # ─────────────────────────────────────────────
 
     async def fetch_url(self, url: str) -> Tuple[bool, str]:
-        """
-        Belirtilen URL'nin içeriğini asenkron olarak çek ve temiz metin olarak döndür.
-
-        Args:
-            url: Çekilecek URL
-
-        Returns:
-            (başarı, içerik)
-        """
+        """Belirtilen URL'nin içeriğini asenkron olarak çek ve temiz metin olarak döndür."""
         try:
             async with httpx.AsyncClient(timeout=self.FETCH_TIMEOUT, follow_redirects=True) as client:
                 resp = await client.get(
@@ -145,19 +222,15 @@ class WebSearchManager:
     @staticmethod
     def _clean_html(html: str) -> str:
         """HTML etiketlerini temizleyerek düz metin üret."""
-        # Script/style bloklarını kaldır
         clean = re.sub(
             r"<(script|style)[^>]*>.*?</(script|style)>",
             "",
             html,
             flags=re.DOTALL | re.IGNORECASE,
         )
-        # HTML etiketlerini kaldır
         clean = re.sub(r"<[^>]+>", " ", clean)
-        # HTML entity'lerini çöz
         clean = clean.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
         clean = clean.replace("&nbsp;", " ").replace("&quot;", '"')
-        # Fazla boşlukları temizle
         clean = re.sub(r"\s+", " ", clean)
         return clean.strip()
 
@@ -166,9 +239,7 @@ class WebSearchManager:
     # ─────────────────────────────────────────────
 
     async def search_docs(self, library: str, topic: str = "") -> Tuple[bool, str]:
-        """
-        Belirli bir kütüphanenin dokümantasyonunu ara.
-        """
+        """Belirli bir kütüphanenin dokümantasyonunu ara."""
         q = f"{library} documentation {topic}".strip()
         q += " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
         return await self.search(q, max_results=5)
