@@ -1,15 +1,14 @@
 """
 Sidar Project - Kod Yöneticisi
-Dosya okuma, yazma, sözdizimi doğrulama ve kod analizi.
+Dosya okuma, yazma, sözdizimi doğrulama ve DOCKER İZOLELİ kod analizi (REPL).
 """
 
 import ast
 import json
 import logging
 import os
-import sys
-import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -22,6 +21,7 @@ class CodeManager:
     """
     PEP 8 uyumlu dosya işlemleri ve sözdizimi doğrulama.
     Thread-safe RLock ile korunur.
+    Kod çalıştırma (execute_code) işlemleri Docker ile izole edilir.
     """
 
     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
@@ -30,11 +30,30 @@ class CodeManager:
         self.security = security
         self.base_dir = base_dir
         self._lock = threading.RLock()
+        
         # Metrikler
         self._files_read = 0
         self._files_written = 0
         self._syntax_checks = 0
         self._audits_done = 0
+
+        # Docker İstemcisi Bağlantısı
+        self.docker_available = False
+        self.docker_client = None
+        self._init_docker()
+
+    def _init_docker(self):
+        """Docker daemon'a bağlanmayı dener."""
+        try:
+            import docker
+            self.docker_client = docker.from_env()
+            self.docker_client.ping()
+            self.docker_available = True
+            logger.info("Docker bağlantısı başarılı. REPL işlemleri izole konteynerde çalışacak.")
+        except ImportError:
+            logger.warning("Docker SDK kurulu değil. (pip install docker)")
+        except Exception as e:
+            logger.warning(f"Docker Daemon'a bağlanılamadı. Kod çalıştırma kapalı: {e}")
 
     # ─────────────────────────────────────────────
     #  DOSYA OKUMA
@@ -140,51 +159,71 @@ class CodeManager:
         return self.write_file(path, new_content, validate=True)
 
     # ─────────────────────────────────────────────
-    #  GÜVENLİ KOD ÇALIŞTIRMA (REPL) - YENİ
+    #  GÜVENLİ KOD ÇALIŞTIRMA (DOCKER SANDBOX)
     # ─────────────────────────────────────────────
 
     def execute_code(self, code: str) -> Tuple[bool, str]:
         """
-        Kodu izole bir alt süreçte çalıştırır.
-        
-        Özellikler:
-        - 10 saniye zaman aşımı (Timeout)
-        - Geçici dosya üzerinde çalışma (/temp/repl_session.py)
-        - Stdout ve Stderr yakalama
+        Kodu tamamen İZOLE ve geçici bir Docker konteynerinde çalıştırır.
+        - Ağ erişimi kapalı (network_disabled=True)
+        - Dosya sistemi okunaksız/geçici
+        - Bellek kısıtlaması (128 MB)
+        - Zaman aşımı koruması (10 saniye)
         """
         if not self.security.can_execute():
             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
-        try:
-            # Geçici çalışma dizini ve dosya
-            temp_dir = self.base_dir / "temp"
-            temp_dir.mkdir(exist_ok=True)
-            runner_path = temp_dir / "repl_session.py"
-            
-            # Kodu dosyaya yaz
-            runner_path.write_text(code, encoding="utf-8")
-            
-            # Subprocess ile çalıştır
-            # sys.executable: O anki Python yorumlayıcısını kullanır (Docker içindeyse onu)
-            result = subprocess.run(
-                [sys.executable, str(runner_path)],
-                capture_output=True,
-                text=True,
-                timeout=10,  # 10 saniye sınır
-                cwd=str(temp_dir)  # Çalışma dizini temp olsun
-            )
-            
-            output = result.stdout + result.stderr
-            if result.returncode == 0:
-                final_out = output.strip() or "(Kod başarıyla çalıştı ancak çıktı üretmedi)"
-                return True, f"REPL Çıktısı:\n{final_out}"
-            else:
-                return False, f"Çalışma Zamanı Hatası (Exit {result.returncode}):\n{output}"
+        if not self.docker_available:
+            return False, "[OpenClaw] Docker bağlantısı kurulamadığı için güvenlik sebebiyle kod çalıştırma reddedildi."
 
-        except subprocess.TimeoutExpired:
-            return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve durduruldu."
+        try:
+            import docker
+            
+            # Kodu konteynere komut satırı argümanı olarak gönderiyoruz
+            # 'python -c "kod"' formatında çalışacak
+            command = ["python", "-c", code]
+
+            # Konteyneri başlat (Arka planda ayrılmış olarak)
+            container = self.docker_client.containers.run(
+                image="python:3.11-alpine", # Çok hafif ve hızlı bir imaj
+                command=command,
+                detach=True,
+                remove=False, # Çıktıyı okuyabilmek için anında silmiyoruz, manuel sileceğiz
+                network_disabled=True, # Dış ağa istek atamaz (Güvenlik)
+                mem_limit="128m", # RAM Limiti (Güvenlik)
+                cpu_quota=50000, # CPU Limiti (Güvenlik - Max %50)
+                working_dir="/tmp",
+            )
+
+            # Zaman aşımı takibi (10 Saniye)
+            timeout = 10
+            start_time = time.time()
+            
+            while True:
+                container.reload() # Durumu güncelle
+                if container.status == "exited":
+                    break
+                if time.time() - start_time > timeout:
+                    container.kill() # 10 saniyeyi geçerse zorla durdur
+                    container.remove(force=True)
+                    return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
+                time.sleep(0.5)
+
+            # Çıktıları al
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8").strip()
+            
+            # İşimiz bitti, konteyneri sil
+            container.remove(force=True)
+
+            if logs:
+                return True, f"REPL Çıktısı (Docker Sandbox):\n{logs}"
+            else:
+                return True, "(Kod başarıyla çalıştı ancak konsola bir çıktı üretmedi)"
+
+        except docker.errors.ImageNotFound:
+             return False, "Çalıştırma hatası: 'python:3.11-alpine' imajı bulunamadı. Lütfen terminalde 'docker pull python:3.11-alpine' komutunu çalıştırın."
         except Exception as exc:
-            return False, f"Çalıştırma hatası: {exc}"
+            return False, f"Docker çalıştırma hatası: {exc}"
 
     # ─────────────────────────────────────────────
     #  DİZİN LİSTELEME

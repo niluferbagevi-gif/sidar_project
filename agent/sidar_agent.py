@@ -1,6 +1,6 @@
 """
 Sidar Project - Ana Ajan
-ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı (Asenkron Mimari).
+ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı (Asenkron + Pydantic Uyumlu).
 """
 
 import logging
@@ -8,6 +8,8 @@ import json
 import re
 import asyncio
 from typing import Optional, AsyncIterator, Dict
+
+from pydantic import BaseModel, Field, ValidationError
 
 from config import Config
 from core.memory import ConversationMemory
@@ -24,14 +26,23 @@ from agent.definitions import SIDAR_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────
+#  PYDANTIC VERİ MODELİ (YAPISAL ÇIKTI)
+# ─────────────────────────────────────────────
+class ToolCall(BaseModel):
+    """LLM'in ReAct döngüsünde üretmesi gereken JSON şeması."""
+    thought: str = Field(description="Ajanın mevcut adımdaki analizi ve planı.")
+    tool: str = Field(description="Çalıştırılacak aracın tam adı (örn: final_answer, web_search).")
+    argument: str = Field(default="", description="Araca geçirilecek parametre (opsiyonel).")
+
 
 class SidarAgent:
     """
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
-    Tamamen asenkron ağ istekleri ve stream uyumlu yapı.
+    Tamamen asenkron ağ istekleri, stream ve yapısal veri uyumlu yapı.
     """
 
-    VERSION = "2.3.3"  # Async Feature Update
+    VERSION = "2.4.0"  # Pydantic & Structured Output Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -61,7 +72,7 @@ class SidarAgent:
         )
 
         logger.info(
-            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (JSON MODE + ASYNC)",
+            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (PYDANTIC + ASYNC)",
             self.VERSION,
             self.cfg.AI_PROVIDER,
             self.cfg.CODING_MODEL,
@@ -88,7 +99,6 @@ class SidarAgent:
         # Bellek yazma ve hızlı eşleme kilitli bölgede yapılır
         async with self._lock:
             self.memory.add("user", user_input)
-            # DİKKAT: auto.handle metodunu asenkron yaptık
             handled, quick_response = await self.auto.handle(user_input)
             if handled:
                 self.memory.add("assistant", quick_response)
@@ -108,7 +118,7 @@ class SidarAgent:
             yield chunk
 
     # ─────────────────────────────────────────────
-    #  ReAct DÖNGÜSÜ (ASYNC & JSON PARSING)
+    #  ReAct DÖNGÜSÜ (PYDANTIC PARSING)
     # ─────────────────────────────────────────────
 
     async def _react_loop(self, user_input: str) -> AsyncIterator[str]:
@@ -136,16 +146,23 @@ class SidarAgent:
             async for chunk in response_generator:
                 llm_response_accumulated += chunk
 
-            # 2. JSON Ayrıştırma ve Araç Kontrolü
+            # 2. JSON Ayrıştırma ve Yapısal Doğrulama (Pydantic)
             try:
-                clean_json = llm_response_accumulated.strip()
-                if clean_json.startswith("```"):
-                    clean_json = re.sub(r"^```(json)?|```$", "", clean_json, flags=re.MULTILINE).strip()
-
-                action_data = json.loads(clean_json)
+                raw_text = llm_response_accumulated.strip()
                 
-                tool_name = action_data.get("tool")
-                tool_arg = action_data.get("argument", "")
+                # Modelin fazladan ürettiği Markdown veya metinleri atlayıp sadece JSON kısmını al
+                json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                
+                if not json_match:
+                    raise ValueError("Yanıtın içerisinde süslü parantezlerle ( { ... } ) çevrili bir JSON objesi bulunamadı.")
+                    
+                clean_json = json_match.group(0)
+
+                # Pydantic ile doğrulama (Eksik veya hatalı tip varsa ValidationError fırlatır)
+                action_data = ToolCall.model_validate_json(clean_json)
+                
+                tool_name = action_data.tool
+                tool_arg = action_data.argument
 
                 if tool_name == "final_answer":
                     self.memory.add("assistant", tool_arg)
@@ -158,7 +175,7 @@ class SidarAgent:
                 if tool_result is None:
                     messages = messages + [
                          {"role": "assistant", "content": llm_response_accumulated},
-                         {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya JSON hatalı."}
+                         {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya geçersiz bir işlem seçildi."}
                     ]
                     continue
 
@@ -167,13 +184,23 @@ class SidarAgent:
                     {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
                 ]
             
-            except json.JSONDecodeError as je:
-                logger.warning("Model geçersiz JSON üretti, tekrar deneniyor: %s", je)
+            except ValidationError as ve:
+                logger.warning("Pydantic doğrulama hatası:\n%s", ve)
                 error_feedback = (
-                    f"[Sistem Hatası] Yanıtın geçerli bir JSON değil.\n"
-                    f"Hata: {je.msg} (satır {je.lineno})\n\n"
-                    f"Ürettiğin yanıt (ilk 300 karakter):\n{llm_response_accumulated[:300]}\n\n"
-                    f'Beklenen format: {{"thought": "...", "tool": "araç_adı", "argument": "argüman"}}'
+                    f"[Sistem Hatası] Ürettiğin JSON yapısı beklentilere uymuyor.\n"
+                    f"Eksik veya hatalı alanlar:\n{ve}\n\n"
+                    f"Lütfen sadece şu formata uyan BİR TANE JSON döndür:\n"
+                    f'{{"thought": "düşüncen", "tool": "araç_adı", "argument": "argüman"}}'
+                )
+                messages = messages + [
+                    {"role": "assistant", "content": llm_response_accumulated},
+                    {"role": "user", "content": error_feedback},
+                ]
+            except (ValueError, json.JSONDecodeError) as e:
+                logger.warning("JSON ayrıştırma hatası: %s", e)
+                error_feedback = (
+                    f"[Sistem Hatası] Yanıtın geçerli bir JSON formatında değil veya bozuk: {e}\n\n"
+                    f"Lütfen yanıtını herhangi bir markdown (```json) bloğuna almadan, sadece düz geçerli bir JSON objesi olarak ver."
                 )
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
@@ -184,7 +211,7 @@ class SidarAgent:
                  yield "Üzgünüm, yanıt üretirken beklenmeyen bir hata oluştu."
                  return
             
-        yield "Üzgünüm, bu istek için güvenilir bir sonuca ulaşamadım."
+        yield "Üzgünüm, bu istek için güvenilir bir sonuca ulaşamadım (Maksimum adım sayısına ulaşıldı)."
 
     async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
         """
