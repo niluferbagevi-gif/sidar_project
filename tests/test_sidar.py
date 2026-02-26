@@ -196,37 +196,37 @@ class TestSystemHealthManager:
 # ─────────────────────────────────────────────
 
 class TestConversationMemory:
-    def test_add_and_retrieve(self):
-        mem = ConversationMemory(max_turns=5)
+    def test_add_and_retrieve(self, tmp_path):
+        mem = ConversationMemory(file_path=tmp_path / "mem.json", max_turns=5)
         mem.add("user", "Merhaba")
         mem.add("assistant", "Selam!")
         history = mem.get_history()
         assert len(history) == 2
 
-    def test_max_turns_window(self):
-        mem = ConversationMemory(max_turns=2)
+    def test_max_turns_window(self, tmp_path):
+        mem = ConversationMemory(file_path=tmp_path / "mem.json", max_turns=2)
         for i in range(10):
             mem.add("user", f"mesaj {i}")
             mem.add("assistant", f"yanıt {i}")
         # max_turns * 2 = 4 mesaj tutulmalı
         assert len(mem) <= 4
 
-    def test_last_file_tracking(self):
-        mem = ConversationMemory()
+    def test_last_file_tracking(self, tmp_path):
+        mem = ConversationMemory(file_path=tmp_path / "mem.json")
         assert mem.get_last_file() is None
         mem.set_last_file("/path/to/file.py")
         assert mem.get_last_file() == "/path/to/file.py"
 
-    def test_clear(self):
-        mem = ConversationMemory()
+    def test_clear(self, tmp_path):
+        mem = ConversationMemory(file_path=tmp_path / "mem.json")
         mem.add("user", "test")
         mem.set_last_file("test.py")
         mem.clear()
         assert len(mem) == 0
         assert mem.get_last_file() is None
 
-    def test_messages_for_llm(self):
-        mem = ConversationMemory()
+    def test_messages_for_llm(self, tmp_path):
+        mem = ConversationMemory(file_path=tmp_path / "mem.json")
         mem.add("user", "soru")
         mem.add("assistant", "yanıt")
         msgs = mem.get_messages_for_llm()

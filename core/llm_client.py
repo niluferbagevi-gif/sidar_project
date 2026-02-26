@@ -61,7 +61,7 @@ class LLMClient:
         temperature: float,
         stream: bool
     ) -> Union[str, Iterator[str]]:
-        url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/chat"
+        url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/chat"
         
         # JSON Modunu Zorla
         payload = {
@@ -196,7 +196,7 @@ class LLMClient:
     # ─────────────────────────────────────────────
 
     def list_ollama_models(self) -> List[str]:
-        url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/tags"
+        url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/tags"
         try:
             resp = requests.get(url, timeout=10)
             resp.raise_for_status()
@@ -207,7 +207,7 @@ class LLMClient:
 
     def is_ollama_available(self) -> bool:
         try:
-            url = f"{self.config.OLLAMA_URL.rstrip('/api')}/api/tags"
+            url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/tags"
             requests.get(url, timeout=5)
             return True
         except Exception:

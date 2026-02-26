@@ -50,8 +50,8 @@ class SidarAgent:
         self.llm = LLMClient(self.cfg.AI_PROVIDER, self.cfg)
 
         # Alt sistemler — yeni
-        self.web = WebSearchManager()
-        self.pkg = PackageInfoManager()
+        self.web = WebSearchManager(self.cfg)
+        self.pkg = PackageInfoManager(self.cfg)
         self.docs = DocumentStore(self.cfg.RAG_DIR)
 
         self.auto = AutoHandle(
@@ -224,6 +224,11 @@ class SidarAgent:
 
         if tool_name == "github_info":
             _, result = self.github.get_repo_info()
+            return result
+
+        if tool_name == "github_read":
+            if not tool_arg: return "⚠ Okunacak GitHub dosya yolu belirtilmedi."
+            _, result = self.github.read_remote_file(tool_arg)
             return result
 
         # ── Web Arama araçları ─────────────────────

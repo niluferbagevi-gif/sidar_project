@@ -70,8 +70,13 @@ class SecurityManager:
     # ─────────────────────────────────────────────
 
     def can_execute(self) -> bool:
-        """Terminal komutları yalnızca FULL modda çalışır."""
-        return self.level == FULL
+        """
+        Kod/REPL çalıştırma izni.
+        - RESTRICTED : yasak
+        - SANDBOX    : izinli (yalnızca /temp üzerinde çalışır)
+        - FULL       : izinli (tam erişim)
+        """
+        return self.level >= SANDBOX
 
     # ─────────────────────────────────────────────
     #  YARDIMCILAR
