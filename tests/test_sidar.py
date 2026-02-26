@@ -84,8 +84,9 @@ class TestSecurityManager:
         outside = str(tmp_base / "outside.py")
         assert security_sandbox.can_write(outside) is False
 
-    def test_sandbox_cannot_execute(self, security_sandbox):
-        assert security_sandbox.can_execute() is False
+    def test_sandbox_can_execute(self, security_sandbox):
+        # sandbox seviyesi SANDBOX >= SANDBOX → True (yalnızca /temp üzerinde çalışır)
+        assert security_sandbox.can_execute() is True
 
     def test_full_can_write_anywhere(self, security_full, tmp_base):
         assert security_full.can_write(str(tmp_base / "anything.py")) is True
@@ -378,12 +379,15 @@ class TestPackageInfoManager:
         assert "2.31.0" in msg
 
     def test_pypi_info_not_found(self):
+        # status_code=404 → package_info.py 404 erken dönüş dalını test eder
         mock = MagicMock()
-        mock.raise_for_status.side_effect = requests.exceptions.HTTPError("404")
+        mock.status_code = 404
+        mock.raise_for_status = MagicMock()
         with patch("requests.get", return_value=mock):
             pkg = PackageInfoManager()
             ok, msg = pkg.pypi_info("nonexistent_pkg_xyz_123")
         assert ok is False
+        assert "bulunamadı" in msg
 
     def test_npm_info_success(self):
         mock = MagicMock()

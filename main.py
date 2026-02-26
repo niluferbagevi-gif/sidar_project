@@ -89,6 +89,7 @@ def interactive_loop(agent: SidarAgent) -> None:
     print(f"  AI Sağlayıcı    : {agent.cfg.AI_PROVIDER} ({agent.cfg.CODING_MODEL})")
     print(f"  GitHub          : {'Bağlı' if agent.github.is_available() else 'Bağlı değil'}")
     print(f"  Web Arama       : {'Aktif' if agent.web.is_available() else 'duckduckgo-search kurulu değil'}")
+    print(f"  Paket Bilgi     : {agent.pkg.status()}")
     print(f"  Belge Deposu    : {agent.docs.status()}")
     print(f"\n  '.help' yazarak komut listesini görebilirsiniz.\n")
 

@@ -282,6 +282,7 @@ sidar_project/
 ├── logs/                   # Log dosyaları (gitignore'da)
 ├── config.py               # Merkezi yapılandırma (env → Config sınıfı)
 ├── main.py                 # Giriş noktası & CLI
+├── github_upload.py        # GitHub'a otomatik yükleme yardımcı betiği (bağımsız)
 ├── Dockerfile              # Docker imajı (python:3.11-slim, v2.3.2)
 ├── docker-compose.yml      # Docker Compose servisi
 ├── environment.yml         # Conda ortamı
