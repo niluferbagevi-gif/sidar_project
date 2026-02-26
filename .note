@@ -1,109 +1,13 @@
 
+⏳ ATLADIĞIMIZ / BEKLEYEN MADDELER (EKSİKLER)
+1. Vektör Bellek (Konuşma Geçmişi İçin) - 2. Maddenin İkinci Yarısı
 
+Eksik: Şu anki RAG sistemimiz (DocumentStore) sadece dış kaynakları (URL, Markdown, kod dosyaları) vektör veritabanına (ChromaDB) kaydediyor. Ancak .note dosyasında belirtilen "eski konuşmaların da RAG sistemine otomatik olarak gömülmesi (Long-term memory)" özelliğini henüz yapmadık. Eski sohbetler sadece özetleniyor, ama vektör aranabilir şekilde arşive atılmıyor.
 
-Sidar projemizdeki dosyaların hepsini inceleyerek eksiksiz bir rapor oluştur. ayrıca geliştirilmesi gereken yerler var ise ayrıca belirt
+2. Web Arama Modülünün Güçlendirilmesi - 5. Madde
 
-1. Asenkron Yapıya Geçiş (Öncelikli)
-Mevcut Durum: WebSearchManager ve LLMClient senkron (requests kütüphanesi) çalışıyor. Web araması yapılırken veya büyük bir model yanıt verirken arayüz donabilir.
-Öneri:
-requests yerine httpx veya aiohttp kütüphanesine geçilmeli.
-SidarAgent.respond metodu async def yapılmalı ve main.py içinde asyncio.run() ile çağrılmalı.
+Eksik: Arama motorunu asenkron yaptık ancak hala sadece DuckDuckGo kullanıyoruz. DuckDuckGo yoğun kullanımlarda "Rate Limit" (Hız Sınırı) hatası verebilir. .note dosyasında önerilen Tavily API veya Google Custom Search API alternatiflerini sisteme (yedek/fallback olarak) henüz eklemedik.
 
-yukarıda belirttiğin eklentiyi geliştirmeyi projemize ekleyip , ilgili dosyaların son güncel eksiksiz tam dosyayı paylaş
+3. Test Kapsamının Genişletilmesi - 6. Madde
 
-
-
-
-
-
-🚀 3. Kritik Eksikler ve Geliştirme Önerileri
-Projenizdeki .note dosyasında belirtilen eksikliklere katılıyor ve bunlara ek olarak kod analizi sonucunda tespit ettiğim teknik iyileştirmeleri aşağıda sunuyorum:
-
-1. Asenkron Yapıya Geçiş (Öncelikli)
-Mevcut Durum: WebSearchManager ve LLMClient senkron (requests kütüphanesi) çalışıyor. Web araması yapılırken veya büyük bir model yanıt verirken arayüz donabilir.
-
-Öneri:
-
-requests yerine httpx veya aiohttp kütüphanesine geçilmeli.
-
-SidarAgent.respond metodu async def yapılmalı ve main.py içinde asyncio.run() ile çağrılmalı.
-
-2. Bellek Yönetimi ve Özetleme (Summarization)
-Mevcut Durum: ConversationMemory sadece son N turu tutuyor. Eski konuşmalar siliniyor.
-
-Öneri:
-
-Özetleyici Bellek: Konuşma geçmişi sınır değere ulaştığında (örn: 20 tur), eski mesajlar silinmek yerine LLM tarafından özetlenip (Summary) System Prompt içine "Önceki Bağlam" olarak eklenmeli.
-
-Vektör Bellek: Uzun süreli proje hafızası için eski konuşmalar da RAG sistemine (chroma_db) otomatik olarak gömülmeli.
-
-3. Yapısal Çıktı (Structured Output / Function Calling)
-Mevcut Durum: Modelden ham metin olarak JSON üretmesi isteniyor ve Regex/JSON parser ile okunuyor. Bu yöntem, model karmaşıklaştıkça hata yapmaya meyillidir (örn: Markdown backtick eklemesi).
-
-Öneri:
-
-Ollama ve Gemini'nin yerel "Function Calling" (Tool Use) API'ları destekleniyorsa bunlara geçilmeli.
-
-Eğer Prompt bazlı gidilecekse, çıktıları doğrulamak için Pydantic kütüphanesi kullanılmalı. Modelin çıktısının belirli bir şemaya uyup uymadığı kod seviyesinde garanti altına alınmalı.
-
-4. Kod Çalıştırma Güvenliği (Code Execution Sandbox)
-Mevcut Durum: execute_code aracı, kodu subprocess ile ana makinede (veya Docker konteynerinin içinde) çalıştırıyor.
-
-Risk: Ajan, os.system("rm -rf /") gibi komutlar denerse (yetkisi varsa) konteyneri veya sistemi bozabilir.
-
-Öneri:
-
-Kod çalıştırma işlemi için E2B gibi izole sandbox servisleri veya tamamen ağ erişimi kısıtlanmış, geçici (ephemeral) ayrı bir Docker konteyneri kullanılmalı.
-
-5. Web Arama Modülünün Güçlendirilmesi
-Mevcut Durum: DuckDuckGo kullanılıyor. Bazen hız sınırı (rate limit) verebilir.
-
-Öneri:
-
-Alternatif olarak Tavily API veya Google Custom Search API desteği eklenebilir. Bu servisler özellikle kod ve teknik doküman aramalarında daha kararlı sonuçlar verir.
-
-6. Test Kapsamı
-Mevcut Durum: tests/test_sidar.py temel fonksiyonları test ediyor.
-
-Öneri:
-
-RAG sistemi için entegrasyon testleri eklenmeli (Gerçekten doğru dokümanı getiriyor mu?).
-
-Farklı LLM modelleri (Qwen, Llama3, Gemini) ile "Prompt Dayanıklılık Testleri" yapılmalı.
-
-
-
-
-
-
-
-
-
-3. Tespit Edilen Kritik Eksikler ve Geliştirme Önerileri
-Dosyalarınız arasında bulunan .note dosyasındaki notlar ve kod analizi sonucunda aşağıdaki geliştirme planını öneriyorum:
-
-
-3. Bellek Yönetimi ve Özetleme
-Mevcut Durum: ConversationMemory sadece son N mesajı tutar ve eski mesajlar silinir.
-Sorun: Uzun süreli projelerde ajan, konuşmanın başındaki kritik proje detaylarını (örn: veritabanı şeması) unutabilir.
-Çözüm Önerisi:
-
-Özetleme (Summarization): N turdan sonra konuşma geçmişi LLM tarafından özetlenerek belleğin başına "System Context" olarak eklenmelidir.
-
-Vektör Bellek: Proje dosyaları RAG'a ekleniyor ancak konuşma geçmişi de vektörel olarak saklanıp, ilgili eski konuşmalar geri çağrılmalıdır.
-
-4. Asenkron Yapı (AsyncIO)
-Mevcut Durum: Web aramaları, dosya işlemleri ve LLM çağrıları senkron (bloklayan) çalışıyor.
-Sorun: Web'den büyük bir dosya çekerken veya ağır bir LLM cevabı beklerken arayüz donabilir.
-Çözüm Önerisi:
-
-Özellikle WebSearchManager ve LLMClient modülleri async/await yapısına dönüştürülmelidir.
-
-5. Yapısal Hata Yönetimi
-Mevcut Durum: sidar_agent.py içinde JSON parse hataları için temel bir try-except bloğu var.
-Sorun: Model bazen JSON dışına açıklama metni ekleyebilir veya bozuk JSON üretebilir.
-Çözüm Önerisi:
-
-Retry Logic: JSON hatası alındığında, hatayı modele geri besleyerek (Feedback Loop) "Lütfen sadece JSON formatında, şu hatayı düzelterek tekrar ver" diyen bir düzeltme mekanizması eklenmelidir.
-
-Özet Rapor
+Eksik: tests/ klasörüne hiç dokunmadık. .note dosyasında RAG entegrasyonu için (Gerçekten doğru dokümanı getiriyor mu?) ve farklı modeller için (Prompt dayanıklılık testleri) testlerin yazılması gerektiği belirtilmişti.

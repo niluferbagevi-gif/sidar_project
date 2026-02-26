@@ -1,6 +1,6 @@
 """
 Sidar Project - GitHub Yöneticisi
-Depo analizi, commit geçmişi ve uzak dosya okuma.
+Depo analizi, commit geçmişi ve uzak dosya okuma (Binary Korumalı).
 """
 
 import logging
@@ -14,6 +14,13 @@ class GitHubManager:
     GitHub API üzerinden depo analizi yapar.
     PyGithub kütüphanesi kullanır.
     """
+
+    # Okunmasına izin verilen, metin tabanlı (text-based) güvenli dosya uzantıları
+    SAFE_TEXT_EXTENSIONS = {
+        ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".ini", ".cfg", ".toml",
+        ".csv", ".xml", ".html", ".css", ".js", ".ts", ".sh", ".bash", ".bat",
+        ".sql", ".env", ".example", ".gitignore", ".dockerignore"
+    }
 
     def __init__(self, token: str, repo_name: str = "") -> None:
         self.token = token
@@ -111,23 +118,43 @@ class GitHubManager:
             return False, f"Commit listesi alınamadı: {exc}"
 
     def read_remote_file(self, file_path: str, ref: Optional[str] = None) -> Tuple[bool, str]:
-        """Uzak depodaki bir dosyayı oku."""
+        """Uzak depodaki bir dosyayı okur (Binary korumalı)."""
         if not self._repo:
             return False, "Aktif depo yok."
         try:
             kwargs = {}
             if ref:
                 kwargs["ref"] = ref
+            
             content_file = self._repo.get_contents(file_path, **kwargs)
+            
+            # Eğer dönen veri bir liste ise, bu bir dizindir
             if isinstance(content_file, list):
-                # Dizin listelemesi
                 lines = [f"[Dizin: {file_path}]"]
                 for item in content_file:
                     icon = "📂" if item.type == "dir" else "📄"
                     lines.append(f"  {icon} {item.name}")
                 return True, "\n".join(lines)
+            
+            # Eğer bu bir dosyaysa, içeriği UTF-8 mi yoksa Binary mi diye kontrol et
+            file_name = content_file.name.lower()
+            
+            # Uzantısız dosyalar (Makefile, Dockerfile vb.) için uzantıyı boş varsayıyoruz
+            extension = ""
+            if "." in file_name:
+                extension = "." + file_name.split(".")[-1]
+
+            # Uzantı güvenli listede değilse ve bilinen bir uzantısız dosya değilse reddet
+            if extension and extension not in self.SAFE_TEXT_EXTENSIONS:
+                 return False, f"⚠ Güvenlik/Hata Koruması: '{file_name}' dosyasının binary (ikili) veya desteklenmeyen bir veri formatı (.png, .zip, vb.) olduğu varsayılarak okuma işlemi iptal edildi. Yalnızca metin tabanlı dosyalar okunabilir."
+
+            # Güvenli olduğuna ikna olduysak, decode et
             decoded = content_file.decoded_content.decode("utf-8", errors="replace")
             return True, decoded
+            
+        except UnicodeDecodeError:
+            # Yine de decode hatası alırsak (örneğin uzantısı .txt ama içi binary bozuk bir dosya)
+             return False, f"⚠ Hata: '{file_path}' dosyası UTF-8 formatında okunamadı. Dosya binary (ikili veri) içeriyor olabilir."
         except Exception as exc:
             return False, f"Uzak dosya okunamadı ({file_path}): {exc}"
 

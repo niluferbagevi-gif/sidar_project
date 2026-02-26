@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SİDAR — Yazılım Mühendisi AI</title>
 
-  <!-- Highlight.js — kod blokları renklendirme -->
   <link rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-  <!-- Marked.js — Markdown render -->
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
 
   <style>
@@ -389,7 +387,6 @@
 <body>
 <div class="app">
 
-  <!-- ── Header ── -->
   <header>
     <div class="logo">
       <div class="logo-icon">SI</div>
@@ -404,7 +401,6 @@
     </div>
   </header>
 
-  <!-- ── Mesaj alanı ── -->
   <div id="messages">
     <div id="welcome">
       <div class="welcome-logo">SİDAR</div>
@@ -422,7 +418,6 @@
     </div>
   </div>
 
-  <!-- ── Input alanı ── -->
   <footer>
     <div class="input-row">
       <textarea
@@ -435,10 +430,7 @@
     <div class="input-hint">Enter ile gönder &nbsp;·&nbsp; Shift+Enter ile yeni satır</div>
   </footer>
 
-</div><!-- .app -->
-
-<!-- ── Durum Modalı ── -->
-<div class="modal-bg" id="status-modal" onclick="modalBgClick(event)">
+</div><div class="modal-bg" id="status-modal" onclick="modalBgClick(event)">
   <div class="modal-box">
     <h3>⚡ Sistem Durumu</h3>
     <div class="stat-grid" id="stat-grid">
@@ -560,7 +552,7 @@ function finalizeMsg(id, rawText) {
 }
 
 /* ════════════════════════════════════════════
-   Mesaj gönderme (SSE streaming)
+   Mesaj gönderme (SSE streaming & Bağlantı Koruması)
    ════════════════════════════════════════════ */
 async function sendMessage() {
   if (isStreaming) return;
@@ -578,16 +570,31 @@ async function sendMessage() {
   const msgId = createSidarMsg();
 
   let accumulated = '';
+  
+  // İsteği iptal etmek için controller
+  const controller = new AbortController();
+  let timeoutId = null;
+
+  // 45 saniye boyunca sunucudan hiç veri gelmezse bağlantıyı zorla kes
+  const resetTimeout = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 45000); 
+  };
 
   try {
+    resetTimeout(); // İlk timeout'u başlat
+    
     const response = await fetch('/chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ message: text }),
+      signal:  controller.signal // İptal sinyalini bağla
     });
 
     if (!response.ok) {
-      finalizeMsg(msgId, `[HTTP Hatası] ${response.status}`);
+      finalizeMsg(msgId, `[HTTP Hatası] Sunucu ${response.status} kodu döndürdü.`);
       return;
     }
 
@@ -598,6 +605,8 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      
+      resetTimeout(); // Sunucudan yeni veri geldi, timeout süresini sıfırla
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -617,8 +626,13 @@ async function sendMessage() {
       }
     }
   } catch (err) {
-    accumulated += `\n\n[Bağlantı Hatası] ${err.message}`;
+    if (err.name === 'AbortError') {
+      accumulated += `\n\n[Sistem Hatası: Yanıt zaman aşımına uğradı veya ağ bağlantısı koptu.]`;
+    } else {
+      accumulated += `\n\n[Bağlantı Hatası: ${err.message}]`;
+    }
   } finally {
+    if (timeoutId) clearTimeout(timeoutId); // Temizlik
     finalizeMsg(msgId, accumulated);
     isStreaming = false;
     document.getElementById('send-btn').disabled = false;
