@@ -7,6 +7,7 @@ import logging
 import json
 import re
 import asyncio
+import time
 from typing import Optional, AsyncIterator, Dict
 
 from pydantic import BaseModel, Field, ValidationError
@@ -39,10 +40,10 @@ class ToolCall(BaseModel):
 class SidarAgent:
     """
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
-    Tamamen asenkron ağ istekleri, stream ve yapısal veri uyumlu yapı.
+    Tamamen asenkron ağ istekleri, stream, yapısal veri ve sonsuz vektör hafıza uyumlu yapı.
     """
 
-    VERSION = "2.4.0"  # Pydantic & Structured Output Update
+    VERSION = "2.5.0"  # Vector Memory (Infinite Recall) Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -72,7 +73,7 @@ class SidarAgent:
         )
 
         logger.info(
-            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (PYDANTIC + ASYNC)",
+            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (VECTOR MEMORY + ASYNC)",
             self.VERSION,
             self.cfg.AI_PROVIDER,
             self.cfg.CODING_MODEL,
@@ -108,9 +109,9 @@ class SidarAgent:
             yield quick_response
             return
 
-        # Bellek eşiği dolmak üzereyse özetleme tetikle
+        # Bellek eşiği dolmak üzereyse özetleme ve arşivleme tetikle
         if self.memory.needs_summarization():
-            yield "\n[Sistem] Konuşma belleği sıkıştırılıyor...\n"
+            yield "\n[Sistem] Konuşma belleği arşivleniyor ve sıkıştırılıyor...\n"
             await self._summarize_memory()
 
         # ReAct döngüsünü akıştır
@@ -363,25 +364,46 @@ class SidarAgent:
         return "\n".join(lines)
 
     # ─────────────────────────────────────────────
-    #  BELLEK ÖZETLEME (ASYNC)
+    #  BELLEK ÖZETLEME VE VEKTÖR ARŞİVLEME (ASYNC)
     # ─────────────────────────────────────────────
 
     async def _summarize_memory(self) -> None:
         """
         Konuşma geçmişini LLM ile özetler ve belleği sıkıştırır.
+        AYRICA: Eski konuşmaları 'Sonsuz Hafıza' için Vektör DB'ye (ChromaDB) gömer.
         """
         history = self.memory.get_history()
         if len(history) < 4:
             return
 
-        turns_text = "\n".join(
+        # 1. VEKTÖR BELLEK (SONSUZ HAFIZA) KAYDI
+        # Kısa özetlemeye geçmeden önce, tüm detayları RAG sistemine kaydediyoruz
+        full_turns_text = "\n\n".join(
+            f"[{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t.get('timestamp', time.time())))}] {t['role'].upper()}:\n{t['content']}"
+            for t in history
+        )
+        
+        try:
+            self.docs.add_document(
+                title=f"Sohbet Geçmişi Arşivi ({time.strftime('%Y-%m-%d %H:%M')})",
+                content=full_turns_text,
+                source="memory_archive",
+                tags=["memory", "archive", "conversation"]
+            )
+            logger.info("Eski konuşmalar RAG (Vektör) belleğine arşivlendi.")
+        except Exception as exc:
+            logger.warning("Vektör belleğe kayıt başarısız: %s", exc)
+
+        # 2. KISA SÜRELİ BELLEK ÖZETLEMESİ
+        # LLM token tasarrufu için sadece ilk 400 karakterlik kısımları gönderiyoruz
+        turns_text_short = "\n".join(
             f"{t['role'].upper()}: {t['content'][:400]}"
             for t in history
         )
         summarize_prompt = (
             "Aşağıdaki konuşmayı kısa ve bilgilendirici şekilde özetle. "
             "Teknik detayları, dosya adlarını ve kod kararlarını koru:\n\n"
-            + turns_text
+            + turns_text_short
         )
         try:
             summary = await self.llm.chat(
