@@ -72,13 +72,14 @@ class LLMClient:
             "options": {"temperature": temperature},
         }
         
+        timeout = getattr(self.config, "REACT_TIMEOUT", 120)
         try:
             # STREAM MODU
             if stream:
-                return self._stream_ollama_response(url, payload)
-            
+                return self._stream_ollama_response(url, payload, timeout=timeout)
+
             # NORMAL MOD
-            resp = requests.post(url, json=payload, timeout=120)
+            resp = requests.post(url, json=payload, timeout=timeout)
             resp.raise_for_status()
             data = resp.json()
             return data.get("message", {}).get("content", "")
@@ -92,10 +93,10 @@ class LLMClient:
             msg = json.dumps({"tool": "final_answer", "argument": f"[HATA] Ollama: {exc}", "thought": "Hata oluştu."})
             return iter([msg]) if stream else msg
 
-    def _stream_ollama_response(self, url: str, payload: dict) -> Iterator[str]:
+    def _stream_ollama_response(self, url: str, payload: dict, timeout: int = 120) -> Iterator[str]:
         """Ollama stream yanıtını parçalar halinde yield eder."""
         try:
-            with requests.post(url, json=payload, stream=True, timeout=120) as resp:
+            with requests.post(url, json=payload, stream=True, timeout=timeout) as resp:
                 resp.raise_for_status()
                 for line in resp.iter_lines():
                     if line:
