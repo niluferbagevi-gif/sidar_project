@@ -4,7 +4,6 @@ channels:
   - nvidia
   - conda-forge
   - defaults
-
 dependencies:
   - python=3.11
   - pip
@@ -12,42 +11,47 @@ dependencies:
   - setuptools
   - wheel
   - packaging
-  - pyyaml
-
-  # GPU hızlandırma (opsiyonel ama proje varsayılanında kullanılıyor)
   - cudatoolkit=11.8
   - pytorch-cuda=11.8
   - pytorch
   - torchvision
-
   - pip:
-      # Temel
+      # ── Temel ─────────────────────────────────
       - python-dotenv>=1.0.0
       - requests>=2.31.0
+      - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
 
-      # Sistem izleme
+      # ── Asenkron Geçiş ve Veri Doğrulama ──────
+      - httpx>=0.25.0  # Asenkron WebSearchManager ve LLMClient (.note önerisi)
+      - pydantic>=2.4.0  # Yapısal çıktı ve hata yönetimi için (.note önerisi)
+
+      # ── Sistem İzleme ─────────────────────────
       - psutil>=5.9.5
       - GPUtil>=1.4.0
       - pynvml>=11.5.0
 
-      # AI sağlayıcıları
+      # ── AI Sağlayıcıları ──────────────────────
       - ollama>=0.1.6
       - google-generativeai>=0.7.0
 
-      # GitHub / web
+      # ── GitHub Entegrasyonu ───────────────────
       - PyGithub>=2.1.0
+
+      # ── Web Arama ─────────────────────────────
       - duckduckgo-search>=6.1.0
 
-      # RAG
+      # ── RAG (Vektör & BM25) ───────────────────
       - rank-bm25>=0.2.2
+      # ChromaDB ve bağımlılıkları (Hafif vektör DB)
       - chromadb>=0.4.0
+      # Vektör embed işlemleri için
       - sentence-transformers>=2.2.0
 
-      # Web UI / API
+      # ── Web Arayüzü ───────────────────────────
       - fastapi>=0.104.0
       - uvicorn[standard]>=0.24.0
 
-      # Test & kalite
+      # ── Geliştirme & Test ─────────────────────
       - pytest>=7.4.0
       - pytest-cov>=4.1.0
       - black>=23.0.0
