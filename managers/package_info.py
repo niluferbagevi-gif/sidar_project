@@ -1,6 +1,6 @@
 """
 Sidar Project - Paket Bilgi Yöneticisi
-PyPI, npm Registry ve GitHub Releases entegrasyonu.
+PyPI, npm Registry ve GitHub Releases entegrasyonu (Asenkron).
 
 Gerçek zamanlı paket sürüm kontrolü, changelog ve bağımlılık sorguları.
 """
@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Tuple
 
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class PackageInfoManager:
     """
     Python (PyPI), JavaScript (npm) ve GitHub projeleri için
-    paket bilgisi sorgular.
+    paket bilgisi sorgular. (Tamamen asenkron mimari).
     """
 
     # Varsayılan değer (Config verilmezse kullanılır)
@@ -25,25 +25,27 @@ class PackageInfoManager:
 
     def __init__(self, config=None) -> None:
         if config is not None:
-            self.TIMEOUT = config.PACKAGE_INFO_TIMEOUT
+            self.TIMEOUT = getattr(config, "PACKAGE_INFO_TIMEOUT", self.TIMEOUT)
 
     # ─────────────────────────────────────────────
-    #  PyPI
+    #  PyPI (ASYNC)
     # ─────────────────────────────────────────────
 
-    def pypi_info(self, package: str) -> Tuple[bool, str]:
+    async def pypi_info(self, package: str) -> Tuple[bool, str]:
         """
-        PyPI JSON API'den paket bilgisi çek.
+        PyPI JSON API'den paket bilgisi çek (Asenkron).
 
         Args:
-            package: Paket adı (örn: "fastapi", "requests")
+            package: Paket adı (örn: "fastapi", "httpx")
 
         Returns:
             (başarı, biçimlendirilmiş_bilgi)
         """
         url = f"https://pypi.org/pypi/{package}/json"
         try:
-            resp = requests.get(url, timeout=self.TIMEOUT)
+            async with httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(url)
+                
             if resp.status_code == 404:
                 return False, f"✗ PyPI'de '{package}' paketi bulunamadı."
             resp.raise_for_status()
@@ -79,32 +81,34 @@ class PackageInfoManager:
 
             return True, "\n".join(lines)
 
+        except httpx.TimeoutException:
+            return False, f"[HATA] PyPI zaman aşımı: {package}"
+        except httpx.RequestError as exc:
+            return False, f"[HATA] PyPI bağlantı hatası: {exc}"
         except Exception as exc:
             logger.error("PyPI sorgu hatası: %s", exc)
             return False, f"[HATA] PyPI: {exc}"
 
-    def pypi_latest_version(self, package: str) -> Tuple[bool, str]:
-        """Sadece güncel sürüm numarasını döndür."""
+    async def pypi_latest_version(self, package: str) -> Tuple[bool, str]:
+        """Sadece güncel sürüm numarasını döndür (Asenkron)."""
         url = f"https://pypi.org/pypi/{package}/json"
         try:
-            resp = requests.get(url, timeout=self.TIMEOUT)
+            async with httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(url)
+                
             if resp.status_code == 404:
                 return False, f"✗ '{package}' bulunamadı."
             resp.raise_for_status()
             version = resp.json().get("info", {}).get("version", "?")
             return True, f"{package}=={version}"
         except Exception as exc:
-            return False, f"[HATA] PyPI: {exc}"
+            return False, f"[HATA] PyPI son sürüm sorgusu: {exc}"
 
-    def pypi_compare(self, package: str, current_version: str) -> Tuple[bool, str]:
+    async def pypi_compare(self, package: str, current_version: str) -> Tuple[bool, str]:
         """
-        Kurulu sürümü PyPI'deki güncel sürümle karşılaştır.
-
-        Args:
-            package        : Paket adı
-            current_version: Kurulu sürüm (örn: "2.1.0")
+        Kurulu sürümü PyPI'deki güncel sürümle karşılaştır (Asenkron).
         """
-        ok, info = self.pypi_info(package)
+        ok, info = await self.pypi_info(package)
         if not ok:
             return False, info
 
@@ -119,19 +123,18 @@ class PackageInfoManager:
         return True, f"{info}\n  Kurulu sürüm  : {current_version}\n{status_line}"
 
     # ─────────────────────────────────────────────
-    #  npm
+    #  npm (ASYNC)
     # ─────────────────────────────────────────────
 
-    def npm_info(self, package: str) -> Tuple[bool, str]:
+    async def npm_info(self, package: str) -> Tuple[bool, str]:
         """
-        npm Registry'den paket bilgisi çek.
-
-        Args:
-            package: Paket adı (örn: "react", "axios")
+        npm Registry'den paket bilgisi çek (Asenkron).
         """
         url = f"https://registry.npmjs.org/{package}/latest"
         try:
-            resp = requests.get(url, timeout=self.TIMEOUT)
+            async with httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(url)
+                
             if resp.status_code == 404:
                 return False, f"✗ npm'de '{package}' paketi bulunamadı."
             resp.raise_for_status()
@@ -169,29 +172,30 @@ class PackageInfoManager:
 
             return True, "\n".join(lines)
 
+        except httpx.TimeoutException:
+            return False, f"[HATA] npm zaman aşımı: {package}"
+        except httpx.RequestError as exc:
+            return False, f"[HATA] npm bağlantı hatası: {exc}"
         except Exception as exc:
             logger.error("npm sorgu hatası: %s", exc)
             return False, f"[HATA] npm: {exc}"
 
     # ─────────────────────────────────────────────
-    #  GITHUB RELEASES
+    #  GITHUB RELEASES (ASYNC)
     # ─────────────────────────────────────────────
 
-    def github_releases(self, repo: str, limit: int = 5) -> Tuple[bool, str]:
+    async def github_releases(self, repo: str, limit: int = 5) -> Tuple[bool, str]:
         """
-        GitHub Releases API ile sürümleri listele.
-
-        Args:
-            repo : "owner/repo" formatı (örn: "tiangolo/fastapi")
-            limit: Gösterilecek maksimum sürüm sayısı
+        GitHub Releases API ile sürümleri listele (Asenkron).
         """
         url = f"https://api.github.com/repos/{repo}/releases"
         try:
-            resp = requests.get(
-                url,
-                timeout=self.TIMEOUT,
-                headers={"Accept": "application/vnd.github+json"},
-            )
+            async with httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(
+                    url,
+                    headers={"Accept": "application/vnd.github+json"}
+                )
+                
             if resp.status_code == 404:
                 return False, f"✗ GitHub deposu bulunamadı: {repo}"
             resp.raise_for_status()
@@ -214,19 +218,22 @@ class PackageInfoManager:
 
             return True, "\n".join(lines)
 
+        except httpx.TimeoutException:
+            return False, f"[HATA] GitHub API zaman aşımı: {repo}"
         except Exception as exc:
             logger.error("GitHub releases hatası: %s", exc)
             return False, f"[HATA] GitHub Releases: {exc}"
 
-    def github_latest_release(self, repo: str) -> Tuple[bool, str]:
-        """Sadece en güncel release tag'ini döndür."""
+    async def github_latest_release(self, repo: str) -> Tuple[bool, str]:
+        """Sadece en güncel release tag'ini döndür (Asenkron)."""
         url = f"https://api.github.com/repos/{repo}/releases/latest"
         try:
-            resp = requests.get(
-                url,
-                timeout=self.TIMEOUT,
-                headers={"Accept": "application/vnd.github+json"},
-            )
+            async with httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(
+                    url,
+                    headers={"Accept": "application/vnd.github+json"}
+                )
+                
             if resp.status_code == 404:
                 return False, f"✗ '{repo}' için release bulunamadı."
             resp.raise_for_status()
@@ -259,4 +266,4 @@ class PackageInfoManager:
         return result
 
     def status(self) -> str:
-        return "PackageInfo: PyPI + npm + GitHub Releases — Aktif"
+        return "PackageInfo: PyPI + npm + GitHub Releases — Aktif (Asenkron)"

@@ -1,13 +1,13 @@
 """
 Sidar Project - Ana Ajan
-ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı.
+ReAct (Reason + Act) döngüsü ile çalışan yazılım mühendisi AI asistanı (Asenkron Mimari).
 """
 
 import logging
-import threading
 import json
 import re
-from typing import Optional, Iterator, Dict
+import asyncio
+from typing import Optional, AsyncIterator, Dict
 
 from config import Config
 from core.memory import ConversationMemory
@@ -28,15 +28,16 @@ logger = logging.getLogger(__name__)
 class SidarAgent:
     """
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
+    Tamamen asenkron ağ istekleri ve stream uyumlu yapı.
     """
 
-    VERSION = "2.3.2"  # REPL Feature Update
+    VERSION = "2.3.3"  # Async Feature Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
-        self._lock = threading.RLock()
+        self._lock = None  # Asenkron Lock, respond çağrıldığında yaratılacak
 
-        # Alt sistemler — temel
+        # Alt sistemler — temel (Senkron/Yerel)
         self.security = SecurityManager(self.cfg.ACCESS_LEVEL, self.cfg.BASE_DIR)
         self.code = CodeManager(self.security, self.cfg.BASE_DIR)
         self.health = SystemHealthManager(self.cfg.USE_GPU)
@@ -49,7 +50,7 @@ class SidarAgent:
         
         self.llm = LLMClient(self.cfg.AI_PROVIDER, self.cfg)
 
-        # Alt sistemler — yeni
+        # Alt sistemler — yeni (Asenkron)
         self.web = WebSearchManager(self.cfg)
         self.pkg = PackageInfoManager(self.cfg)
         self.docs = DocumentStore(self.cfg.RAG_DIR, top_k=self.cfg.RAG_TOP_K)
@@ -60,7 +61,7 @@ class SidarAgent:
         )
 
         logger.info(
-            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (JSON MODE)",
+            "SidarAgent v%s başlatıldı — sağlayıcı=%s model=%s erişim=%s (JSON MODE + ASYNC)",
             self.VERSION,
             self.cfg.AI_PROVIDER,
             self.cfg.CODING_MODEL,
@@ -68,28 +69,31 @@ class SidarAgent:
         )
 
     # ─────────────────────────────────────────────
-    #  ANA YANIT METODU (STREAMING)
+    #  ANA YANIT METODU (ASYNC STREAMING)
     # ─────────────────────────────────────────────
 
-    def respond(self, user_input: str) -> Iterator[str]:
+    async def respond(self, user_input: str) -> AsyncIterator[str]:
         """
-        Kullanıcı girdisini işle ve yanıtı STREAM olarak döndür.
-        Lock yalnızca bellek/auto-handle kontrolü için kısa tutulur;
-        generator tüketimi lock dışında gerçekleşir.
+        Kullanıcı girdisini asenkron işle ve yanıtı STREAM olarak döndür.
         """
         user_input = user_input.strip()
         if not user_input:
             yield "⚠ Boş girdi."
             return
 
+        # Event loop içinde güvenli Lock oluşturma
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+
         # Bellek yazma ve hızlı eşleme kilitli bölgede yapılır
-        with self._lock:
+        async with self._lock:
             self.memory.add("user", user_input)
-            handled, quick_response = self.auto.handle(user_input)
+            # DİKKAT: auto.handle metodunu asenkron yaptık
+            handled, quick_response = await self.auto.handle(user_input)
             if handled:
                 self.memory.add("assistant", quick_response)
 
-        # Lock serbest bırakıldı — yield ve generator lock dışında
+        # Lock serbest bırakıldı
         if handled:
             yield quick_response
             return
@@ -97,19 +101,19 @@ class SidarAgent:
         # Bellek eşiği dolmak üzereyse özetleme tetikle
         if self.memory.needs_summarization():
             yield "\n[Sistem] Konuşma belleği sıkıştırılıyor...\n"
-            self._summarize_memory()
+            await self._summarize_memory()
 
         # ReAct döngüsünü akıştır
-        for chunk in self._react_loop(user_input):
+        async for chunk in self._react_loop(user_input):
             yield chunk
 
     # ─────────────────────────────────────────────
-    #  ReAct DÖNGÜSÜ (JSON PARSING)
+    #  ReAct DÖNGÜSÜ (ASYNC & JSON PARSING)
     # ─────────────────────────────────────────────
 
-    def _react_loop(self, user_input: str) -> Iterator[str]:
+    async def _react_loop(self, user_input: str) -> AsyncIterator[str]:
         """
-        LLM ile araç çağrısı döngüsü.
+        LLM ile araç çağrısı döngüsü (Asenkron).
         Kullanıcıya yalnızca nihai yanıt metni döndürülür; ara JSON/araç
         çıktıları arka planda işlenir.
         """
@@ -118,8 +122,8 @@ class SidarAgent:
         full_system = SIDAR_SYSTEM_PROMPT + "\n\n" + context
 
         for step in range(self.cfg.MAX_REACT_STEPS):
-            # 1. LLM Çağrısı (Stream)
-            response_generator = self.llm.chat(
+            # 1. LLM Çağrısı (Async Stream)
+            response_generator = await self.llm.chat(
                 messages=messages,
                 model=self.cfg.CODING_MODEL,
                 system_prompt=full_system,
@@ -127,14 +131,13 @@ class SidarAgent:
                 stream=True
             )
 
-            # LLM yanıtını biriktir (ara JSON çıktısı kullanıcıya akıtılmaz)
+            # LLM yanıtını biriktir
             llm_response_accumulated = ""
-            for chunk in response_generator:
+            async for chunk in response_generator:
                 llm_response_accumulated += chunk
 
             # 2. JSON Ayrıştırma ve Araç Kontrolü
             try:
-                # Markdown temizliği
                 clean_json = llm_response_accumulated.strip()
                 if clean_json.startswith("```"):
                     clean_json = re.sub(r"^```(json)?|```$", "", clean_json, flags=re.MULTILINE).strip()
@@ -149,8 +152,8 @@ class SidarAgent:
                     yield str(tool_arg)
                     return
 
-                # Aracı çalıştır
-                tool_result = self._execute_tool(tool_name, tool_arg)
+                # Aracı asenkron çalıştır
+                tool_result = await self._execute_tool(tool_name, tool_arg)
                 
                 if tool_result is None:
                     messages = messages + [
@@ -183,13 +186,13 @@ class SidarAgent:
             
         yield "Üzgünüm, bu istek için güvenilir bir sonuca ulaşamadım."
 
-    def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
+    async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
         """
-        Ayrıştırılmış araç adı ve argümanını kullanarak ilgili metodu çağırır.
+        Ayrıştırılmış araç adı ve argümanını kullanarak ilgili metodu asenkron çağırır.
         """
         tool_arg = str(tool_arg).strip()
 
-        # ── Temel araçlar ──────────────────────────
+        # ── Temel araçlar (Senkron çalışanlar) ─────
         if tool_name == "list_dir":
             _, result = self.code.list_directory(tool_arg or ".")
             return result
@@ -246,49 +249,49 @@ class SidarAgent:
             _, result = self.github.read_remote_file(tool_arg)
             return result
 
-        # ── Web Arama araçları ─────────────────────
+        # ── Web Arama araçları (ASENKRON) ──────────
         if tool_name == "web_search":
             if not tool_arg: return "⚠ Arama sorgusu belirtilmedi."
-            _, result = self.web.search(tool_arg)
+            _, result = await self.web.search(tool_arg)
             return result
 
         if tool_name == "fetch_url":
             if not tool_arg: return "⚠ URL belirtilmedi."
-            _, result = self.web.fetch_url(tool_arg)
+            _, result = await self.web.fetch_url(tool_arg)
             return result
 
         if tool_name == "search_docs":
             parts = tool_arg.split(" ", 1)
             lib = parts[0]
             topic = parts[1] if len(parts) > 1 else ""
-            _, result = self.web.search_docs(lib, topic)
+            _, result = await self.web.search_docs(lib, topic)
             return result
 
         if tool_name == "search_stackoverflow":
-            _, result = self.web.search_stackoverflow(tool_arg)
+            _, result = await self.web.search_stackoverflow(tool_arg)
             return result
 
-        # ── Paket Bilgi araçları ───────────────────
+        # ── Paket Bilgi araçları (ASENKRON) ────────
         if tool_name == "pypi":
-            _, result = self.pkg.pypi_info(tool_arg)
+            _, result = await self.pkg.pypi_info(tool_arg)
             return result
 
         if tool_name == "pypi_compare":
             parts = tool_arg.split("|", 1)
             if len(parts) < 2: return "⚠ Kullanım: paket|mevcut_sürüm"
-            _, result = self.pkg.pypi_compare(parts[0].strip(), parts[1].strip())
+            _, result = await self.pkg.pypi_compare(parts[0].strip(), parts[1].strip())
             return result
 
         if tool_name == "npm":
-            _, result = self.pkg.npm_info(tool_arg)
+            _, result = await self.pkg.npm_info(tool_arg)
             return result
 
         if tool_name == "gh_releases":
-            _, result = self.pkg.github_releases(tool_arg)
+            _, result = await self.pkg.github_releases(tool_arg)
             return result
 
         if tool_name == "gh_latest":
-            _, result = self.pkg.github_latest_release(tool_arg)
+            _, result = await self.pkg.github_latest_release(tool_arg)
             return result
 
         # ── RAG / Belge Deposu araçları ────────────
@@ -333,13 +336,12 @@ class SidarAgent:
         return "\n".join(lines)
 
     # ─────────────────────────────────────────────
-    #  BELLEK ÖZETLEME
+    #  BELLEK ÖZETLEME (ASYNC)
     # ─────────────────────────────────────────────
 
-    def _summarize_memory(self) -> None:
+    async def _summarize_memory(self) -> None:
         """
         Konuşma geçmişini LLM ile özetler ve belleği sıkıştırır.
-        Başarısız olursa sessizce geçer; bellek mevcut haliyle sürer.
         """
         history = self.memory.get_history()
         if len(history) < 4:
@@ -355,12 +357,12 @@ class SidarAgent:
             + turns_text
         )
         try:
-            summary = self.llm.chat(
+            summary = await self.llm.chat(
                 messages=[{"role": "user", "content": summarize_prompt}],
                 model=self.cfg.CODING_MODEL,
                 temperature=0.1,
                 stream=False,
-                json_mode=False,   # Özet düz metin olmalı, JSON değil
+                json_mode=False,
             )
             self.memory.apply_summary(str(summary))
             logger.info("Bellek özetlendi (%d → 2 mesaj).", len(history))
