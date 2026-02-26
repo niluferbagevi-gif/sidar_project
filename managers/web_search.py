@@ -16,7 +16,7 @@ class WebSearchManager:
     """
     DuckDuckGo ile gerçek zamanlı web araması ve URL içerik çekme.
 
-    Gereksinim: pip install duckduckgo-search
+    Gereksinim: pip install ddgs (eski: duckduckgo-search)
     """
 
     # Varsayılan değerler (Config verilmezse kullanılır)
@@ -37,12 +37,12 @@ class WebSearchManager:
 
     def _check_availability(self) -> bool:
         try:
-            from duckduckgo_search import DDGS  # noqa: F401
+            self._get_ddgs_class()
             return True
         except ImportError:
             logger.warning(
-                "duckduckgo-search kurulu değil. "
-                "Kurmak için: pip install duckduckgo-search"
+                "Web arama paketi kurulu değil. "
+                "Kurmak için: pip install ddgs"
             )
             return False
 
@@ -50,8 +50,19 @@ class WebSearchManager:
         return self._available
 
     def status(self) -> str:
-        state = "Aktif" if self._available else "duckduckgo-search kurulu değil"
+        state = "Aktif" if self._available else "ddgs kurulu değil"
         return f"WebSearch: {state}"
+
+
+    @staticmethod
+    def _get_ddgs_class():
+        """DDGS sınıfını yeni paketten (ddgs), yoksa eski paketten yükler."""
+        try:
+            from ddgs import DDGS
+            return DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+            return DDGS
 
     # ─────────────────────────────────────────────
     #  WEB ARAMA
@@ -71,12 +82,12 @@ class WebSearchManager:
         if not self._available:
             return False, (
                 "⚠ Web arama mevcut değil. "
-                "Kurmak için: pip install duckduckgo-search"
+                "Kurmak için: pip install ddgs"
             )
 
         n = max_results or self.MAX_RESULTS
         try:
-            from duckduckgo_search import DDGS
+            DDGS = self._get_ddgs_class()
 
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=n))

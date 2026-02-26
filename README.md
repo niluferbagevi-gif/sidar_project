@@ -145,7 +145,7 @@ conda activate sidar-ai
 
 ```bash
 pip install python-dotenv requests psutil GPUtil pynvml ollama \
-            google-generativeai PyGithub duckduckgo-search \
+            google-generativeai PyGithub ddgs \
             rank-bm25 chromadb sentence-transformers pytest pytest-cov
 ```
 
