@@ -19,11 +19,16 @@ class WebSearchManager:
     Gereksinim: pip install duckduckgo-search
     """
 
+    # Varsayılan değerler (Config verilmezse kullanılır)
     MAX_RESULTS = 5
     FETCH_TIMEOUT = 15  # saniye
     FETCH_MAX_CHARS = 4000
 
-    def __init__(self) -> None:
+    def __init__(self, config=None) -> None:
+        if config is not None:
+            self.MAX_RESULTS = config.WEB_SEARCH_MAX_RESULTS
+            self.FETCH_TIMEOUT = config.WEB_FETCH_TIMEOUT
+            self.FETCH_MAX_CHARS = config.WEB_FETCH_MAX_CHARS
         self._available = self._check_availability()
 
     # ─────────────────────────────────────────────
@@ -167,9 +172,4 @@ class WebSearchManager:
     def search_stackoverflow(self, query: str) -> Tuple[bool, str]:
         """Stack Overflow'da soru ara."""
         q = f"site:stackoverflow.com {query}"
-        return self.search(q, max_results=5)
-
-    def search_github(self, query: str) -> Tuple[bool, str]:
-        """GitHub'da depo veya kod ara."""
-        q = f"site:github.com {query}"
         return self.search(q, max_results=5)

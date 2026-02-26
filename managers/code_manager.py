@@ -152,10 +152,8 @@ class CodeManager:
         - Geçici dosya üzerinde çalışma (/temp/repl_session.py)
         - Stdout ve Stderr yakalama
         """
-        # RESTRICTED modda çalıştırmayı engelle (SANDBOX ve FULL izinli)
-        # SecurityManager level: 0=Restricted, 1=Sandbox, 2=Full
-        if self.security.level == 0:
-             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
+        if not self.security.can_execute():
+            return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
         try:
             # Geçici çalışma dizini ve dosya

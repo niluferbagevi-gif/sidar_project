@@ -66,7 +66,8 @@ class Config:
     BASE_DIR: Path = BASE_DIR
     TEMP_DIR: Path = TEMP_DIR
     LOGS_DIR: Path = LOGS_DIR
-    
+    DATA_DIR: Path = DATA_DIR
+
     # Kalıcı bellek dosyası
     MEMORY_FILE: Path = DATA_DIR / "memory.json"
 

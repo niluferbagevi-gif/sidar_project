@@ -20,7 +20,12 @@ class PackageInfoManager:
     paket bilgisi sorgular.
     """
 
+    # Varsayılan değer (Config verilmezse kullanılır)
     TIMEOUT = 12  # saniye
+
+    def __init__(self, config=None) -> None:
+        if config is not None:
+            self.TIMEOUT = config.PACKAGE_INFO_TIMEOUT
 
     # ─────────────────────────────────────────────
     #  PyPI
