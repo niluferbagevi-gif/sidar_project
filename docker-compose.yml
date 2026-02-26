@@ -1,16 +1,18 @@
 services:
+
+  # ── CLI Modu (Terminal) ────────────────────────────────────────────
   sidar-ai:
     build: .
     container_name: sidar_agent
     restart: unless-stopped
-    
+
     # Kaynak sınırlamaları (İsteğe bağlı - Güvenlik için)
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 4G
-    
+
     # Ortam değişkenleri
     environment:
       - ACCESS_LEVEL=sandbox
@@ -19,14 +21,14 @@ services:
       - OLLAMA_URL=http://host.docker.internal:11434/api
       # Host makinedeki Ollama'ya erişmek için "host.docker.internal" kullanılır.
       # Linux kullanıcıları için "network_mode: host" gerekebilir.
-      
+
     # Dosya sistemi eşlemeleri (Kalıcılık için)
     volumes:
       - ./data:/app/data         # Bellek ve RAG veritabanı
       - ./logs:/app/logs         # Log dosyaları
       - ./temp:/app/temp         # Geçici çalışma alanı
       - ./.env:/app/.env         # Gizli anahtarlar
-      
+
     # Ağ ayarları
     # Linux kullanıyorsanız, yerel Ollama'ya erişmek için aşağıdaki satırı açın:
     # network_mode: "host"
@@ -36,3 +38,35 @@ services:
     # Etkileşimli mod için (Terminal girişini aktif eder)
     stdin_open: true
     tty: true
+
+  # ── Web Arayüzü (Tarayıcı) ────────────────────────────────────────
+  sidar-web:
+    build: .
+    container_name: sidar_web
+    restart: unless-stopped
+    command: python web_server.py
+
+    ports:
+      - "${WEB_PORT:-7860}:7860"   # http://localhost:7860
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OLLAMA_URL=http://host.docker.internal:11434/api
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=7860
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

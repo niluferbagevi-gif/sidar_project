@@ -360,6 +360,7 @@ class SidarAgent:
                 model=self.cfg.CODING_MODEL,
                 temperature=0.1,
                 stream=False,
+                json_mode=False,   # Özet düz metin olmalı, JSON değil
             )
             self.memory.apply_summary(str(summary))
             logger.info("Bellek özetlendi (%d → 2 mesaj).", len(history))

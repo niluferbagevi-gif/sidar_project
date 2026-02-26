@@ -103,7 +103,7 @@ async def chat(request: Request):
 
     async def sse_generator():
         """Asenkron SSE akışı: queue okur → event stream yayar."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()   # get_event_loop() Python 3.10+ async context'te deprecated
         while True:
             # Bloklamayan queue.get (thread pool üzerinden)
             chunk = await loop.run_in_executor(None, chunk_queue.get)
