@@ -41,6 +41,10 @@ dependencies:
       # Vektör embed işlemleri için
       - sentence-transformers>=2.2.0
 
+      # ── Web Arayüzü ───────────────────────────
+      - fastapi>=0.104.0
+      - uvicorn[standard]>=0.24.0
+
       # ── Geliştirme & Test ─────────────────────
       - pytest>=7.4.0
       - pytest-cov>=4.1.0

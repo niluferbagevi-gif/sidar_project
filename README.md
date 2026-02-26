@@ -174,6 +174,34 @@ docker compose up --build
 
 ## Kullanım
 
+### 🌐 Web Arayüzü (Önerilen)
+
+```bash
+python web_server.py
+```
+
+Tarayıcıda açılır: **http://localhost:7860**
+
+```bash
+# Özel host/port
+python web_server.py --host 0.0.0.0 --port 8080
+
+# Erişim seviyesi ile
+python web_server.py --level full
+
+# Gemini sağlayıcısı ile
+python web_server.py --provider gemini --port 7860
+```
+
+Web arayüzü özellikleri:
+- Streaming chat (daktilo efekti)
+- Markdown ve kod bloğu renklendirme
+- Hızlı eylem butonları (8 hazır komut)
+- ⚡ Durum paneli (canlı sistem bilgisi)
+- Bellek temizleme
+
+### 💻 Terminal (CLI) Modu
+
 ### İnteraktif Mod
 
 ```bash
@@ -277,11 +305,14 @@ sidar_project/
 ├── tests/
 │   ├── __init__.py
 │   └── test_sidar.py       # 8 test sınıfı, 50+ test (mock dahil)
+├── web_ui/
+│   └── index.html          # Chat arayüzü (dark theme, Markdown, SSE streaming)
 ├── data/                   # Bellek ve RAG veritabanı (gitignore'da)
 ├── temp/                   # Sandbox modunda yazma dizini (gitignore'da)
 ├── logs/                   # Log dosyaları (gitignore'da)
 ├── config.py               # Merkezi yapılandırma (env → Config sınıfı)
 ├── main.py                 # Giriş noktası & CLI
+├── web_server.py           # FastAPI + SSE web arayüzü sunucusu
 ├── github_upload.py        # GitHub'a otomatik yükleme yardımcı betiği (bağımsız)
 ├── Dockerfile              # Docker imajı (python:3.11-slim, v2.3.2)
 ├── docker-compose.yml      # Docker Compose servisi
