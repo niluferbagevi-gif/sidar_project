@@ -1,13 +1,29 @@
 
-B. Özellik Eklentileri
-Diff/Patch Mekanizması (Dosya Düzenleme):
+3. Tespit Edilen Kritik Eksikler ve Geliştirme Önerileri
+Dosyalarınız arasında bulunan .note dosyasındaki notlar ve kod analizi sonucunda aşağıdaki geliştirme planını öneriyorum:
 
-Tespit: CodeManager dosyayı tamamen yeniden yazıyor (write_file). 500 satırlık bir dosyada tek satır değiştirmek için tüm dosyayı tekrar yazmak token israfıdır ve hata riskini artırır.
 
-Öneri: Ajanın sadece değişen satırları (Unified Diff formatında) belirttiği bir apply_patch aracı eklenmelidir.
+3. Bellek Yönetimi ve Özetleme
+Mevcut Durum: ConversationMemory sadece son N mesajı tutar ve eski mesajlar silinir.
+Sorun: Uzun süreli projelerde ajan, konuşmanın başındaki kritik proje detaylarını (örn: veritabanı şeması) unutabilir.
+Çözüm Önerisi:
 
-Sandbox Kod Çalıştırma (Code Execution):
+Özetleme (Summarization): N turdan sonra konuşma geçmişi LLM tarafından özetlenerek belleğin başına "System Context" olarak eklenmelidir.
 
-Tespit: Şu an kod çalıştırılamıyor, sadece okunup yazılıyor. security.py içinde terminal yetkisi var ama güvenli kod çalıştırma (repl) yok.
+Vektör Bellek: Proje dosyaları RAG'a ekleniyor ancak konuşma geçmişi de vektörel olarak saklanıp, ilgili eski konuşmalar geri çağrılmalıdır.
 
-Öneri: Docker içinde ayrı bir, izole edilmiş Python REPL (Read-Eval-Print Loop) oturumu başlatılarak, ajanın yazdığı kodu test etmesine izin verilebilir.
+4. Asenkron Yapı (AsyncIO)
+Mevcut Durum: Web aramaları, dosya işlemleri ve LLM çağrıları senkron (bloklayan) çalışıyor.
+Sorun: Web'den büyük bir dosya çekerken veya ağır bir LLM cevabı beklerken arayüz donabilir.
+Çözüm Önerisi:
+
+Özellikle WebSearchManager ve LLMClient modülleri async/await yapısına dönüştürülmelidir.
+
+5. Yapısal Hata Yönetimi
+Mevcut Durum: sidar_agent.py içinde JSON parse hataları için temel bir try-except bloğu var.
+Sorun: Model bazen JSON dışına açıklama metni ekleyebilir veya bozuk JSON üretebilir.
+Çözüm Önerisi:
+
+Retry Logic: JSON hatası alındığında, hatayı modele geri besleyerek (Feedback Loop) "Lütfen sadece JSON formatında, şu hatayı düzelterek tekrar ver" diyen bir düzeltme mekanizması eklenmelidir.
+
+Özet Rapor

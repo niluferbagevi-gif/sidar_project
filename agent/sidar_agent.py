@@ -30,7 +30,7 @@ class SidarAgent:
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
     """
 
-    VERSION = "2.3.1"  # Patch Feature Update
+    VERSION = "2.3.2"  # REPL Feature Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -186,7 +186,6 @@ class SidarAgent:
             return result
         
         if tool_name == "write_file":
-            # Beklenen format: path|||content
             parts = tool_arg.split("|||", 1)
             if len(parts) < 2: return "⚠ Hatalı format. Kullanım: path|||content"
             path, content = parts[0].strip(), parts[1]
@@ -194,16 +193,18 @@ class SidarAgent:
             return result
 
         if tool_name == "patch_file":
-            # Beklenen format: path|||old_code|||new_code
             parts = tool_arg.split("|||")
             if len(parts) < 3:
                 return "⚠ Hatalı patch formatı. Kullanım: path|||eski_kod|||yeni_kod"
-            
             path = parts[0].strip()
-            old_code = parts[1] # Strip yapmıyoruz, boşluk önemli olabilir
+            old_code = parts[1]
             new_code = parts[2]
-            
             _, result = self.code.patch_file(path, old_code, new_code)
+            return result
+
+        if tool_name == "execute_code":
+            if not tool_arg: return "⚠ Çalıştırılacak kod belirtilmedi."
+            _, result = self.code.execute_code(tool_arg)
             return result
 
         if tool_name == "audit":

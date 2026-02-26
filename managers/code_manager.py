@@ -7,6 +7,8 @@ import ast
 import json
 import logging
 import os
+import sys
+import subprocess
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -108,34 +110,20 @@ class CodeManager:
             return False, f"Yazma hatası: {exc}"
 
     # ─────────────────────────────────────────────
-    #  AKILLI YAMA (PATCH) - YENİ ÖZELLİK
+    #  AKILLI YAMA (PATCH)
     # ─────────────────────────────────────────────
 
     def patch_file(self, path: str, target_block: str, replacement_block: str) -> Tuple[bool, str]:
         """
         Dosyadaki belirli bir kod bloğunu yenisiyle değiştirir.
-        
-        Args:
-            path: Dosya yolu
-            target_block: Değiştirilecek eski kod parçası (birebir eşleşmeli)
-            replacement_block: Yerine geçecek yeni kod parçası
-            
-        Returns:
-            (başarı, mesaj)
         """
-        # 1. Dosyayı oku
         ok, content = self.read_file(path)
         if not ok:
-            return False, content # Hata mesajı döner
+            return False, content
 
-        # 2. Blok kontrolü (Whitespace temizliği yapmadan exact match arıyoruz)
-        # Ancak satır sonu (\r\n vs \n) sorunlarını çözmek için strip() kullanmıyoruz,
-        # modelin tam formatı vermesini bekliyoruz.
-        
         count = content.count(target_block)
         
         if count == 0:
-            # Belki indentation veya boşluk hatası vardır, ipucu verelim
             return False, (
                 "⚠ Yama uygulanamadı: 'Hedef kod bloğu' dosyada bulunamadı.\n"
                 "Lütfen boşluklara ve girintilere (indentation) dikkat ederek, "
@@ -148,11 +136,57 @@ class CodeManager:
                 "Hangi bloğun değiştirileceği belirsiz. Lütfen daha fazla bağlam (context) ekle."
             )
 
-        # 3. Değişikliği uygula
         new_content = content.replace(target_block, replacement_block)
-
-        # 4. Yazma işlemi (write_file içinde sözdizimi kontrolü zaten var)
         return self.write_file(path, new_content, validate=True)
+
+    # ─────────────────────────────────────────────
+    #  GÜVENLİ KOD ÇALIŞTIRMA (REPL) - YENİ
+    # ─────────────────────────────────────────────
+
+    def execute_code(self, code: str) -> Tuple[bool, str]:
+        """
+        Kodu izole bir alt süreçte çalıştırır.
+        
+        Özellikler:
+        - 10 saniye zaman aşımı (Timeout)
+        - Geçici dosya üzerinde çalışma (/temp/repl_session.py)
+        - Stdout ve Stderr yakalama
+        """
+        # RESTRICTED modda çalıştırmayı engelle (SANDBOX ve FULL izinli)
+        # SecurityManager level: 0=Restricted, 1=Sandbox, 2=Full
+        if self.security.level == 0:
+             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
+
+        try:
+            # Geçici çalışma dizini ve dosya
+            temp_dir = self.base_dir / "temp"
+            temp_dir.mkdir(exist_ok=True)
+            runner_path = temp_dir / "repl_session.py"
+            
+            # Kodu dosyaya yaz
+            runner_path.write_text(code, encoding="utf-8")
+            
+            # Subprocess ile çalıştır
+            # sys.executable: O anki Python yorumlayıcısını kullanır (Docker içindeyse onu)
+            result = subprocess.run(
+                [sys.executable, str(runner_path)],
+                capture_output=True,
+                text=True,
+                timeout=10,  # 10 saniye sınır
+                cwd=str(temp_dir)  # Çalışma dizini temp olsun
+            )
+            
+            output = result.stdout + result.stderr
+            if result.returncode == 0:
+                final_out = output.strip() or "(Kod başarıyla çalıştı ancak çıktı üretmedi)"
+                return True, f"REPL Çıktısı:\n{final_out}"
+            else:
+                return False, f"Çalışma Zamanı Hatası (Exit {result.returncode}):\n{output}"
+
+        except subprocess.TimeoutExpired:
+            return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve durduruldu."
+        except Exception as exc:
+            return False, f"Çalıştırma hatası: {exc}"
 
     # ─────────────────────────────────────────────
     #  DİZİN LİSTELEME
@@ -208,10 +242,6 @@ class CodeManager:
     # ─────────────────────────────────────────────
 
     def audit_project(self, root: str = ".") -> str:
-        """
-        Proje yapısını denetler: Python dosyalarının sözdizimini kontrol eder,
-        istatistikleri toplar.
-        """
         with self._lock:
             self._audits_done += 1
 
