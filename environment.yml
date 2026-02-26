@@ -11,9 +11,11 @@ dependencies:
   - setuptools
   - wheel
   - packaging
-  - cudatoolkit=11.8
+  # PyTorch CUDA kurulumu — pytorch-cuda hem CUDA toolkit'i hem de torch'u kapsar.
+  # cudatoolkit paketini AYRICA listelemeyin: pytorch-cuda=11.8 ile çakışır.
+  # GPU YOK ise bu iki satırı silin ve pip bölümüne torch>=2.0.0 ekleyin.
   - pytorch-cuda=11.8
-  - pytorch
+  - pytorch>=2.0.0
   - torchvision
   - pip:
       # ── Temel ─────────────────────────────────
@@ -53,6 +55,7 @@ dependencies:
 
       # ── Geliştirme & Test ─────────────────────
       - pytest>=7.4.0
+      - pytest-asyncio>=0.21.0  # @pytest.mark.asyncio dekoratörü için zorunlu
       - pytest-cov>=4.1.0
       - black>=23.0.0
       - flake8>=6.0.0
