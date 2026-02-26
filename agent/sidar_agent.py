@@ -11,7 +11,7 @@ from typing import Optional, Iterator, Dict, Any
 
 from config import Config
 from core.memory import ConversationMemory
-from core.llm_client.py import LLMClient
+from core.llm_client import LLMClient
 from core.rag import DocumentStore
 from managers.code_manager import CodeManager
 from managers.system_health import SystemHealthManager
@@ -30,7 +30,7 @@ class SidarAgent:
     Sidar — Yazılım Mimarı ve Baş Mühendis AI Asistanı.
     """
 
-    VERSION = "2.3.0"  # JSON Mode Update
+    VERSION = "2.3.1"  # Patch Feature Update
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -90,9 +90,6 @@ class SidarAgent:
                 return
 
             # ReAct döngüsünden gelen akışı kullanıcıya ilet
-            # JSON modunda, kullanıcıya ham JSON akıtmak yerine
-            # "düşünme" sürecini veya sonucu gösterebiliriz.
-            # Şimdilik debug amaçlı JSON'u da akıtıyoruz.
             for chunk in self._react_loop(user_input):
                 yield chunk
 
@@ -110,7 +107,6 @@ class SidarAgent:
 
         for step in range(self.cfg.MAX_REACT_STEPS):
             # 1. LLM Çağrısı (Stream)
-            # Not: JSON modunda da stream çalışır, parça parça JSON gelir.
             response_generator = self.llm.chat(
                 messages=messages,
                 model=self.cfg.CODING_MODEL,
@@ -123,12 +119,11 @@ class SidarAgent:
             llm_response_accumulated = ""
             for chunk in response_generator:
                 llm_response_accumulated += chunk
-                # Kullanıcıya JSON'un oluşumunu göster (Matrix efekti gibi)
                 yield chunk
 
             # 2. JSON Ayrıştırma ve Araç Kontrolü
             try:
-                # Bazen modeller JSON'u Markdown içine alır
+                # Markdown temizliği
                 clean_json = llm_response_accumulated.strip()
                 if clean_json.startswith("```"):
                     clean_json = re.sub(r"^```(json)?|```$", "", clean_json, flags=re.MULTILINE).strip()
@@ -139,9 +134,7 @@ class SidarAgent:
                 tool_arg = action_data.get("argument", "")
                 thought = action_data.get("thought", "")
 
-                # Eğer araç 'final_answer' ise döngüyü bitir
                 if tool_name == "final_answer":
-                    # Yanıt zaten yield edildi (JSON içinde), hafızaya ekle ve çık
                     self.memory.add("assistant", tool_arg)
                     return
 
@@ -149,19 +142,15 @@ class SidarAgent:
                 tool_result = self._execute_tool(tool_name, tool_arg)
                 
                 if tool_result is None:
-                    # Tanımsız araç veya hata
                     yield f"\n\n[Sistem] Geçersiz araç çağrısı: {tool_name}\n"
-                    # Hafızaya ekleyip devam etme kararı (hata düzeltme şansı ver)
                     messages = messages + [
                          {"role": "assistant", "content": llm_response_accumulated},
                          {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya JSON hatalı."}
                     ]
                     continue
 
-                # Araç çıktısını kullanıcıya göster
                 yield f"\n\n[Sistem] Araç Çıktısı ({tool_name}):\n{tool_result}\n\n"
 
-                # Hafızayı güncelle
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
                     {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
@@ -169,16 +158,14 @@ class SidarAgent:
             
             except json.JSONDecodeError:
                 yield "\n\n[Sistem Hatası] Model geçersiz JSON üretti. Tekrar deneniyor...\n"
-                # Hata durumunda döngüye devam etmesi için hafızaya hata mesajı ekle
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
-                    {"role": "user", "content": "[Sistem Hatası] Yanıtın geçerli bir JSON değil. Lütfen 'tool', 'argument' ve 'thought' anahtarlarını içeren geçerli bir JSON döndür."}
+                    {"role": "user", "content": "[Sistem Hatası] Yanıtın geçerli bir JSON değil."}
                 ]
             except Exception as exc:
                  yield f"\n\n[Sistem Hatası] Beklenmeyen hata: {exc}\n"
                  return
             
-        # Döngü biterse
         yield "\n[Sistem] Maksimum adım sayısına ulaşıldı."
 
     def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
@@ -196,6 +183,27 @@ class SidarAgent:
             if not tool_arg: return "Dosya yolu belirtilmedi."
             ok, result = self.code.read_file(tool_arg)
             if ok: self.memory.set_last_file(tool_arg)
+            return result
+        
+        if tool_name == "write_file":
+            # Beklenen format: path|||content
+            parts = tool_arg.split("|||", 1)
+            if len(parts) < 2: return "⚠ Hatalı format. Kullanım: path|||content"
+            path, content = parts[0].strip(), parts[1]
+            _, result = self.code.write_file(path, content)
+            return result
+
+        if tool_name == "patch_file":
+            # Beklenen format: path|||old_code|||new_code
+            parts = tool_arg.split("|||")
+            if len(parts) < 3:
+                return "⚠ Hatalı patch formatı. Kullanım: path|||eski_kod|||yeni_kod"
+            
+            path = parts[0].strip()
+            old_code = parts[1] # Strip yapmıyoruz, boşluk önemli olabilir
+            new_code = parts[2]
+            
+            _, result = self.code.patch_file(path, old_code, new_code)
             return result
 
         if tool_name == "audit":
@@ -229,7 +237,6 @@ class SidarAgent:
             return result
 
         if tool_name == "search_docs":
-            # Argümanı "lib konu" şeklinde bekliyoruz
             parts = tool_arg.split(" ", 1)
             lib = parts[0]
             topic = parts[1] if len(parts) > 1 else ""
