@@ -11,3 +11,8 @@ Eksik: Arama motorunu asenkron yaptık ancak hala sadece DuckDuckGo kullanıyoru
 3. Test Kapsamının Genişletilmesi - 6. Madde
 
 Eksik: tests/ klasörüne hiç dokunmadık. .note dosyasında RAG entegrasyonu için (Gerçekten doğru dokümanı getiriyor mu?) ve farklı modeller için (Prompt dayanıklılık testleri) testlerin yazılması gerektiği belirtilmişti.
+
+
+
+
+
