@@ -1,60 +1,87 @@
-# Temel imaj olarak hafif Python 3.11 sürümünü kullanıyoruz
-FROM python:3.11-slim
+# ═══════════════════════════════════════════════════════════════
+# Sidar AI — Dockerfile
+# Sürüm: 2.6.0  (GPU & CPU destekli çift mod)
+#
+#  CPU modu (varsayılan):
+#    docker build -t sidar-ai .
+#
+#  GPU modu (NVIDIA CUDA 12.4):
+#    docker build \
+#      --build-arg BASE_IMAGE=nvidia/cuda:12.4.1-runtime-ubuntu22.04 \
+#      --build-arg GPU_ENABLED=true \
+#      -t sidar-ai-gpu .
+# ═══════════════════════════════════════════════════════════════
+
+# ── Build-time argümanlar ──────────────────────────────────────
+# CPU-only: python:3.11-slim
+# GPU:      nvidia/cuda:12.4.1-runtime-ubuntu22.04
+ARG BASE_IMAGE=python:3.11-slim
+ARG GPU_ENABLED=false
+
+FROM ${BASE_IMAGE}
 
 # Meta veriler
 LABEL maintainer="Sidar AI Project"
-LABEL version="2.3.2"
+LABEL version="2.6.0"
 LABEL description="Yazılım Mühendisi AI Asistanı - Docker İzolasyonu"
 
 # Çevresel değişkenler
+# GPU_ENABLED build-arg çalışma zamanında USE_GPU env değişkenine dönüşür
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    ACCESS_LEVEL=sandbox
+    ACCESS_LEVEL=sandbox \
+    USE_GPU=${GPU_ENABLED}
 
-# Çalışma dizinini ayarla
+# Çalışma dizini
 WORKDIR /app
 
-# Sistem bağımlılıklarını yükle
-# Not: git ve build araçları bazı python paketleri için gereklidir
+# Sistem bağımlılıkları
+# GPU base image'ında (nvidia/cuda) libcuda ve sürücü zaten mevcuttur.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
     git \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Bağımlılık Yönetimi (Environment.yml entegrasyonu)
-# 1. environment.yml dosyasını kopyala
+# GPU modunda PyTorch CUDA wheel URL'i (CPU için default)
+# GPU build: --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+ENV TORCH_INDEX_URL=${TORCH_INDEX_URL}
+
+# Bağımlılık Yönetimi (environment.yml entegrasyonu)
 COPY environment.yml .
 
-# 2. PyYAML kur (Yaml dosyasını okumak için) ve pip paketlerini ayrıştır
+# PyYAML kur → pip bağımlılıklarını çıkar → kur
+# NOT: Conda'ya özgü pytorch-cuda satırları pip ile kurulmaz;
+#      GPU için TORCH_INDEX_URL üzerinden ayrı torch wheel alınır.
 RUN pip install --upgrade pip setuptools wheel pyyaml && \
-    python -c "import sys, yaml; \
-    deps = yaml.safe_load(open('environment.yml')); \
-    pip_deps = next((item['pip'] for item in deps['dependencies'] if isinstance(item, dict) and 'pip' in item), []); \
-    print('\n'.join(pip_deps))" > requirements.txt && \
-    \
-# 3. Ayrıştırılan paketleri kur
+    python3 -c "\
+import yaml; \
+deps = yaml.safe_load(open('environment.yml')); \
+pkgs = next((item['pip'] for item in deps['dependencies'] if isinstance(item, dict) and 'pip' in item), []); \
+print('\n'.join(pkgs))" > requirements.txt && \
     pip install -r requirements.txt
 
 # Uygulama kodlarını kopyala
 COPY . .
 
-# Kalıcı veri dizinlerini oluştur
+# Kalıcı veri dizinleri
 RUN mkdir -p logs data temp
 
-# Sidar kullanıcısı oluştur (Güvenlik için root olmayan kullanıcı)
-RUN useradd -m sidar && \
-    chown -R sidar:sidar /app
+# Güvenlik: root olmayan kullanıcı
+RUN useradd -m sidar && chown -R sidar:sidar /app
 USER sidar
 
-# Web arayüzü için port aç (python web_server.py ile kullanılır)
+# Web arayüzü portu
 EXPOSE 7860
 
-# Sağlık kontrolü (CLI veya web sunucusu çalışıyorsa geçer)
+# Sağlık kontrolü
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD ps aux | grep "[p]ython" || exit 1
 
-# Varsayılan başlatma komutu (CLI modu)
-# Web arayüzü için: docker run ... python web_server.py
+# Varsayılan başlatma (CLI)
+# Web için: docker run ... python web_server.py
 ENTRYPOINT ["python", "main.py"]

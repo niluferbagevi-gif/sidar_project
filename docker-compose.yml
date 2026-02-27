@@ -1,53 +1,100 @@
 services:
 
-  # ── CLI Modu (Terminal) ────────────────────────────────────────────
+  # ── CLI Modu — CPU (Varsayılan) ────────────────────────────────
   sidar-ai:
-    build: .
+    build:
+      context: .
+      args:
+        BASE_IMAGE: python:3.11-slim
+        GPU_ENABLED: "false"
     container_name: sidar_agent
     restart: unless-stopped
 
-    # Kaynak sınırlamaları (İsteğe bağlı - Güvenlik için)
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 4G
 
-    # Ortam değişkenleri
     environment:
       - ACCESS_LEVEL=sandbox
       - AI_PROVIDER=${AI_PROVIDER:-ollama}
-      # BURASI ÖNEMLİ: Docker içindeyken URL'i otomatik değiştiriyoruz.
       - OLLAMA_URL=http://host.docker.internal:11434/api
-      # Host makinedeki Ollama'ya erişmek için "host.docker.internal" kullanılır.
-      # Linux kullanıcıları için "network_mode: host" gerekebilir.
 
-    # Dosya sistemi eşlemeleri (Kalıcılık için)
     volumes:
-      - ./data:/app/data         # Bellek ve RAG veritabanı
-      - ./logs:/app/logs         # Log dosyaları
-      - ./temp:/app/temp         # Geçici çalışma alanı
-      - ./.env:/app/.env         # Gizli anahtarlar
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
 
-    # Ağ ayarları
-    # Linux kullanıyorsanız, yerel Ollama'ya erişmek için aşağıdaki satırı açın:
-    # network_mode: "host"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    # Etkileşimli mod için (Terminal girişini aktif eder)
     stdin_open: true
     tty: true
 
-  # ── Web Arayüzü (Tarayıcı) ────────────────────────────────────────
+  # ── CLI Modu — GPU (NVIDIA) ────────────────────────────────────
+  # Kullanım: docker compose up sidar-gpu
+  # Gereksinim: NVIDIA Container Toolkit kurulu olmalı.
+  #   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+  sidar-gpu:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+        GPU_ENABLED: "true"
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124
+    container_name: sidar_agent_gpu
+    restart: unless-stopped
+
+    # NVIDIA GPU çalışma zamanı (Docker Compose v2 sözdizimi)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all          # Tüm GPU'ları bağla; belirli sayı için: count: 1
+              capabilities: [gpu]
+        limits:
+          cpus: '4.0'
+          memory: 8G
+
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OLLAMA_URL=http://host.docker.internal:11434/api
+      - USE_GPU=true
+      - GPU_DEVICE=${GPU_DEVICE:-0}
+      - GPU_MEMORY_FRACTION=${GPU_MEMORY_FRACTION:-0.8}
+      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-false}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    stdin_open: true
+    tty: true
+
+  # ── Web Arayüzü — CPU ──────────────────────────────────────────
   sidar-web:
-    build: .
+    build:
+      context: .
+      args:
+        BASE_IMAGE: python:3.11-slim
+        GPU_ENABLED: "false"
     container_name: sidar_web
     restart: unless-stopped
     command: python web_server.py
 
     ports:
-      - "${WEB_PORT:-7860}:7860"   # http://localhost:7860
+      - "${WEB_PORT:-7860}:7860"
 
     deploy:
       resources:
@@ -61,6 +108,55 @@ services:
       - OLLAMA_URL=http://host.docker.internal:11434/api
       - WEB_HOST=0.0.0.0
       - WEB_PORT=7860
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Web Arayüzü — GPU ─────────────────────────────────────────
+  # Kullanım: docker compose up sidar-web-gpu
+  sidar-web-gpu:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: nvidia/cuda:12.4.1-runtime-ubuntu22.04
+        GPU_ENABLED: "true"
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124
+    container_name: sidar_web_gpu
+    restart: unless-stopped
+    command: python web_server.py
+
+    ports:
+      - "${WEB_GPU_PORT:-7861}:7860"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          cpus: '4.0'
+          memory: 8G
+
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OLLAMA_URL=http://host.docker.internal:11434/api
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=7860
+      - USE_GPU=true
+      - GPU_DEVICE=${GPU_DEVICE:-0}
+      - GPU_MEMORY_FRACTION=${GPU_MEMORY_FRACTION:-0.8}
+      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-false}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
     volumes:
       - ./data:/app/data
