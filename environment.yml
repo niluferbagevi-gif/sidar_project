@@ -4,58 +4,54 @@ channels:
   - nvidia
   - conda-forge
   - defaults
+
 dependencies:
+  # ── Temel ─────────────────────────────────────
   - python=3.11
   - pip
   - git
   - setuptools
   - wheel
   - packaging
-  # PyTorch CUDA kurulumu — pytorch-cuda hem CUDA toolkit'i hem de torch'u kapsar.
-  # cudatoolkit paketini AYRICA listelemeyin: pytorch-cuda=11.8 ile çakışır.
-  # GPU YOK ise bu iki satırı silin ve pip bölümüne torch>=2.0.0 ekleyin.
-  - pytorch-cuda=11.8
-  - pytorch>=2.0.0
+
+  # ── PyTorch + CUDA (WSL2/Ubuntu/Conda) ───────
+  # Not: Ayrı "cudatoolkit" EKLEMEYİN.
+  # pytorch-cuda paketi gerekli CUDA runtime bileşenlerini sağlar.
+  - pytorch>=2.4
   - torchvision
+  - pytorch-cuda=12.1
+
   - pip:
-      # ── Temel ─────────────────────────────────
+      # ── Konfigürasyon / Temel ────────────────
       - python-dotenv>=1.0.0
-      # requests kaldırıldı — tüm HTTP istekleri httpx (aşağıda) ile yapılıyor
-      - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
+      - pyyaml>=6.0.1
 
-      # ── Asenkron Geçiş ve Veri Doğrulama ──────
-      - httpx>=0.25.0  # Asenkron WebSearchManager ve LLMClient (.note önerisi)
-      - pydantic>=2.4.0  # Yapısal çıktı ve hata yönetimi için (.note önerisi)
+      # ── Asenkron HTTP + Veri Doğrulama ───────
+      - httpx>=0.25.0
+      - pydantic>=2.4.0
 
-      # ── Sistem İzleme ─────────────────────────
+      # ── Sistem / İzleme ──────────────────────
       - psutil>=5.9.5
-      - GPUtil>=1.4.0
-      - pynvml>=11.5.0
 
-      # ── AI Sağlayıcıları ──────────────────────
-      - ollama>=0.1.6
+      # ── AI Sağlayıcıları ─────────────────────
       - google-generativeai>=0.7.0
 
-      # ── GitHub Entegrasyonu ───────────────────
+      # ── Entegrasyonlar ───────────────────────
       - PyGithub>=2.1.0
-
-      # ── Web Arama ─────────────────────────────
       - duckduckgo-search>=6.1.0
 
-      # ── RAG (Vektör & BM25) ───────────────────
+      # ── RAG ──────────────────────────────────
       - rank-bm25>=0.2.2
-      # ChromaDB ve bağımlılıkları (Hafif vektör DB)
       - chromadb>=0.4.0
-      # Vektör embed işlemleri için
       - sentence-transformers>=2.2.0
 
-      # ── Web Arayüzü ───────────────────────────
+      # ── Web API ──────────────────────────────
       - fastapi>=0.104.0
       - uvicorn[standard]>=0.24.0
 
-      # ── Geliştirme & Test ─────────────────────
+      # ── Geliştirme / Test ────────────────────
       - pytest>=7.4.0
-      - pytest-asyncio>=0.21.0  # @pytest.mark.asyncio dekoratörü için zorunlu
+      - pytest-asyncio>=0.21.0
       - pytest-cov>=4.1.0
       - black>=23.0.0
       - flake8>=6.0.0
