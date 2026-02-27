@@ -99,6 +99,8 @@ class Config:
     # ─────────────────────────────────────────────
     RAG_DIR: Path = BASE_DIR / os.getenv("RAG_DIR", "data/rag")
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))
+    RAG_CHUNK_SIZE: int = int(os.getenv("RAG_CHUNK_SIZE", "1000"))
+    RAG_CHUNK_OVERLAP: int = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 
     # ─────────────────────────────────────────────
     #  WEB ARAYÜZÜ

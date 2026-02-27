@@ -65,7 +65,12 @@ class SidarAgent:
         # Alt sistemler — yeni (Asenkron)
         self.web = WebSearchManager(self.cfg)
         self.pkg = PackageInfoManager(self.cfg)
-        self.docs = DocumentStore(self.cfg.RAG_DIR, top_k=self.cfg.RAG_TOP_K)
+        self.docs = DocumentStore(
+            self.cfg.RAG_DIR,
+            top_k=self.cfg.RAG_TOP_K,
+            chunk_size=self.cfg.RAG_CHUNK_SIZE,
+            chunk_overlap=self.cfg.RAG_CHUNK_OVERLAP,
+        )
 
         self.auto = AutoHandle(
             self.code, self.health, self.github, self.memory,
@@ -214,132 +219,150 @@ class SidarAgent:
             
         yield "Üzgünüm, bu istek için güvenilir bir sonuca ulaşamadım (Maksimum adım sayısına ulaşıldı)."
 
+    # ─────────────────────────────────────────────
+    #  ARAÇ HANDLER METODLARI
+    # ─────────────────────────────────────────────
+
+    async def _tool_list_dir(self, a: str) -> str:
+        _, result = self.code.list_directory(a or ".")
+        return result
+
+    async def _tool_read_file(self, a: str) -> str:
+        if not a: return "Dosya yolu belirtilmedi."
+        ok, result = self.code.read_file(a)
+        if ok: self.memory.set_last_file(a)
+        return result
+
+    async def _tool_write_file(self, a: str) -> str:
+        parts = a.split("|||", 1)
+        if len(parts) < 2: return "⚠ Hatalı format. Kullanım: path|||content"
+        _, result = self.code.write_file(parts[0].strip(), parts[1])
+        return result
+
+    async def _tool_patch_file(self, a: str) -> str:
+        parts = a.split("|||")
+        if len(parts) < 3: return "⚠ Hatalı patch formatı. Kullanım: path|||eski_kod|||yeni_kod"
+        _, result = self.code.patch_file(parts[0].strip(), parts[1], parts[2])
+        return result
+
+    async def _tool_execute_code(self, a: str) -> str:
+        if not a: return "⚠ Çalıştırılacak kod belirtilmedi."
+        _, result = self.code.execute_code(a)
+        return result
+
+    async def _tool_audit(self, a: str) -> str:
+        return self.code.audit_project(a or ".")
+
+    async def _tool_health(self, _: str) -> str:
+        return self.health.full_report()
+
+    async def _tool_gpu_optimize(self, _: str) -> str:
+        return self.health.optimize_gpu_memory()
+
+    async def _tool_github_commits(self, a: str) -> str:
+        try: n = int(a)
+        except: n = 10
+        _, result = self.github.list_commits(n=n)
+        return result
+
+    async def _tool_github_info(self, _: str) -> str:
+        _, result = self.github.get_repo_info()
+        return result
+
+    async def _tool_github_read(self, a: str) -> str:
+        if not a: return "⚠ Okunacak GitHub dosya yolu belirtilmedi."
+        _, result = self.github.read_remote_file(a)
+        return result
+
+    async def _tool_web_search(self, a: str) -> str:
+        if not a: return "⚠ Arama sorgusu belirtilmedi."
+        _, result = await self.web.search(a)
+        return result
+
+    async def _tool_fetch_url(self, a: str) -> str:
+        if not a: return "⚠ URL belirtilmedi."
+        _, result = await self.web.fetch_url(a)
+        return result
+
+    async def _tool_search_docs(self, a: str) -> str:
+        parts = a.split(" ", 1)
+        lib, topic = parts[0], (parts[1] if len(parts) > 1 else "")
+        _, result = await self.web.search_docs(lib, topic)
+        return result
+
+    async def _tool_search_stackoverflow(self, a: str) -> str:
+        _, result = await self.web.search_stackoverflow(a)
+        return result
+
+    async def _tool_pypi(self, a: str) -> str:
+        _, result = await self.pkg.pypi_info(a)
+        return result
+
+    async def _tool_pypi_compare(self, a: str) -> str:
+        parts = a.split("|", 1)
+        if len(parts) < 2: return "⚠ Kullanım: paket|mevcut_sürüm"
+        _, result = await self.pkg.pypi_compare(parts[0].strip(), parts[1].strip())
+        return result
+
+    async def _tool_npm(self, a: str) -> str:
+        _, result = await self.pkg.npm_info(a)
+        return result
+
+    async def _tool_gh_releases(self, a: str) -> str:
+        _, result = await self.pkg.github_releases(a)
+        return result
+
+    async def _tool_gh_latest(self, a: str) -> str:
+        _, result = await self.pkg.github_latest_release(a)
+        return result
+
+    async def _tool_docs_search(self, a: str) -> str:
+        _, result = self.docs.search(a)
+        return result
+
+    async def _tool_docs_add(self, a: str) -> str:
+        parts = a.split("|", 1)
+        if len(parts) < 2: return "⚠ Kullanım: başlık|url"
+        _, result = await self.docs.add_document_from_url(parts[1].strip(), title=parts[0].strip())
+        return result
+
+    async def _tool_docs_list(self, _: str) -> str:
+        return self.docs.list_documents()
+
+    async def _tool_docs_delete(self, a: str) -> str:
+        return self.docs.delete_document(a)
+
     async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
-        """
-        Ayrıştırılmış araç adı ve argümanını kullanarak ilgili metodu asenkron çağırır.
-        """
+        """Dispatch tablosu aracılığıyla araç handler'ını çağırır."""
         tool_arg = str(tool_arg).strip()
-
-        # ── Temel araçlar (Senkron çalışanlar) ─────
-        if tool_name == "list_dir":
-            _, result = self.code.list_directory(tool_arg or ".")
-            return result
-
-        if tool_name == "read_file":
-            if not tool_arg: return "Dosya yolu belirtilmedi."
-            ok, result = self.code.read_file(tool_arg)
-            if ok: self.memory.set_last_file(tool_arg)
-            return result
-        
-        if tool_name == "write_file":
-            parts = tool_arg.split("|||", 1)
-            if len(parts) < 2: return "⚠ Hatalı format. Kullanım: path|||content"
-            path, content = parts[0].strip(), parts[1]
-            _, result = self.code.write_file(path, content)
-            return result
-
-        if tool_name == "patch_file":
-            parts = tool_arg.split("|||")
-            if len(parts) < 3:
-                return "⚠ Hatalı patch formatı. Kullanım: path|||eski_kod|||yeni_kod"
-            path = parts[0].strip()
-            old_code = parts[1]
-            new_code = parts[2]
-            _, result = self.code.patch_file(path, old_code, new_code)
-            return result
-
-        if tool_name == "execute_code":
-            if not tool_arg: return "⚠ Çalıştırılacak kod belirtilmedi."
-            _, result = self.code.execute_code(tool_arg)
-            return result
-
-        if tool_name == "audit":
-            return self.code.audit_project(tool_arg or ".")
-
-        if tool_name == "health":
-            return self.health.full_report()
-
-        if tool_name == "gpu_optimize":
-            return self.health.optimize_gpu_memory()
-
-        if tool_name == "github_commits":
-            try: n = int(tool_arg)
-            except: n = 10
-            _, result = self.github.list_commits(n=n)
-            return result
-
-        if tool_name == "github_info":
-            _, result = self.github.get_repo_info()
-            return result
-
-        if tool_name == "github_read":
-            if not tool_arg: return "⚠ Okunacak GitHub dosya yolu belirtilmedi."
-            _, result = self.github.read_remote_file(tool_arg)
-            return result
-
-        # ── Web Arama araçları (ASENKRON) ──────────
-        if tool_name == "web_search":
-            if not tool_arg: return "⚠ Arama sorgusu belirtilmedi."
-            _, result = await self.web.search(tool_arg)
-            return result
-
-        if tool_name == "fetch_url":
-            if not tool_arg: return "⚠ URL belirtilmedi."
-            _, result = await self.web.fetch_url(tool_arg)
-            return result
-
-        if tool_name == "search_docs":
-            parts = tool_arg.split(" ", 1)
-            lib = parts[0]
-            topic = parts[1] if len(parts) > 1 else ""
-            _, result = await self.web.search_docs(lib, topic)
-            return result
-
-        if tool_name == "search_stackoverflow":
-            _, result = await self.web.search_stackoverflow(tool_arg)
-            return result
-
-        # ── Paket Bilgi araçları (ASENKRON) ────────
-        if tool_name == "pypi":
-            _, result = await self.pkg.pypi_info(tool_arg)
-            return result
-
-        if tool_name == "pypi_compare":
-            parts = tool_arg.split("|", 1)
-            if len(parts) < 2: return "⚠ Kullanım: paket|mevcut_sürüm"
-            _, result = await self.pkg.pypi_compare(parts[0].strip(), parts[1].strip())
-            return result
-
-        if tool_name == "npm":
-            _, result = await self.pkg.npm_info(tool_arg)
-            return result
-
-        if tool_name == "gh_releases":
-            _, result = await self.pkg.github_releases(tool_arg)
-            return result
-
-        if tool_name == "gh_latest":
-            _, result = await self.pkg.github_latest_release(tool_arg)
-            return result
-
-        # ── RAG / Belge Deposu araçları ────────────
-        if tool_name == "docs_search":
-            _, result = self.docs.search(tool_arg)
-            return result
-
-        if tool_name == "docs_add":
-            parts = tool_arg.split("|", 1)
-            if len(parts) < 2: return "⚠ Kullanım: başlık|url"
-            _, result = await self.docs.add_document_from_url(parts[1].strip(), title=parts[0].strip())
-            return result
-
-        if tool_name == "docs_list":
-            return self.docs.list_documents()
-
-        if tool_name == "docs_delete":
-            return self.docs.delete_document(tool_arg)
-
-        return None
+        dispatch = {
+            "list_dir":             self._tool_list_dir,
+            "read_file":            self._tool_read_file,
+            "write_file":           self._tool_write_file,
+            "patch_file":           self._tool_patch_file,
+            "execute_code":         self._tool_execute_code,
+            "audit":                self._tool_audit,
+            "health":               self._tool_health,
+            "gpu_optimize":         self._tool_gpu_optimize,
+            "github_commits":       self._tool_github_commits,
+            "github_info":          self._tool_github_info,
+            "github_read":          self._tool_github_read,
+            "web_search":           self._tool_web_search,
+            "fetch_url":            self._tool_fetch_url,
+            "search_docs":          self._tool_search_docs,
+            "search_stackoverflow": self._tool_search_stackoverflow,
+            "pypi":                 self._tool_pypi,
+            "pypi_compare":         self._tool_pypi_compare,
+            "npm":                  self._tool_npm,
+            "gh_releases":          self._tool_gh_releases,
+            "gh_latest":            self._tool_gh_latest,
+            "docs_search":          self._tool_docs_search,
+            "docs_add":             self._tool_docs_add,
+            "docs_list":            self._tool_docs_list,
+            "docs_delete":          self._tool_docs_delete,
+        }
+        handler = dispatch.get(tool_name)
+        return await handler(tool_arg) if handler else None
 
     # ─────────────────────────────────────────────
     #  BAĞLAM OLUŞTURMA

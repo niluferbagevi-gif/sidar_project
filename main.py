@@ -10,6 +10,7 @@ Kullanım:
 """
 
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -50,7 +51,7 @@ BANNER = r"""
  ║  ╚════██║██║██║  ██║██╔══██║██╔══██╗         ║
  ║  ███████║██║██████╔╝██║  ██║██║  ██║         ║
  ║  ╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝         ║
- ║  Yazılım Mimarı & Baş Mühendis AI  v2.3.2   ║
+ ║  Yazılım Mimarı & Baş Mühendis AI  v2.5.0   ║
  ╚══════════════════════════════════════════════╝
 """
 

@@ -27,15 +27,14 @@ class DocumentStore:
     mantıksal parçalara ayırarak vektörleştirir.
     """
 
-    # Chunk Ayarları
-    CHUNK_SIZE = 1000  # Karakter
-    CHUNK_OVERLAP = 200 # Karakter
-
-    def __init__(self, store_dir: Path, top_k: int = 3) -> None:
+    def __init__(self, store_dir: Path, top_k: int = 3,
+                 chunk_size: int = 1000, chunk_overlap: int = 200) -> None:
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self.index_file = self.store_dir / "index.json"
         self.default_top_k = top_k
+        self._chunk_size = chunk_size
+        self._chunk_overlap = chunk_overlap
 
         # Meta verileri yükle
         self._index: Dict[str, Dict] = self._load_index()
@@ -115,17 +114,17 @@ class DocumentStore:
         final_chunks = []
         
         # Eğer metin zaten limitin altındaysa direkt döndür
-        if len(text) <= self.CHUNK_SIZE:
+        if len(text) <= self._chunk_size:
             return [text]
 
         def _split(text_part: str, sep_idx: int) -> List[str]:
             """Recursive bölme fonksiyonu"""
-            if len(text_part) <= self.CHUNK_SIZE:
+            if len(text_part) <= self._chunk_size:
                 return [text_part]
             
             if sep_idx >= len(separators):
                 # Hiçbir ayırıcı ile bölünemiyorsa zorla böl (character limit)
-                return [text_part[i:i+self.CHUNK_SIZE] for i in range(0, len(text_part), self.CHUNK_SIZE - self.CHUNK_OVERLAP)]
+                return [text_part[i:i+self._chunk_size] for i in range(0, len(text_part), self._chunk_size - self._chunk_overlap)]
 
             sep = separators[sep_idx]
             # Ayırıcıya göre böl (ayırıcı başta kalsın diye lookahead simülasyonu yapılabilir ama basit split yeterli)
@@ -143,7 +142,7 @@ class DocumentStore:
 
             for part in parts:
                 # Eğer parça tek başına bile çok büyükse, bir sonraki ayırıcı ile böl
-                if len(part) > self.CHUNK_SIZE:
+                if len(part) > self._chunk_size:
                     if current_chunk:
                         new_chunks.append(current_chunk)
                         current_chunk = ""
@@ -152,10 +151,10 @@ class DocumentStore:
                     continue
 
                 # Mevcut parça ile limiti aşıyor mu?
-                if len(current_chunk) + len(part) > self.CHUNK_SIZE:
+                if len(current_chunk) + len(part) > self._chunk_size:
                     new_chunks.append(current_chunk)
                     # Overlap mekanizması: Bir önceki chunk'ın sonundan biraz al
-                    overlap_len = min(len(current_chunk), self.CHUNK_OVERLAP)
+                    overlap_len = min(len(current_chunk), self._chunk_overlap)
                     current_chunk = current_chunk[-overlap_len:] + part
                 else:
                     current_chunk += part
