@@ -20,7 +20,7 @@ dependencies:
   - pip:
       # ── Temel ─────────────────────────────────
       - python-dotenv>=1.0.0
-      - requests>=2.31.0
+      # requests kaldırıldı — tüm HTTP istekleri httpx (aşağıda) ile yapılıyor
       - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
 
       # ── Asenkron Geçiş ve Veri Doğrulama ──────
