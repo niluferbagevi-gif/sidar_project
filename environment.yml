@@ -24,16 +24,18 @@ dependencies:
       - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
 
       # ── Asenkron Geçiş ve Veri Doğrulama ──────
-      - httpx>=0.25.0  # Asenkron WebSearchManager ve LLMClient (.note önerisi)
-      - pydantic>=2.4.0  # Yapısal çıktı ve hata yönetimi için (.note önerisi)
+      - httpx>=0.25.0  # Asenkron LLMClient, WebSearchManager, PackageInfoManager, RAG
+      - pydantic>=2.4.0  # ToolCall şeması (sidar_agent.py) ve test doğrulamaları için
 
       # ── Sistem İzleme ─────────────────────────
       - psutil>=5.9.5
-      - GPUtil>=1.4.0
-      - pynvml>=11.5.0
+      # NOT: GPUtil ve pynvml kaldırıldı — GPU izleme torch.cuda üzerinden yapılıyor
+
+      # ── Docker (Güvenli Kod Çalıştırma / REPL Sandbox) ───
+      - docker>=6.0.0  # managers/code_manager.py içinde Docker izole REPL için
 
       # ── AI Sağlayıcıları ──────────────────────
-      - ollama>=0.1.6
+      # NOT: ollama paketi kaldırıldı — Ollama API'sine httpx ile HTTP isteği atılıyor
       - google-generativeai>=0.7.0
 
       # ── GitHub Entegrasyonu ───────────────────
@@ -46,7 +48,7 @@ dependencies:
       - rank-bm25>=0.2.2
       # ChromaDB ve bağımlılıkları (Hafif vektör DB)
       - chromadb>=0.4.0
-      # Vektör embed işlemleri için
+      # Vektör embed işlemleri için (ChromaDB varsayılan: all-MiniLM-L6-v2)
       - sentence-transformers>=2.2.0
 
       # ── Web Arayüzü ───────────────────────────
