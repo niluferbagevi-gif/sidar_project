@@ -43,9 +43,11 @@ class WebSearchManager:
 
     def _check_ddg(self) -> bool:
         try:
-            from duckduckgo_search import AsyncDDGS  # noqa: F401
+            # v8 uyumlu import (AsyncDDGS yerine standart DDGS)
+            from duckduckgo_search import DDGS  # noqa: F401
             return True
-        except ImportError:
+        except ImportError as e:
+            logger.debug(f"DDG Import hatası: {e}")
             return False
 
     def is_available(self) -> bool:
@@ -73,7 +75,6 @@ class WebSearchManager:
         """
         n = max_results or self.MAX_RESULTS
 
-        # Sadece belirli bir motor istenmişse
         if self.engine == "tavily" and self.tavily_key:
             return await self._search_tavily(query, n)
         elif self.engine == "google" and self.google_key and self.google_cx:
@@ -140,7 +141,7 @@ class WebSearchManager:
             "key": self.google_key,
             "cx": self.google_cx,
             "q": query,
-            "num": min(n, 10)  # Google Search API tek seferde max 10 sonuç verir
+            "num": min(n, 10)
         }
         try:
             async with httpx.AsyncClient(timeout=10) as client:
@@ -168,9 +169,14 @@ class WebSearchManager:
 
     async def _search_duckduckgo(self, query: str, n: int) -> Tuple[bool, str]:
         try:
-            from duckduckgo_search import AsyncDDGS
-            async with AsyncDDGS() as ddgs:
-                results = await ddgs.text(query, max_results=n)
+            from duckduckgo_search import DDGS
+
+            # v8 güncellemesi için DDGS'yi asenkron thread'de çalıştırıyoruz
+            def _sync_search():
+                with DDGS() as ddgs:
+                    return list(ddgs.text(query, max_results=n))
+
+            results = await asyncio.to_thread(_sync_search)
 
             if not results:
                 return True, f"'{query}' için DuckDuckGo'da sonuç bulunamadı."
@@ -194,7 +200,6 @@ class WebSearchManager:
     # ─────────────────────────────────────────────
 
     async def fetch_url(self, url: str) -> Tuple[bool, str]:
-        """Belirtilen URL'nin içeriğini asenkron olarak çek ve temiz metin olarak döndür."""
         try:
             async with httpx.AsyncClient(timeout=self.FETCH_TIMEOUT, follow_redirects=True) as client:
                 resp = await client.get(
@@ -221,7 +226,6 @@ class WebSearchManager:
 
     @staticmethod
     def _clean_html(html: str) -> str:
-        """HTML etiketlerini temizleyerek düz metin üret."""
         clean = re.sub(
             r"<(script|style)[^>]*>.*?</(script|style)>",
             "",
@@ -239,12 +243,10 @@ class WebSearchManager:
     # ─────────────────────────────────────────────
 
     async def search_docs(self, library: str, topic: str = "") -> Tuple[bool, str]:
-        """Belirli bir kütüphanenin dokümantasyonunu ara."""
         q = f"{library} documentation {topic}".strip()
         q += " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
         return await self.search(q, max_results=5)
 
     async def search_stackoverflow(self, query: str) -> Tuple[bool, str]:
-        """Stack Overflow'da soru ara."""
         q = f"site:stackoverflow.com {query}"
         return await self.search(q, max_results=5)

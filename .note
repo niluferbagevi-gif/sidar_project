@@ -1,4 +1,243 @@
 
+Projenizdeki tüm dosyaları WSL (Windows Subsystem for Linux), Ubuntu ve Conda ekosistemi perspektifinden detaylı bir şekilde inceledim.
+
+Genel olarak projenizin mimarisi, dosya yolu yönetiminde pathlib kullanması ve işletim sistemine özgü bağımlılıklardan (örneğin Windows'un os.system veya dizin ayırıcıları) kaçınması sebebiyle büyük ölçüde Linux/WSL ortamına zaten uyumlu.
+
+Ancak WSL2 ve Conda ortamının bazı spesifik ağ (networking), CUDA çözümlemesi ve yerel IP (localhost) yönlendirme kural farklılıkları vardır. Bu uyumsuzlukları gidermek ve tam optimizasyon sağlamak için güncellenmesi gereken dosyalar aşağıdadır:
+
+1. docker-compose.yml (WSL Ağ Optimizasyonu)
+WSL2 üzerinde Docker kullanırken varsayılan host.docker.internal yönlendirmesi sorun yaratabilir. Eğer Ollama'yı WSL içindeki Ubuntu'da veya Conda ortamında çalıştırıyorsanız, Docker konteynerinin dışarıdaki Ollama'ya erişebilmesi için en stabil yöntem network_mode: "host" kullanmaktır.
+
+YAML
+services:
+
+  # ── CLI Modu (Terminal) ────────────────────────────────────────────
+  sidar-ai:
+    build: .
+    container_name: sidar_agent
+    restart: unless-stopped
+    
+    # WSL/Ubuntu ortamında Ollama'ya doğrudan erişim için host ağı kullanılır
+    network_mode: "host" 
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      # network_mode: host kullanıldığı için localhost doğrudan Ubuntu'yu hedefler
+      - OLLAMA_URL=http://127.0.0.1:11434/api 
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+
+    stdin_open: true
+    tty: true
+
+  # ── Web Arayüzü (Tarayıcı) ────────────────────────────────────────
+  sidar-web:
+    build: .
+    container_name: sidar_web
+    restart: unless-stopped
+    command: python web_server.py
+    
+    # Portları doğrudan host ağı üzerinden açar
+    network_mode: "host"
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+    environment:
+      - ACCESS_LEVEL=sandbox
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OLLAMA_URL=http://127.0.0.1:11434/api
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=7860
+
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - ./.env:/app/.env
+2. environment.yml (Conda & CUDA Uyumu)
+WSL2 Ubuntu üzerinde Conda kullanırken eski cudatoolkit paketi, pytorch-cuda ile çakışma yaratabilir. Linux/WSL kurulumlarında güncel PyTorch için sadece pytorch-cuda gereklidir. Ayrıca gelecekteki asenkron yapı için httpx eklenmiştir.
+
+YAML
+name: sidar-ai
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - git
+  - setuptools
+  - packaging
+  - pytorch-cuda=11.8
+  - pytorch
+  - torchvision
+  - pip:
+      # ── Temel ─────────────────────────────────
+      - python-dotenv>=1.0.0
+      - requests>=2.31.0
+      - httpx>=0.25.0  # Asenkron (async) yapıya geçiş için
+
+      # ── Sistem İzleme ─────────────────────────
+      - psutil>=5.9.5
+      - GPUtil>=1.4.0
+      - pynvml>=11.5.0
+
+      # ── AI Sağlayıcıları ──────────────────────
+      - ollama>=0.1.6
+      - google-generativeai>=0.7.0
+
+      # ── GitHub Entegrasyonu ───────────────────
+      - PyGithub>=2.1.0
+
+      # ── Web Arama ─────────────────────────────
+      - duckduckgo-search>=6.1.0
+
+      # ── RAG (Vektör & BM25) ───────────────────
+      - rank-bm25>=0.2.2
+      - chromadb>=0.4.0
+      - sentence-transformers>=2.2.0
+
+      # ── Web Arayüzü ───────────────────────────
+      - fastapi>=0.104.0
+      - uvicorn[standard]>=0.24.0
+
+      # ── Geliştirme & Test ─────────────────────
+      - pytest>=7.4.0
+      - pytest-cov>=4.1.0
+      - black>=23.0.0
+      - flake8>=6.0.0
+      - mypy>=1.5.0
+3. config.py (IPv6 & Localhost Çözümlemesi)
+WSL ortamında localhost terimi bazen IPv6 (::1) üzerinden çözümlenmeye çalışılır ve Ollama API'sine bağlantı reddedilebilir. Bunu önlemek için varsayılan IP olarak doğrudan IPv4 (127.0.0.1) atanmıştır.
+
+Python
+"""
+Sidar Project - Konfigürasyon Modülü
+Yazılım Mühendisi AI Asistanı
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ─────────────────────────────────────────────
+#  PROJE KÖK DİZİNİ
+# ─────────────────────────────────────────────
+BASE_DIR = Path(__file__).resolve().parent
+TEMP_DIR = BASE_DIR / "temp"
+LOGS_DIR = BASE_DIR / "logs"
+DATA_DIR = BASE_DIR / "data"
+
+TEMP_DIR.mkdir(exist_ok=True)
+LOGS_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
+
+
+class Config:
+    # ─────────────────────────────────────────────
+    #  AI SAĞLAYICI
+    # ─────────────────────────────────────────────
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "ollama")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+    # ─────────────────────────────────────────────
+    #  OLLAMA
+    # ─────────────────────────────────────────────
+    # WSL ortamında IPv6 çakışmasını önlemek için 127.0.0.1 kullanıldı
+    OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api")
+    CODING_MODEL: str = os.getenv("CODING_MODEL", "qwen2.5-coder:7b")
+    TEXT_MODEL: str = os.getenv("TEXT_MODEL", "gemma2:9b")
+
+    # ─────────────────────────────────────────────
+    #  ERİŞİM SEVİYESİ (OpenClaw Sistemi)
+    # ─────────────────────────────────────────────
+    ACCESS_LEVEL: str = os.getenv("ACCESS_LEVEL", "sandbox")
+
+    # ─────────────────────────────────────────────
+    #  GITHUB
+    # ─────────────────────────────────────────────
+    GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
+    GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")
+
+    # ─────────────────────────────────────────────
+    #  DONANIM
+    # ─────────────────────────────────────────────
+    USE_GPU: bool = os.getenv("USE_GPU", "true").lower() == "true"
+
+    # ─────────────────────────────────────────────
+    #  UYGULAMA
+    # ─────────────────────────────────────────────
+    MAX_MEMORY_TURNS: int = int(os.getenv("MAX_MEMORY_TURNS", "20"))
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    RESPONSE_LANGUAGE: str = os.getenv("RESPONSE_LANGUAGE", "tr")
+
+    # ─────────────────────────────────────────────
+    #  DOSYA YOLLARI
+    # ─────────────────────────────────────────────
+    BASE_DIR: Path = BASE_DIR
+    TEMP_DIR: Path = TEMP_DIR
+    LOGS_DIR: Path = LOGS_DIR
+    DATA_DIR: Path = DATA_DIR
+
+    MEMORY_FILE: Path = DATA_DIR / "memory.json"
+
+    # ─────────────────────────────────────────────
+    #  ReAct DÖNGÜSÜ
+    # ─────────────────────────────────────────────
+    MAX_REACT_STEPS: int = int(os.getenv("MAX_REACT_STEPS", "10"))
+    REACT_TIMEOUT: int = int(os.getenv("REACT_TIMEOUT", "60"))
+
+    # ─────────────────────────────────────────────
+    #  WEB ARAMA
+    # ─────────────────────────────────────────────
+    WEB_SEARCH_MAX_RESULTS: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+    WEB_FETCH_TIMEOUT: int = int(os.getenv("WEB_FETCH_TIMEOUT", "15"))
+    WEB_FETCH_MAX_CHARS: int = int(os.getenv("WEB_FETCH_MAX_CHARS", "4000"))
+
+    # ─────────────────────────────────────────────
+    #  PAKET BİLGİ
+    # ─────────────────────────────────────────────
+    PACKAGE_INFO_TIMEOUT: int = int(os.getenv("PACKAGE_INFO_TIMEOUT", "12"))
+
+    # ─────────────────────────────────────────────
+    #  RAG — Belge Deposu
+    # ─────────────────────────────────────────────
+    RAG_DIR: Path = BASE_DIR / os.getenv("RAG_DIR", "data/rag")
+    RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))
+
+    # ─────────────────────────────────────────────
+    #  WEB ARAYÜZÜ
+    # ─────────────────────────────────────────────
+    WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
+    WEB_PORT: int = int(os.getenv("WEB_PORT", "7860"))
+Diğer Dosyalar Hakkında Not
+İncelemelerimde managers/code_manager.py içinde bulunan ve alt süreç çalıştıran execute_code aracının sys.executable kullandığını tespit ettim. Bu mükemmel bir yaklaşımdır çünkü projenizi Conda ile aktif ettiğinizde ( conda activate sidar-ai ), komutlar WSL ana Python ortamı yerine doğrudan izole Conda ortamında çalıştırılacaktır. Aynı şekilde github_upload.py scriptiniz içindeki subprocess.run(shell=True) yapısı Ubuntu terminali ile tam bir uyum içindedir. Ek bir değişikliğe gerek yoktur.
+
+
+
+
+
+
 
 
 ; Sidar projemizdeki dosyaların hepsini inceleyerek eksiksiz bir rapor oluştur. ayrıca geliştirilmesi gereken yerler var ise ayrıca belirt
