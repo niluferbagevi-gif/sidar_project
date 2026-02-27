@@ -1,9 +1,12 @@
 """
 Sidar Project - Belge Deposu ve Arama (RAG)
 ChromaDB tabanlı Vektör Arama + BM25 Hibrit Sistemi.
+Sürüm: 2.6.0 (GPU Hızlandırmalı Embedding)
 
 Özellikler:
 1. Vektör Arama (ChromaDB): Anlamsal yakınlık (Semantic Search) - Chunking destekli
+   → USE_GPU=true ise sentence-transformers CUDA üzerinde çalışır
+   → GPU_MIXED_PRECISION=true ise FP16 ile bellek tasarrufu sağlanır
 2. BM25 (rank_bm25): Kelime sıklığı ve nadirlik tabanlı arama
 3. Fallback: Basit anahtar kelime eşleşmesi
 """
@@ -19,32 +22,99 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def _build_embedding_function(use_gpu: bool = False,
+                               gpu_device: int = 0,
+                               mixed_precision: bool = False):
+    """
+    ChromaDB için GPU-farkında embedding fonksiyonu oluşturur.
+
+    use_gpu=True  →  sentence-transformers all-MiniLM-L6-v2  CUDA üzerinde çalışır.
+    use_gpu=False →  ChromaDB varsayılan CPU embedding'i kullanılır (None).
+
+    Döndürülen nesne None ise ChromaDB kendi varsayılanını kullanır.
+    """
+    if not use_gpu:
+        return None  # ChromaDB varsayılan (CPU) embedding fonksiyonu
+
+    try:
+        from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+        import torch
+
+        device = f"cuda:{gpu_device}" if torch.cuda.is_available() else "cpu"
+
+        if mixed_precision and device.startswith("cuda"):
+            # FP16 desteği — torch.amp ile embedding modeli daha az VRAM kullanır
+            import torch.amp  # noqa: F401  (import kontrolü)
+
+        ef = SentenceTransformerEmbeddingFunction(
+            model_name="all-MiniLM-L6-v2",
+            device=device,
+        )
+
+        # Mixed precision: sentence-transformers encode sırasında half() uygula
+        if mixed_precision and device.startswith("cuda"):
+            _orig_call = ef.__call__
+
+            def _fp16_call(input):
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    return _orig_call(input)
+
+            ef.__call__ = _fp16_call
+
+        logger.info(
+            "🚀 ChromaDB GPU Embedding: device=%s  mixed_precision=%s",
+            device, mixed_precision,
+        )
+        return ef
+
+    except Exception as exc:
+        logger.warning(
+            "⚠️  GPU embedding başlatılamadı, CPU'ya dönülüyor: %s", exc
+        )
+        return None
+
+
 class DocumentStore:
     """
     Yerel belge deposu — ChromaDB ile semantik arama.
-    
-    Güncelleme: Recursive Character Chunking stratejisi ile büyük belgeleri
-    mantıksal parçalara ayırarak vektörleştirir.
+
+    Güncellemeler (v2.6.0):
+    - Recursive Character Chunking ile büyük belgeleri mantıksal parçalara ayırır.
+    - USE_GPU=true ise GPU hızlandırmalı embedding fonksiyonu kullanılır.
+    - GPU_MIXED_PRECISION=true ise FP16 ile VRAM tasarrufu sağlanır.
     """
 
-    def __init__(self, store_dir: Path, top_k: int = 3,
-                 chunk_size: int = 1000, chunk_overlap: int = 200) -> None:
+    def __init__(
+        self,
+        store_dir: Path,
+        top_k: int = 3,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 200,
+        use_gpu: bool = False,
+        gpu_device: int = 0,
+        mixed_precision: bool = False,
+    ) -> None:
         self.store_dir = Path(store_dir)
         self.store_dir.mkdir(parents=True, exist_ok=True)
-        self.index_file = self.store_dir / "index.json"
+        self.index_file    = self.store_dir / "index.json"
         self.default_top_k = top_k
-        self._chunk_size = chunk_size
+        self._chunk_size   = chunk_size
         self._chunk_overlap = chunk_overlap
+
+        # GPU embedding ayarları
+        self._use_gpu          = use_gpu
+        self._gpu_device       = gpu_device
+        self._mixed_precision  = mixed_precision
 
         # Meta verileri yükle
         self._index: Dict[str, Dict] = self._load_index()
 
         # Arama motorlarını başlat
-        self._bm25_available = self._check_import("rank_bm25")
+        self._bm25_available   = self._check_import("rank_bm25")
         self._chroma_available = self._check_import("chromadb")
 
         self.chroma_client = None
-        self.collection = None
+        self.collection    = None
 
         if self._chroma_available:
             self._init_chroma()
@@ -62,22 +132,37 @@ class DocumentStore:
             return False
 
     def _init_chroma(self) -> None:
-        """ChromaDB istemcisini ve koleksiyonunu başlat."""
+        """ChromaDB istemcisini ve koleksiyonunu başlat (GPU embedding destekli)."""
         try:
             import chromadb
-            from chromadb.config import Settings
-            
+
             # Veritabanını data/rag/chroma_db içinde tut
             db_path = self.store_dir / "chroma_db"
-            
             self.chroma_client = chromadb.PersistentClient(path=str(db_path))
-            
-            # Varsayılan embedding fonksiyonu (all-MiniLM-L6-v2) otomatik kullanılır
+
+            # GPU-farkında embedding fonksiyonu
+            embedding_fn = _build_embedding_function(
+                use_gpu=self._use_gpu,
+                gpu_device=self._gpu_device,
+                mixed_precision=self._mixed_precision,
+            )
+
+            create_kwargs: Dict = {"metadata": {"hnsw:space": "cosine"}}
+            if embedding_fn is not None:
+                create_kwargs["embedding_function"] = embedding_fn
+
             self.collection = self.chroma_client.get_or_create_collection(
                 name="sidar_knowledge_base",
-                metadata={"hnsw:space": "cosine"}
+                **create_kwargs,
             )
-            logger.info("ChromaDB vektör veritabanı başlatıldı.")
+
+            device_info = (
+                f"cuda:{self._gpu_device}" if self._use_gpu and embedding_fn else "cpu"
+            )
+            logger.info(
+                "ChromaDB vektör veritabanı başlatıldı. Embedding device: %s",
+                device_info,
+            )
         except Exception as exc:
             logger.error("ChromaDB başlatma hatası: %s", exc)
             self._chroma_available = False
@@ -516,8 +601,12 @@ class DocumentStore:
 
     def status(self) -> str:
         engines = []
-        if self._chroma_available: engines.append("ChromaDB (Chunking Destekli)")
-        if self._bm25_available: engines.append("BM25")
-        if not engines: engines.append("Anahtar Kelime")
-        
+        if self._chroma_available:
+            gpu_tag = f"GPU cuda:{self._gpu_device}" if self._use_gpu else "CPU"
+            engines.append(f"ChromaDB (Chunking + {gpu_tag})")
+        if self._bm25_available:
+            engines.append("BM25")
+        if not engines:
+            engines.append("Anahtar Kelime")
+
         return f"RAG: {len(self._index)} belge | Motorlar: {', '.join(engines)}"
