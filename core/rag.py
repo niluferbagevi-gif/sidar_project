@@ -231,16 +231,17 @@ class DocumentStore:
         logger.info("RAG belge eklendi: [%s] %s (%d karakter)", doc_id, title, len(content))
         return doc_id
 
-    def add_document_from_url(self, url: str, title: str = "", tags: Optional[List[str]] = None) -> Tuple[bool, str]:
-        """URL'den içerik çekerek belge ekle."""
-        import requests
+    async def add_document_from_url(self, url: str, title: str = "", tags: Optional[List[str]] = None) -> Tuple[bool, str]:
+        """URL'den içerik çekerek belge ekle (Asenkron — event loop bloklanmaz)."""
+        import httpx
 
         try:
-            resp = requests.get(
-                url,
+            async with httpx.AsyncClient(
                 timeout=15,
+                follow_redirects=True,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; SidarBot/1.0)"},
-            )
+            ) as client:
+                resp = await client.get(url)
             resp.raise_for_status()
             content = self._clean_html(resp.text)
 

@@ -330,7 +330,7 @@ class SidarAgent:
         if tool_name == "docs_add":
             parts = tool_arg.split("|", 1)
             if len(parts) < 2: return "⚠ Kullanım: başlık|url"
-            _, result = self.docs.add_document_from_url(parts[1].strip(), title=parts[0].strip())
+            _, result = await self.docs.add_document_from_url(parts[1].strip(), title=parts[0].strip())
             return result
 
         if tool_name == "docs_list":
