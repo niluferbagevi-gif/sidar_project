@@ -29,7 +29,9 @@ dependencies:
 
       # ── Sistem İzleme ─────────────────────────
       - psutil>=5.9.5
-      # NOT: GPUtil ve pynvml kaldırıldı — GPU izleme torch.cuda üzerinden yapılıyor
+      # GPU sıcaklık, kullanım yüzdesi ve sürücü sürümü için (opsiyonel ama önerilir)
+      # NOT: CUDA sistemi yoksa kurulum başarısız olmaz; pynvml gracefully devre dışı kalır
+      - nvidia-ml-py>=12.535.77
 
       # ── Docker (Güvenli Kod Çalıştırma / REPL Sandbox) ───
       - docker>=6.0.0  # managers/code_manager.py içinde Docker izole REPL için

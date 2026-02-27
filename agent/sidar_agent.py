@@ -70,6 +70,9 @@ class SidarAgent:
             top_k=self.cfg.RAG_TOP_K,
             chunk_size=self.cfg.RAG_CHUNK_SIZE,
             chunk_overlap=self.cfg.RAG_CHUNK_OVERLAP,
+            use_gpu=getattr(self.cfg, "USE_GPU", False),
+            gpu_device=getattr(self.cfg, "GPU_DEVICE", 0),
+            mixed_precision=getattr(self.cfg, "GPU_MIXED_PRECISION", False),
         )
 
         self.auto = AutoHandle(
