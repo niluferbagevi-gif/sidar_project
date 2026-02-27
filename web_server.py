@@ -116,6 +116,7 @@ async def chat(request: Request):
 async def status():
     """Ajan durum bilgisini JSON olarak döndür."""
     a = await get_agent()
+    gpu_info = a.health.get_gpu_info()
     return JSONResponse({
         "version": a.VERSION,
         "provider": a.cfg.AI_PROVIDER,
@@ -126,6 +127,12 @@ async def status():
         "web_search": a.web.is_available(),
         "rag_status": a.docs.status(),
         "pkg_status": a.pkg.status(),
+        # GPU bilgisi
+        "gpu_enabled": a.cfg.USE_GPU,
+        "gpu_info": a.cfg.GPU_INFO,
+        "gpu_count": getattr(a.cfg, "GPU_COUNT", 0),
+        "cuda_version": getattr(a.cfg, "CUDA_VERSION", "N/A"),
+        "gpu_devices": gpu_info.get("devices", []),
     })
 
 

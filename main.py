@@ -27,16 +27,12 @@ from agent.sidar_agent import SidarAgent
 # ─────────────────────────────────────────────
 
 def _setup_logging(level: str) -> None:
+    """
+    config.py zaten logging.basicConfig'i RotatingFileHandler ile kurmuştur.
+    Burada yalnızca CLI --log argümanına göre kök logger seviyesini güncelliyoruz.
+    """
     log_level = getattr(logging, level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(str(Config.LOGS_DIR / "sidar.log"), encoding="utf-8"),
-        ],
-    )
+    logging.getLogger().setLevel(log_level)
 
 
 # ─────────────────────────────────────────────
@@ -51,7 +47,7 @@ BANNER = r"""
  ║  ╚════██║██║██║  ██║██╔══██║██╔══██╗         ║
  ║  ███████║██║██████╔╝██║  ██║██║  ██║         ║
  ║  ╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝         ║
- ║  Yazılım Mimarı & Baş Mühendis AI  v2.5.0   ║
+ ║  Yazılım Mimarı & Baş Mühendis AI  v2.6.0   ║
  ╚══════════════════════════════════════════════╝
 """
 
@@ -88,6 +84,17 @@ def interactive_loop(agent: SidarAgent) -> None:
     print(BANNER)
     print(f"  Erişim Seviyesi : {agent.cfg.ACCESS_LEVEL.upper()}")
     print(f"  AI Sağlayıcı    : {agent.cfg.AI_PROVIDER} ({agent.cfg.CODING_MODEL})")
+    # GPU bilgisi
+    if agent.cfg.USE_GPU:
+        gpu_line = f"✓ {agent.cfg.GPU_INFO}"
+        if getattr(agent.cfg, "CUDA_VERSION", "N/A") != "N/A":
+            gpu_line += f"  (CUDA {agent.cfg.CUDA_VERSION}"
+            if getattr(agent.cfg, "GPU_COUNT", 1) > 1:
+                gpu_line += f", {agent.cfg.GPU_COUNT} GPU"
+            gpu_line += ")"
+        print(f"  GPU             : {gpu_line}")
+    else:
+        print(f"  GPU             : ✗ CPU Modu  ({agent.cfg.GPU_INFO})")
     print(f"  GitHub          : {'Bağlı' if agent.github.is_available() else 'Bağlı değil'}")
     print(f"  Web Arama       : {'Aktif' if agent.web.is_available() else 'duckduckgo-search kurulu değil'}")
     print(f"  Paket Bilgi     : {agent.pkg.status()}")

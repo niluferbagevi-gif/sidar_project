@@ -68,11 +68,19 @@ class LLMClient:
     ) -> Union[str, AsyncIterator[str]]:
         url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/chat"
 
+        # Ollama options: GPU katman sayısını ilet (USE_GPU=true ise)
+        options: dict = {"temperature": temperature}
+        use_gpu = getattr(self.config, "USE_GPU", False)
+        if use_gpu:
+            # num_gpu=-1 → Ollama mevcut tüm GPU katmanlarını otomatik atar
+            options["num_gpu"] = getattr(self.config, "GPU_DEVICE", -1) if \
+                getattr(self.config, "MULTI_GPU", False) else -1
+
         payload = {
             "model": model,
             "messages": messages,
             "stream": stream,
-            "options": {"temperature": temperature},
+            "options": options,
         }
         # JSON modu yalnızca ReAct döngüsü için zorunlu; özetleme gibi
         # düz metin gereken çağrılarda atlanır.

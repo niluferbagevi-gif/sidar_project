@@ -48,8 +48,10 @@ Kod yönetimi, sistem optimizasyonu, gerçek zamanlı araştırma ve teknik dene
 - execute_code           : Python kodu çalıştır/test et (Argüman: python_kodu)
                            Not: 10sn zaman aşımı vardır. Print ile çıktı almalısın.
 - audit                  : Proje denetimi (Argüman: ".")
-- health                 : Sistem sağlık raporu (Argüman: boş string "")
-- gpu_optimize           : GPU bellek temizle (Argüman: boş string "")
+- health                 : Sistem sağlık raporu — OS, CPU, RAM, GPU adı, VRAM,
+                           CUDA sürümü, sürücü sürümü, sıcaklık (°C), kullanım yüzdesi
+                           (Argüman: boş string "")
+- gpu_optimize           : GPU VRAM temizle ve Python GC çalıştır (Argüman: boş string "")
 - github_commits         : Son commitler (Argüman: sayı, örn: "10")
 - github_info            : Depo bilgisi (Argüman: boş string "")
 - github_read            : Uzak depodaki dosyayı oku (Argüman: dosya_yolu, örn: "README.md")

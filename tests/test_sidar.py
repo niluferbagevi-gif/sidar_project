@@ -10,9 +10,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from config import Config
+from config import Config, HARDWARE
 from agent.sidar_agent import SidarAgent, ToolCall
 from managers.web_search import WebSearchManager
+from managers.system_health import SystemHealthManager
 from core.rag import DocumentStore
 
 
@@ -118,7 +119,7 @@ async def test_web_search_fallback(test_config):
 
 def test_rag_document_chunking(test_config):
     """DocumentStore'un büyük metinleri chunking mantığıyla böldüğünü test eder."""
-    docs = DocumentStore(test_config.RAG_DIR)
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
     
     # Uzun ve yapısal bir metin oluşturalım
     long_text = "Metin baslangici.\n\n"
@@ -145,10 +146,94 @@ def test_rag_document_chunking(test_config):
 async def test_agent_initialization(agent):
     """Ajanın ve alt modüllerinin başarıyla ayağa kalktığını test eder."""
     status_report = agent.status()
-    
+
     assert agent.VERSION is not None
     assert agent.cfg.AI_PROVIDER in ("ollama", "gemini")
     assert "Bellek" in status_report
     assert "Güvenlik" in agent._build_context()
 
 
+# ─────────────────────────────────────────────
+# 6. GPU & DONANIM TESTLERİ
+# ─────────────────────────────────────────────
+
+def test_hardware_info_fields():
+    """HardwareInfo dataclass alanlarının doğru tipte olduğunu doğrular."""
+    assert isinstance(HARDWARE.has_cuda, bool)
+    assert isinstance(HARDWARE.gpu_name, str)
+    assert isinstance(HARDWARE.gpu_count, int)
+    assert isinstance(HARDWARE.cpu_count, int)
+    assert isinstance(HARDWARE.cuda_version, str)
+    assert isinstance(HARDWARE.driver_version, str)
+    assert HARDWARE.cpu_count >= 1
+
+
+def test_config_gpu_fields():
+    """Config sınıfının GPU ile ilgili tüm alanları içerdiğini doğrular."""
+    cfg = Config()
+    assert hasattr(cfg, "USE_GPU")
+    assert hasattr(cfg, "GPU_INFO")
+    assert hasattr(cfg, "GPU_COUNT")
+    assert hasattr(cfg, "GPU_DEVICE")
+    assert hasattr(cfg, "CUDA_VERSION")
+    assert hasattr(cfg, "DRIVER_VERSION")
+    assert hasattr(cfg, "MULTI_GPU")
+    assert hasattr(cfg, "GPU_MEMORY_FRACTION")
+    assert hasattr(cfg, "GPU_MIXED_PRECISION")
+
+    assert isinstance(cfg.USE_GPU, bool)
+    assert isinstance(cfg.GPU_DEVICE, int)
+    assert 0.0 < cfg.GPU_MEMORY_FRACTION <= 1.0
+
+
+def test_system_health_manager_cpu_only():
+    """SystemHealthManager'ın GPU olmadan CPU/RAM raporunu ürettiğini test eder."""
+    health = SystemHealthManager(use_gpu=False)
+
+    assert health._gpu_available is False
+
+    report = health.full_report()
+    assert "Sistem Sağlık Raporu" in report
+    assert "OS" in report
+
+    # GPU devre dışı — optimize çağrısı yine de güvenli çalışmalı
+    result = health.optimize_gpu_memory()
+    assert "GC" in result
+
+
+def test_system_health_gpu_info_structure():
+    """get_gpu_info() çıktısının beklenen yapıyı döndürdüğünü test eder."""
+    health = SystemHealthManager(use_gpu=True)
+    info = health.get_gpu_info()
+
+    assert "available" in info
+    if info["available"]:
+        # GPU varsa zorunlu alanlar
+        assert "device_count" in info
+        assert "devices" in info
+        assert "cuda_version" in info
+        for dev in info["devices"]:
+            assert "id" in dev
+            assert "name" in dev
+            assert "total_vram_gb" in dev
+            assert "free_gb" in dev
+            assert "compute_capability" in dev
+    else:
+        # GPU yoksa reason veya error alanı olmalı
+        assert "reason" in info or "error" in info
+
+
+def test_rag_gpu_params(test_config):
+    """DocumentStore'un GPU parametrelerini kabul ettiğini doğrular."""
+    # GPU olmayan sistemde use_gpu=True verilse bile güvenle başlamalı
+    docs = DocumentStore(
+        test_config.RAG_DIR,
+        use_gpu=True,
+        gpu_device=0,
+        mixed_precision=False,
+    )
+    assert docs._use_gpu is True
+    assert docs._gpu_device == 0
+    # CUDA yoksa ChromaDB CPU'ya düşmeli; collection ya None ya da başlatılmış olmalı
+    status = docs.status()
+    assert "RAG" in status
