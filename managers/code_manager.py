@@ -1,15 +1,14 @@
 """
 Sidar Project - Kod Yöneticisi
-Dosya okuma, yazma, sözdizimi doğrulama ve izole (Conda) kod analizi (REPL).
+Dosya okuma, yazma, sözdizimi doğrulama ve DOCKER İZOLELİ kod analizi (REPL).
 """
 
 import ast
 import json
 import logging
 import os
-import subprocess
-import sys
 import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -22,7 +21,7 @@ class CodeManager:
     """
     PEP 8 uyumlu dosya işlemleri ve sözdizimi doğrulama.
     Thread-safe RLock ile korunur.
-    Kod çalıştırma (execute_code) işlemleri Conda ortamının kendi sys.executable'ı ile izole edilir.
+    Kod çalıştırma (execute_code) işlemleri Docker ile izole edilir.
     """
 
     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
@@ -38,12 +37,35 @@ class CodeManager:
         self._syntax_checks = 0
         self._audits_done = 0
 
+        # Docker İstemcisi Bağlantısı
+        self.docker_available = False
+        self.docker_client = None
+        self._init_docker()
+
+    def _init_docker(self):
+        """Docker daemon'a bağlanmayı dener."""
+        try:
+            import docker
+            self.docker_client = docker.from_env()
+            self.docker_client.ping()
+            self.docker_available = True
+            logger.info("Docker bağlantısı başarılı. REPL işlemleri izole konteynerde çalışacak.")
+        except ImportError:
+            logger.warning("Docker SDK kurulu değil. (pip install docker)")
+        except Exception as e:
+            logger.warning(f"Docker Daemon'a bağlanılamadı. Kod çalıştırma kapalı: {e}")
+
     # ─────────────────────────────────────────────
     #  DOSYA OKUMA
     # ─────────────────────────────────────────────
 
     def read_file(self, path: str) -> Tuple[bool, str]:
-        """Dosya içeriğini oku."""
+        """
+        Dosya içeriğini oku.
+
+        Returns:
+            (başarı, içerik_veya_hata_mesajı)
+        """
         if not self.security.can_read():
             return False, "[OpenClaw] Okuma yetkisi yok."
 
@@ -71,7 +93,12 @@ class CodeManager:
     # ─────────────────────────────────────────────
 
     def write_file(self, path: str, content: str, validate: bool = True) -> Tuple[bool, str]:
-        """Dosyaya içerik yaz (Tam üzerine yazma)."""
+        """
+        Dosyaya içerik yaz (Tam üzerine yazma).
+
+        Returns:
+            (başarı, mesaj)
+        """
         if not self.security.can_write(path):
             safe = str(self.security.get_safe_write_path(Path(path).name))
             return False, (
@@ -79,6 +106,7 @@ class CodeManager:
                 f"  Güvenli alternatif: {safe}"
             )
 
+        # Python dosyaları için sözdizimi kontrolü
         if validate and path.endswith(".py"):
             ok, msg = self.validate_python_syntax(content)
             if not ok:
@@ -105,7 +133,9 @@ class CodeManager:
     # ─────────────────────────────────────────────
 
     def patch_file(self, path: str, target_block: str, replacement_block: str) -> Tuple[bool, str]:
-        """Dosyadaki belirli bir kod bloğunu yenisiyle değiştirir."""
+        """
+        Dosyadaki belirli bir kod bloğunu yenisiyle değiştirir.
+        """
         ok, content = self.read_file(path)
         if not ok:
             return False, content
@@ -113,49 +143,87 @@ class CodeManager:
         count = content.count(target_block)
         
         if count == 0:
-            return False, "⚠ Yama uygulanamadı: 'Hedef kod bloğu' dosyada bulunamadı."
+            return False, (
+                "⚠ Yama uygulanamadı: 'Hedef kod bloğu' dosyada bulunamadı.\n"
+                "Lütfen boşluklara ve girintilere (indentation) dikkat ederek, "
+                "dosyada var olan kodu birebir kopyaladığından emin ol."
+            )
         
         if count > 1:
-            return False, f"⚠ Yama uygulanamadı: Hedef kod bloğu dosyada {count} kez geçiyor."
+            return False, (
+                f"⚠ Yama uygulanamadı: Hedef kod bloğu dosyada {count} kez geçiyor.\n"
+                "Hangi bloğun değiştirileceği belirsiz. Lütfen daha fazla bağlam (context) ekle."
+            )
 
         new_content = content.replace(target_block, replacement_block)
         return self.write_file(path, new_content, validate=True)
 
     # ─────────────────────────────────────────────
-    #  GÜVENLİ KOD ÇALIŞTIRMA (CONDA İZOLASYONU)
+    #  GÜVENLİ KOD ÇALIŞTIRMA (DOCKER SANDBOX)
     # ─────────────────────────────────────────────
 
     def execute_code(self, code: str) -> Tuple[bool, str]:
         """
-        Kodu aktif Python ortamında (Conda) alt süreç olarak çalıştırır.
-        Sonsuz döngüleri engellemek için 10 saniyelik timeout uygulanır.
+        Kodu tamamen İZOLE ve geçici bir Docker konteynerinde çalıştırır.
+        - Ağ erişimi kapalı (network_disabled=True)
+        - Dosya sistemi okunaksız/geçici
+        - Bellek kısıtlaması (128 MB)
+        - Zaman aşımı koruması (10 saniye)
         """
         if not self.security.can_execute():
             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
+        if not self.docker_available:
+            return False, "[OpenClaw] Docker bağlantısı kurulamadığı için güvenlik sebebiyle kod çalıştırma reddedildi."
+
         try:
-            # sys.executable mevcut Conda ortamını (örn: sidar-ai) hedefler
-            result = subprocess.run(
-                [sys.executable, "-c", code],
-                capture_output=True,
-                text=True,
-                timeout=10,  # 10 Saniye sınırı
-                cwd=str(self.base_dir / "temp")  # Kodu /temp dizininde çalıştırır
-            )
+            import docker
             
-            output = result.stdout
-            if result.stderr:
-                output += f"\n[HATA ÇIKTISI]:\n{result.stderr}"
+            # Kodu konteynere komut satırı argümanı olarak gönderiyoruz
+            # 'python -c "kod"' formatında çalışacak
+            command = ["python", "-c", code]
 
-            if not output.strip():
+            # Konteyneri başlat (Arka planda ayrılmış olarak)
+            container = self.docker_client.containers.run(
+                image="python:3.11-alpine", # Çok hafif ve hızlı bir imaj
+                command=command,
+                detach=True,
+                remove=False, # Çıktıyı okuyabilmek için anında silmiyoruz, manuel sileceğiz
+                network_disabled=True, # Dış ağa istek atamaz (Güvenlik)
+                mem_limit="128m", # RAM Limiti (Güvenlik)
+                cpu_quota=50000, # CPU Limiti (Güvenlik - Max %50)
+                working_dir="/tmp",
+            )
+
+            # Zaman aşımı takibi (10 Saniye)
+            timeout = 10
+            start_time = time.time()
+            
+            while True:
+                container.reload() # Durumu güncelle
+                if container.status == "exited":
+                    break
+                if time.time() - start_time > timeout:
+                    container.kill() # 10 saniyeyi geçerse zorla durdur
+                    container.remove(force=True)
+                    return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
+                time.sleep(0.5)
+
+            # Çıktıları al
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8").strip()
+            
+            # İşimiz bitti, konteyneri sil
+            container.remove(force=True)
+
+            if logs:
+                return True, f"REPL Çıktısı (Docker Sandbox):\n{logs}"
+            else:
                 return True, "(Kod başarıyla çalıştı ancak konsola bir çıktı üretmedi)"
-                
-            return True, f"REPL Çıktısı:\n{output.strip()}"
 
-        except subprocess.TimeoutExpired:
-            return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
+        except docker.errors.ImageNotFound:
+             return False, "Çalıştırma hatası: 'python:3.11-alpine' imajı bulunamadı. Lütfen terminalde 'docker pull python:3.11-alpine' komutunu çalıştırın."
         except Exception as exc:
-            return False, f"Çalıştırma hatası: {exc}"
+            return False, f"Docker çalıştırma hatası: {exc}"
 
     # ─────────────────────────────────────────────
     #  DİZİN LİSTELEME
@@ -267,18 +335,18 @@ class CodeManager:
 
 
 
-
 # """
 # Sidar Project - Kod Yöneticisi
-# Dosya okuma, yazma, sözdizimi doğrulama ve DOCKER İZOLELİ kod analizi (REPL).
+# Dosya okuma, yazma, sözdizimi doğrulama ve izole (Conda) kod analizi (REPL).
 # """
 
 # import ast
 # import json
 # import logging
 # import os
+# import subprocess
+# import sys
 # import threading
-# import time
 # from pathlib import Path
 # from typing import Dict, List, Optional, Tuple
 
@@ -291,7 +359,7 @@ class CodeManager:
 #     """
 #     PEP 8 uyumlu dosya işlemleri ve sözdizimi doğrulama.
 #     Thread-safe RLock ile korunur.
-#     Kod çalıştırma (execute_code) işlemleri Docker ile izole edilir.
+#     Kod çalıştırma (execute_code) işlemleri Conda ortamının kendi sys.executable'ı ile izole edilir.
 #     """
 
 #     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
@@ -307,35 +375,12 @@ class CodeManager:
 #         self._syntax_checks = 0
 #         self._audits_done = 0
 
-#         # Docker İstemcisi Bağlantısı
-#         self.docker_available = False
-#         self.docker_client = None
-#         self._init_docker()
-
-#     def _init_docker(self):
-#         """Docker daemon'a bağlanmayı dener."""
-#         try:
-#             import docker
-#             self.docker_client = docker.from_env()
-#             self.docker_client.ping()
-#             self.docker_available = True
-#             logger.info("Docker bağlantısı başarılı. REPL işlemleri izole konteynerde çalışacak.")
-#         except ImportError:
-#             logger.warning("Docker SDK kurulu değil. (pip install docker)")
-#         except Exception as e:
-#             logger.warning(f"Docker Daemon'a bağlanılamadı. Kod çalıştırma kapalı: {e}")
-
 #     # ─────────────────────────────────────────────
 #     #  DOSYA OKUMA
 #     # ─────────────────────────────────────────────
 
 #     def read_file(self, path: str) -> Tuple[bool, str]:
-#         """
-#         Dosya içeriğini oku.
-
-#         Returns:
-#             (başarı, içerik_veya_hata_mesajı)
-#         """
+#         """Dosya içeriğini oku."""
 #         if not self.security.can_read():
 #             return False, "[OpenClaw] Okuma yetkisi yok."
 
@@ -363,12 +408,7 @@ class CodeManager:
 #     # ─────────────────────────────────────────────
 
 #     def write_file(self, path: str, content: str, validate: bool = True) -> Tuple[bool, str]:
-#         """
-#         Dosyaya içerik yaz (Tam üzerine yazma).
-
-#         Returns:
-#             (başarı, mesaj)
-#         """
+#         """Dosyaya içerik yaz (Tam üzerine yazma)."""
 #         if not self.security.can_write(path):
 #             safe = str(self.security.get_safe_write_path(Path(path).name))
 #             return False, (
@@ -376,7 +416,6 @@ class CodeManager:
 #                 f"  Güvenli alternatif: {safe}"
 #             )
 
-#         # Python dosyaları için sözdizimi kontrolü
 #         if validate and path.endswith(".py"):
 #             ok, msg = self.validate_python_syntax(content)
 #             if not ok:
@@ -403,9 +442,7 @@ class CodeManager:
 #     # ─────────────────────────────────────────────
 
 #     def patch_file(self, path: str, target_block: str, replacement_block: str) -> Tuple[bool, str]:
-#         """
-#         Dosyadaki belirli bir kod bloğunu yenisiyle değiştirir.
-#         """
+#         """Dosyadaki belirli bir kod bloğunu yenisiyle değiştirir."""
 #         ok, content = self.read_file(path)
 #         if not ok:
 #             return False, content
@@ -413,87 +450,49 @@ class CodeManager:
 #         count = content.count(target_block)
         
 #         if count == 0:
-#             return False, (
-#                 "⚠ Yama uygulanamadı: 'Hedef kod bloğu' dosyada bulunamadı.\n"
-#                 "Lütfen boşluklara ve girintilere (indentation) dikkat ederek, "
-#                 "dosyada var olan kodu birebir kopyaladığından emin ol."
-#             )
+#             return False, "⚠ Yama uygulanamadı: 'Hedef kod bloğu' dosyada bulunamadı."
         
 #         if count > 1:
-#             return False, (
-#                 f"⚠ Yama uygulanamadı: Hedef kod bloğu dosyada {count} kez geçiyor.\n"
-#                 "Hangi bloğun değiştirileceği belirsiz. Lütfen daha fazla bağlam (context) ekle."
-#             )
+#             return False, f"⚠ Yama uygulanamadı: Hedef kod bloğu dosyada {count} kez geçiyor."
 
 #         new_content = content.replace(target_block, replacement_block)
 #         return self.write_file(path, new_content, validate=True)
 
 #     # ─────────────────────────────────────────────
-#     #  GÜVENLİ KOD ÇALIŞTIRMA (DOCKER SANDBOX)
+#     #  GÜVENLİ KOD ÇALIŞTIRMA (CONDA İZOLASYONU)
 #     # ─────────────────────────────────────────────
 
 #     def execute_code(self, code: str) -> Tuple[bool, str]:
 #         """
-#         Kodu tamamen İZOLE ve geçici bir Docker konteynerinde çalıştırır.
-#         - Ağ erişimi kapalı (network_disabled=True)
-#         - Dosya sistemi okunaksız/geçici
-#         - Bellek kısıtlaması (128 MB)
-#         - Zaman aşımı koruması (10 saniye)
+#         Kodu aktif Python ortamında (Conda) alt süreç olarak çalıştırır.
+#         Sonsuz döngüleri engellemek için 10 saniyelik timeout uygulanır.
 #         """
 #         if not self.security.can_execute():
 #             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
-#         if not self.docker_available:
-#             return False, "[OpenClaw] Docker bağlantısı kurulamadığı için güvenlik sebebiyle kod çalıştırma reddedildi."
-
 #         try:
-#             import docker
-            
-#             # Kodu konteynere komut satırı argümanı olarak gönderiyoruz
-#             # 'python -c "kod"' formatında çalışacak
-#             command = ["python", "-c", code]
-
-#             # Konteyneri başlat (Arka planda ayrılmış olarak)
-#             container = self.docker_client.containers.run(
-#                 image="python:3.11-alpine", # Çok hafif ve hızlı bir imaj
-#                 command=command,
-#                 detach=True,
-#                 remove=False, # Çıktıyı okuyabilmek için anında silmiyoruz, manuel sileceğiz
-#                 network_disabled=True, # Dış ağa istek atamaz (Güvenlik)
-#                 mem_limit="128m", # RAM Limiti (Güvenlik)
-#                 cpu_quota=50000, # CPU Limiti (Güvenlik - Max %50)
-#                 working_dir="/tmp",
+#             # sys.executable mevcut Conda ortamını (örn: sidar-ai) hedefler
+#             result = subprocess.run(
+#                 [sys.executable, "-c", code],
+#                 capture_output=True,
+#                 text=True,
+#                 timeout=10,  # 10 Saniye sınırı
+#                 cwd=str(self.base_dir / "temp")  # Kodu /temp dizininde çalıştırır
 #             )
-
-#             # Zaman aşımı takibi (10 Saniye)
-#             timeout = 10
-#             start_time = time.time()
             
-#             while True:
-#                 container.reload() # Durumu güncelle
-#                 if container.status == "exited":
-#                     break
-#                 if time.time() - start_time > timeout:
-#                     container.kill() # 10 saniyeyi geçerse zorla durdur
-#                     container.remove(force=True)
-#                     return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
-#                 time.sleep(0.5)
+#             output = result.stdout
+#             if result.stderr:
+#                 output += f"\n[HATA ÇIKTISI]:\n{result.stderr}"
 
-#             # Çıktıları al
-#             logs = container.logs(stdout=True, stderr=True).decode("utf-8").strip()
-            
-#             # İşimiz bitti, konteyneri sil
-#             container.remove(force=True)
-
-#             if logs:
-#                 return True, f"REPL Çıktısı (Docker Sandbox):\n{logs}"
-#             else:
+#             if not output.strip():
 #                 return True, "(Kod başarıyla çalıştı ancak konsola bir çıktı üretmedi)"
+                
+#             return True, f"REPL Çıktısı:\n{output.strip()}"
 
-#         except docker.errors.ImageNotFound:
-#              return False, "Çalıştırma hatası: 'python:3.11-alpine' imajı bulunamadı. Lütfen terminalde 'docker pull python:3.11-alpine' komutunu çalıştırın."
+#         except subprocess.TimeoutExpired:
+#             return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
 #         except Exception as exc:
-#             return False, f"Docker çalıştırma hatası: {exc}"
+#             return False, f"Çalıştırma hatası: {exc}"
 
 #     # ─────────────────────────────────────────────
 #     #  DİZİN LİSTELEME
@@ -602,3 +601,7 @@ class CodeManager:
 #             f"writes={m['files_written']} "
 #             f"checks={m['syntax_checks']}>"
 #         )
+
+
+
+
