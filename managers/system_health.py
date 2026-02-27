@@ -1,36 +1,55 @@
 """
-Sidar Project - Sistem Sağlığı Yöneticisi
-CPU, RAM ve GPU izleme; bellek optimizasyonu.
+Sidar Project — Sistem Sağlığı Yöneticisi
+Sürüm: 2.6.0 (GPU Genişletilmiş İzleme)
+
+Özellikler:
+- CPU kullanımı (psutil)
+- RAM kullanımı (psutil)
+- GPU: cihaz adı, VRAM, CUDA sürümü, driver sürümü (torch.cuda + pynvml)
+- GPU sıcaklık & anlık kullanım yüzdesi (nvidia-ml-py / pynvml — opsiyonel)
+- GPU VRAM temizleme (torch.cuda.empty_cache + gc)
 """
 
 import gc
 import logging
 import platform
 import threading
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class SystemHealthManager:
     """
-    Donanım sağlığını izler ve raporlar.
-    GPU bellek optimizasyonu gerçekleştirir.
+    Donanım sağlığını izler, raporlar ve GPU belleğini optimize eder.
+    nvidia-ml-py (pynvml) kuruluysa GPU sıcaklık/kullanım verisi de sağlar.
     """
 
     def __init__(self, use_gpu: bool = True) -> None:
         self.use_gpu = use_gpu
         self._lock = threading.RLock()
-        self._torch_available = self._check_torch()
+
+        # Bağımlılık kontrolleri
+        self._torch_available  = self._check_import("torch")
+        self._psutil_available = self._check_import("psutil")
+        self._pynvml_available = self._check_import("pynvml")
+
         self._gpu_available = self._check_gpu()
 
+        # pynvml başlat (sıcaklık / kullanım için)
+        self._nvml_initialized = False
+        if self._pynvml_available and self._gpu_available:
+            self._init_nvml()
+
     # ─────────────────────────────────────────────
-    #  BAŞLANGIC KONTROLLERI
+    #  BAŞLANGIÇ KONTROLLERI
     # ─────────────────────────────────────────────
 
-    def _check_torch(self) -> bool:
+    @staticmethod
+    def _check_import(module_name: str) -> bool:
+        import importlib
         try:
-            import torch  # noqa: F401
+            importlib.import_module(module_name)
             return True
         except ImportError:
             return False
@@ -44,72 +63,131 @@ class SystemHealthManager:
         except Exception:
             return False
 
+    def _init_nvml(self) -> None:
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            self._nvml_initialized = True
+            logger.debug("pynvml başlatıldı — GPU sıcaklık/kullanım izleme aktif.")
+        except Exception as exc:
+            logger.debug("pynvml başlatılamadı (opsiyonel): %s", exc)
+
     # ─────────────────────────────────────────────
     #  CPU & RAM
     # ─────────────────────────────────────────────
 
     def get_cpu_usage(self) -> Optional[float]:
+        """CPU kullanım yüzdesini döndür."""
+        if not self._psutil_available:
+            return None
         try:
             import psutil
             return psutil.cpu_percent(interval=0.5)
-        except ImportError:
+        except Exception:
             return None
 
     def get_memory_info(self) -> Dict[str, float]:
         """RAM bilgisini GB cinsinden döndür."""
+        if not self._psutil_available:
+            return {}
         try:
             import psutil
             vm = psutil.virtual_memory()
             return {
-                "total_gb": vm.total / 1e9,
-                "used_gb": vm.used / 1e9,
-                "available_gb": vm.available / 1e9,
-                "percent": vm.percent,
+                "total_gb":     round(vm.total    / 1e9, 2),
+                "used_gb":      round(vm.used      / 1e9, 2),
+                "available_gb": round(vm.available / 1e9, 2),
+                "percent":      vm.percent,
             }
-        except ImportError:
+        except Exception:
             return {}
 
     # ─────────────────────────────────────────────
     #  GPU
     # ─────────────────────────────────────────────
 
-    def get_gpu_info(self) -> Dict[str, object]:
-        """GPU bilgisini döndür."""
+    def get_gpu_info(self) -> Dict:
+        """
+        Detaylı GPU bilgisini döndür.
+
+        Alanlar:
+          available, device_count, cuda_version, driver_version,
+          devices[]: id, name, compute_capability, total_vram_gb,
+                     allocated_gb, reserved_gb, free_gb,
+                     temperature_c (pynvml varsa), utilization_pct (pynvml varsa)
+        """
         if not self._gpu_available:
             return {"available": False, "reason": "CUDA bulunamadı veya devre dışı"}
 
         try:
             import torch
             device_count = torch.cuda.device_count()
-            devices = []
+            devices: List[Dict] = []
+
             for i in range(device_count):
-                props = torch.cuda.get_device_properties(i)
-                total_vram = props.total_memory / 1e9
-                allocated = torch.cuda.memory_allocated(i) / 1e9
-                reserved = torch.cuda.memory_reserved(i) / 1e9
-                devices.append({
-                    "id": i,
-                    "name": props.name,
-                    "total_vram_gb": round(total_vram, 2),
-                    "allocated_gb": round(allocated, 2),
-                    "reserved_gb": round(reserved, 2),
-                    "free_gb": round(total_vram - reserved, 2),
-                })
-            return {"available": True, "device_count": device_count, "devices": devices}
+                props     = torch.cuda.get_device_properties(i)
+                total_mem = props.total_memory / 1e9
+                alloc_mem = torch.cuda.memory_allocated(i) / 1e9
+                res_mem   = torch.cuda.memory_reserved(i)  / 1e9
+
+                dev: Dict = {
+                    "id":                 i,
+                    "name":               props.name,
+                    "compute_capability": f"{props.major}.{props.minor}",
+                    "total_vram_gb":      round(total_mem, 2),
+                    "allocated_gb":       round(alloc_mem, 2),
+                    "reserved_gb":        round(res_mem,   2),
+                    "free_gb":            round(total_mem - res_mem, 2),
+                }
+
+                # pynvml ek verisi
+                if self._nvml_initialized:
+                    try:
+                        import pynvml
+                        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                        temp   = pynvml.nvmlDeviceGetTemperature(
+                            handle, pynvml.NVML_TEMPERATURE_GPU
+                        )
+                        util   = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                        dev["temperature_c"]    = temp
+                        dev["utilization_pct"]  = util.gpu
+                        dev["mem_utilization_pct"] = util.memory
+                    except Exception:
+                        pass  # pynvml hatası kritik değil
+
+                devices.append(dev)
+
+            return {
+                "available":      True,
+                "device_count":   device_count,
+                "cuda_version":   torch.version.cuda or "N/A",
+                "driver_version": self._get_driver_version(),
+                "devices":        devices,
+            }
         except Exception as exc:
             return {"available": False, "error": str(exc)}
 
+    def _get_driver_version(self) -> str:
+        """NVIDIA sürücü sürümünü döndür (pynvml varsa)."""
+        if self._nvml_initialized:
+            try:
+                import pynvml
+                return pynvml.nvmlSystemGetDriverVersion()
+            except Exception:
+                pass
+        return "N/A"
+
     def optimize_gpu_memory(self) -> str:
-        """GPU VRAM'ını boşalt ve Python GC çalıştır."""
+        """GPU VRAM'ını boşalt ve Python GC'yi çalıştır."""
         freed_mb = 0.0
         if self._gpu_available:
             try:
                 import torch
-                before = torch.cuda.memory_reserved() / 1e6
+                before   = torch.cuda.memory_reserved() / 1e6
                 torch.cuda.empty_cache()
-                after = torch.cuda.memory_reserved() / 1e6
-                freed_mb = before - after
-                logger.info("GPU bellek temizlendi: %.1f MB boşaltıldı", freed_mb)
+                after    = torch.cuda.memory_reserved() / 1e6
+                freed_mb = max(before - after, 0.0)
+                logger.info("GPU bellek temizlendi: %.1f MB boşaltıldı.", freed_mb)
             except Exception as exc:
                 logger.warning("GPU bellek temizleme hatası: %s", exc)
 
@@ -124,43 +202,67 @@ class SystemHealthManager:
     # ─────────────────────────────────────────────
 
     def full_report(self) -> str:
-        """Kapsamlı sistem sağlık raporu."""
+        """Kapsamlı sistem sağlık raporu (metin)."""
         lines = ["[Sistem Sağlık Raporu]"]
 
         # Platform
-        lines.append(f"  OS      : {platform.system()} {platform.release()}")
-        lines.append(f"  Python  : {platform.python_version()}")
+        lines.append(f"  OS        : {platform.system()} {platform.release()}")
+        lines.append(f"  Python    : {platform.python_version()}")
 
         # CPU
         cpu = self.get_cpu_usage()
         if cpu is not None:
-            lines.append(f"  CPU     : %{cpu:.1f} kullanımda")
+            lines.append(f"  CPU       : %{cpu:.1f} kullanımda")
         else:
-            lines.append("  CPU     : psutil kurulu değil")
+            lines.append("  CPU       : psutil kurulu değil")
 
         # RAM
         mem = self.get_memory_info()
         if mem:
             lines.append(
-                f"  RAM     : {mem['used_gb']:.1f}/{mem['total_gb']:.1f} GB "
+                f"  RAM       : {mem['used_gb']:.1f}/{mem['total_gb']:.1f} GB "
                 f"(%{mem['percent']:.0f} kullanımda)"
             )
 
         # GPU
         gpu = self.get_gpu_info()
         if gpu.get("available"):
+            lines.append(
+                f"  CUDA      : {gpu.get('cuda_version', 'N/A')}  |  "
+                f"Sürücü: {gpu.get('driver_version', 'N/A')}"
+            )
             for d in gpu["devices"]:
-                lines.append(
-                    f"  GPU {d['id']}   : {d['name']} | "
-                    f"VRAM {d['allocated_gb']:.1f}/{d['total_vram_gb']:.1f} GB"
+                line = (
+                    f"  GPU {d['id']}     : {d['name']}  |  "
+                    f"Compute {d.get('compute_capability', '?')}  |  "
+                    f"VRAM {d['allocated_gb']:.1f}/{d['total_vram_gb']:.1f} GB  "
+                    f"(Serbest {d['free_gb']:.1f} GB)"
                 )
+                if "temperature_c" in d:
+                    line += f"  |  {d['temperature_c']}°C"
+                if "utilization_pct" in d:
+                    line += f"  |  %{d['utilization_pct']} GPU"
+                lines.append(line)
         else:
-            lines.append(f"  GPU     : {gpu.get('reason', 'Yok')}")
+            lines.append(f"  GPU       : {gpu.get('reason', gpu.get('error', 'Yok'))}")
 
         return "\n".join(lines)
+
+    # ─────────────────────────────────────────────
+    #  TEMİZLİK
+    # ─────────────────────────────────────────────
+
+    def __del__(self) -> None:
+        if self._nvml_initialized:
+            try:
+                import pynvml
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
 
     def __repr__(self) -> str:
         return (
             f"<SystemHealthManager gpu={self._gpu_available} "
-            f"torch={self._torch_available}>"
+            f"torch={self._torch_available} "
+            f"pynvml={self._nvml_initialized}>"
         )
