@@ -11,7 +11,6 @@ import argparse
 import asyncio
 import json
 import logging
-import threading
 from pathlib import Path
 
 import uvicorn
@@ -30,14 +29,14 @@ logger = logging.getLogger(__name__)
 
 cfg = Config()
 _agent: SidarAgent | None = None
-_agent_lock = threading.Lock()
+_agent_lock = asyncio.Lock()
 
 
-def get_agent() -> SidarAgent:
-    """Singleton ajan — ilk çağrıda başlatılır."""
+async def get_agent() -> SidarAgent:
+    """Singleton ajan — ilk async çağrıda başlatılır (asyncio.Lock ile korunur)."""
     global _agent
     if _agent is None:
-        with _agent_lock:
+        async with _agent_lock:
             if _agent is None:
                 _agent = SidarAgent(cfg)
     return _agent
@@ -88,7 +87,7 @@ async def chat(request: Request):
     async def sse_generator():
         """Asenkron SSE akışı: Ajan yanıtlarını dinler ve yayar."""
         try:
-            agent = get_agent()
+            agent = await get_agent()
             # Ajanın asenkron stream yanıtını bekle ve akıt
             async for chunk in agent.respond(user_message):
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -116,7 +115,7 @@ async def chat(request: Request):
 @app.get("/status")
 async def status():
     """Ajan durum bilgisini JSON olarak döndür."""
-    a = get_agent()
+    a = await get_agent()
     return JSONResponse({
         "version": a.VERSION,
         "provider": a.cfg.AI_PROVIDER,
@@ -133,7 +132,8 @@ async def status():
 @app.post("/clear")
 async def clear():
     """Konuşma belleğini temizle."""
-    result = get_agent().clear_memory()
+    agent = await get_agent()
+    result = agent.clear_memory()
     return JSONResponse({"result": result})
 
 
@@ -171,12 +171,14 @@ def main() -> None:
     if args.provider:
         cfg.AI_PROVIDER = args.provider
 
-    # Ajan önceden başlat (ilk istekte gecikme olmasın)
-    get_agent()
+    # Ajan önceden başlat (ilk istekte gecikme olmasın).
+    # SidarAgent.__init__ senkrondur; asyncio.run() gerekmez.
+    global _agent
+    _agent = SidarAgent(cfg)
 
     display_host = "localhost" if args.host in ("0.0.0.0", "") else args.host
     print(f"\n  ╔══════════════════════════════════════╗")
-    print(f"  ║  SİDAR Web Arayüzü — v{get_agent().VERSION}          ║")
+    print(f"  ║  SİDAR Web Arayüzü — v{_agent.VERSION}          ║")
     print(f"  ║  http://{display_host}:{args.port:<27}║")
     print(f"  ╚══════════════════════════════════════╝\n")
 

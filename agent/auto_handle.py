@@ -109,14 +109,14 @@ class AutoHandle:
         result = await self._try_gh_releases(t, text)
         if result[0]: return result
 
-        # ── RAG / Belge Deposu (Senkron) ─────────────────────
+        # ── RAG / Belge Deposu ────────────────────────────────
         result = self._try_docs_search(t, text)
         if result[0]: return result
 
         result = self._try_docs_list(t, text)
         if result[0]: return result
 
-        result = self._try_docs_add(t, text)
+        result = await self._try_docs_add(t, text)
         if result[0]: return result
 
         return False, ""
@@ -334,14 +334,14 @@ class AutoHandle:
             return True, self.docs.list_documents()
         return False, ""
 
-    def _try_docs_add(self, t: str, raw: str) -> Tuple[bool, str]:
+    async def _try_docs_add(self, t: str, raw: str) -> Tuple[bool, str]:
         """URL'den belge deposuna ekle — 'belge ekle https://...' vb."""
         m = re.search(r"(?:belge\s+ekle|dokümana\s+ekle|rag.*ekle)\s+(https?://\S+)", raw, re.IGNORECASE)
         if m:
             url = m.group(1).strip()
             title_m = re.search(r'"([^"]+)"', raw)
             title = title_m.group(1) if title_m else ""
-            _, result = self.docs.add_document_from_url(url, title=title)
+            _, result = await self.docs.add_document_from_url(url, title=title)
             return True, result
         return False, ""
 
