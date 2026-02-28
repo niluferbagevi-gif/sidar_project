@@ -16,7 +16,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
 
 from config import Config
 from agent.sidar_agent import SidarAgent
@@ -61,6 +61,12 @@ WEB_DIR = Path(__file__).parent / "web_ui"
 # ─────────────────────────────────────────────
 #  ROTALAR
 # ─────────────────────────────────────────────
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Tarayıcının favicon isteğini 404 hatası vermeden sessizce (204) geçiştirir."""
+    return Response(status_code=204)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
