@@ -227,34 +227,41 @@ class SidarAgent:
     # ─────────────────────────────────────────────
 
     async def _tool_list_dir(self, a: str) -> str:
-        _, result = self.code.list_directory(a or ".")
+        # Dizin listeleme disk I/O içerir — event loop'u bloke etmemek için thread'e itilir
+        _, result = await asyncio.to_thread(self.code.list_directory, a or ".")
         return result
 
     async def _tool_read_file(self, a: str) -> str:
         if not a: return "Dosya yolu belirtilmedi."
-        ok, result = self.code.read_file(a)
+        # Disk okuma event loop'u bloke eder — thread'e itilir
+        ok, result = await asyncio.to_thread(self.code.read_file, a)
         if ok: self.memory.set_last_file(a)
         return result
 
     async def _tool_write_file(self, a: str) -> str:
         parts = a.split("|||", 1)
         if len(parts) < 2: return "⚠ Hatalı format. Kullanım: path|||content"
-        _, result = self.code.write_file(parts[0].strip(), parts[1])
+        # Disk yazma event loop'u bloke eder — thread'e itilir
+        _, result = await asyncio.to_thread(self.code.write_file, parts[0].strip(), parts[1])
         return result
 
     async def _tool_patch_file(self, a: str) -> str:
         parts = a.split("|||")
         if len(parts) < 3: return "⚠ Hatalı patch formatı. Kullanım: path|||eski_kod|||yeni_kod"
-        _, result = self.code.patch_file(parts[0].strip(), parts[1], parts[2])
+        # Disk okuma+yazma event loop'u bloke eder — thread'e itilir
+        _, result = await asyncio.to_thread(self.code.patch_file, parts[0].strip(), parts[1], parts[2])
         return result
 
     async def _tool_execute_code(self, a: str) -> str:
         if not a: return "⚠ Çalıştırılacak kod belirtilmedi."
-        _, result = self.code.execute_code(a)
+        # execute_code içinde time.sleep(0.5) döngüsü var — event loop'u dondurur.
+        # asyncio.to_thread ile ayrı bir thread'de çalıştırılır; web sunucusu kilitlenmez.
+        _, result = await asyncio.to_thread(self.code.execute_code, a)
         return result
 
     async def _tool_audit(self, a: str) -> str:
-        return self.code.audit_project(a or ".")
+        # Tüm .py dosyalarını tararken ağır disk I/O yapılır — thread'e itilir
+        return await asyncio.to_thread(self.code.audit_project, a or ".")
 
     async def _tool_health(self, _: str) -> str:
         return self.health.full_report()

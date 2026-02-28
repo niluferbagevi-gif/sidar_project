@@ -111,13 +111,28 @@ class LLMClient:
             return self._fallback_stream(msg) if stream else msg
 
     async def _stream_ollama_response(self, url: str, payload: dict, timeout: int = 120) -> AsyncIterator[str]:
-        """Ollama stream yanıtını parçalar halinde asenkron yield eder."""
+        """
+        Ollama stream yanıtını manuel buffer ile güvenli şekilde ayrıştırır.
+
+        Sorun (aiter_lines): TCP paket sınırlarında JSON objesi ikiye bölünebilir;
+        JSONDecodeError ile atlanan satır sessizce içerik kaybına yol açar.
+
+        Çözüm: aiter_bytes() ile ham veri okunur, '\\n' karakterine göre satırlara
+        bölünür. Tamamlanmamış satır buffer'da bekletilir, tam satır gelince ayrıştırılır.
+        """
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 async with client.stream("POST", url, json=payload) as resp:
                     resp.raise_for_status()
-                    async for line in resp.aiter_lines():
-                        if line:
+                    buffer = ""
+                    async for raw_bytes in resp.aiter_bytes():
+                        buffer += raw_bytes.decode("utf-8", errors="replace")
+                        # Tamamlanmış satırları işle; son (henüz bitmemiş) satır buffer'da kalır
+                        while "\n" in buffer:
+                            line, buffer = buffer.split("\n", 1)
+                            line = line.strip()
+                            if not line:
+                                continue
                             try:
                                 body = json.loads(line)
                                 chunk = body.get("message", {}).get("content", "")
