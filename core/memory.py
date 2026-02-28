@@ -1,10 +1,11 @@
 """
 Sidar Project - Konuşma Belleği (Kalıcı)
-Çoklu tur konuşma geçmişini yönetir ve diske kaydeder.
+Çoklu tur konuşma geçmişini ve farklı sohbet oturumlarını yönetir, diske kaydeder.
 """
 
 import json
 import time
+import uuid
 import threading
 import logging
 from pathlib import Path
@@ -14,54 +15,133 @@ logger = logging.getLogger(__name__)
 
 class ConversationMemory:
     """
-    Thread-safe ve kalıcı (persistent) konuşma belleği yöneticisi.
-    Verileri JSON dosyasında saklar.
+    Thread-safe ve kalıcı (persistent) çoklu konuşma (session) belleği yöneticisi.
+    Verileri sessions dizininde ayrı JSON dosyalarında saklar.
     """
 
     def __init__(self, file_path: Path, max_turns: int = 20) -> None:
-        self.file_path = file_path
+        # Eski memory.json yolunu alıp yerine 'sessions' klasörü oluşturuyoruz
+        self.sessions_dir = file_path.parent / "sessions"
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.max_turns = max_turns
         self._lock = threading.RLock()
         
-        # Varsayılan değerler
+        # Aktif oturum (seçili sohbet) bilgileri
+        self.active_session_id: Optional[str] = None
+        self.active_title: str = "Yeni Sohbet"
         self._turns: List[Dict] = []
         self._last_file: Optional[str] = None
         
-        # Başlangıçta belleği yükle
-        self._load()
+        # Başlangıçta oturumları yükle veya yeni oluştur
+        self._init_sessions()
+
+    def _init_sessions(self) -> None:
+        """Mevcut oturumları bul, yoksa yeni bir tane oluştur ve aktif yap."""
+        sessions = self.get_all_sessions()
+        if sessions:
+            # En son güncellenen (en yeni) oturumu yükle
+            last_session = sessions[0]
+            self.load_session(last_session["id"])
+        else:
+            self.create_session("İlk Sohbet")
+
+    # ─────────────────────────────────────────────
+    #  OTURUM (SESSION) YÖNETİMİ
+    # ─────────────────────────────────────────────
+
+    def get_all_sessions(self) -> List[Dict]:
+        """Tüm oturumları tarihe göre (en yeni en üstte) sıralı döndürür."""
+        sessions = []
+        with self._lock:
+            for file_path in self.sessions_dir.glob("*.json"):
+                try:
+                    data = json.loads(file_path.read_text(encoding="utf-8"))
+                    sessions.append({
+                        "id": data.get("id", file_path.stem),
+                        "title": data.get("title", "İsimsiz Sohbet"),
+                        "updated_at": data.get("updated_at", 0)
+                    })
+                except Exception as exc:
+                    logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
+            
+        # Güncellenme zamanına göre azalan (descending) sırala
+        sessions.sort(key=lambda x: x["updated_at"], reverse=True)
+        return sessions
+
+    def create_session(self, title: str = "Yeni Sohbet") -> str:
+        """Yeni bir sohbet oturumu oluşturur ve aktif hale getirir."""
+        session_id = str(uuid.uuid4())
+        with self._lock:
+            self.active_session_id = session_id
+            self.active_title = title
+            self._turns = []
+            self._last_file = None
+            self._save()
+            logger.info(f"Yeni oturum oluşturuldu: {session_id} - {title}")
+        return session_id
+
+    def load_session(self, session_id: str) -> bool:
+        """Belirtilen oturumu (sohbeti) belleğe yükler."""
+        file_path = self.sessions_dir / f"{session_id}.json"
+        if not file_path.exists():
+            logger.warning(f"Oturum bulunamadı: {session_id}")
+            return False
+
+        try:
+            with self._lock:
+                data = json.loads(file_path.read_text(encoding="utf-8"))
+                self.active_session_id = session_id
+                self.active_title = data.get("title", "İsimsiz Sohbet")
+                self._turns = data.get("turns", [])
+                self._last_file = data.get("last_file")
+                logger.info(f"Oturum yüklendi: {session_id} ({len(self._turns)} mesaj)")
+            return True
+        except Exception as exc:
+            logger.error(f"Oturum yükleme hatası ({session_id}): {exc}")
+            return False
+
+    def delete_session(self, session_id: str) -> bool:
+        """Belirtilen oturumu siler."""
+        file_path = self.sessions_dir / f"{session_id}.json"
+        with self._lock:
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    logger.info(f"Oturum silindi: {session_id}")
+                    # Eğer silinen oturum aktif oturumsa, başka birine geç veya yeni oluştur
+                    if self.active_session_id == session_id:
+                        self._init_sessions()
+                    return True
+                except OSError as exc:
+                    logger.error(f"Oturum silinirken hata: {exc}")
+        return False
+        
+    def update_title(self, new_title: str) -> None:
+        """Aktif oturumun başlığını günceller."""
+        with self._lock:
+            self.active_title = new_title
+            self._save()
 
     # ─────────────────────────────────────────────
     #  PERSISTENCE (Kalıcılık)
     # ─────────────────────────────────────────────
 
-    def _load(self) -> None:
-        """Belleği diskten yükle."""
-        if not self.file_path.exists():
-            return
-
-        try:
-            with self._lock:
-                data = json.loads(self.file_path.read_text(encoding="utf-8"))
-                self._turns = data.get("turns", [])
-                self._last_file = data.get("last_file")
-                logger.info(f"Bellek yüklendi: {len(self._turns)} mesaj.")
-        except Exception as exc:
-            logger.error(f"Bellek yükleme hatası: {exc}")
-            # Hata durumunda boş başlat
-            self._turns = []
-            self._last_file = None
-
     def _save(self) -> None:
-        """Belleği diske kaydet."""
+        """Aktif belleği (oturumu) diske kaydet."""
+        if not self.active_session_id:
+            return
+            
         try:
             data = {
+                "id": self.active_session_id,
+                "title": self.active_title,
+                "updated_at": time.time(),
                 "last_file": self._last_file,
                 "turns": self._turns
             }
+            file_path = self.sessions_dir / f"{self.active_session_id}.json"
             with self._lock:
-                # Dizin yoksa oluştur
-                self.file_path.parent.mkdir(parents=True, exist_ok=True)
-                self.file_path.write_text(
+                file_path.write_text(
                     json.dumps(data, ensure_ascii=False, indent=2),
                     encoding="utf-8"
                 )
@@ -87,7 +167,7 @@ class ConversationMemory:
             self._save()
 
     def get_history(self, n_last: Optional[int] = None) -> List[Dict]:
-        """Son n_last turu döndür."""
+        """Aktif sohbetin son n_last turunu döndür."""
         with self._lock:
             turns = list(self._turns)
         return turns if n_last is None else turns[-n_last:]
@@ -117,7 +197,6 @@ class ConversationMemory:
     def needs_summarization(self) -> bool:
         """
         Bellek penceresinin %80'i dolduğunda özetleme sinyali ver.
-        Örn: max_turns=20 → eşik = 32 mesaj (20 * 2 * 0.8)
         """
         with self._lock:
             threshold = int(self.max_turns * 2 * 0.8)
@@ -126,7 +205,6 @@ class ConversationMemory:
     def apply_summary(self, summary_text: str) -> None:
         """
         Tüm konuşma geçmişini özetle değiştir; belleği sıkıştırır.
-        2 mesaj (user + assistant özet çifti) kalır, eskiler silinir.
         """
         with self._lock:
             self._turns = [
@@ -149,21 +227,15 @@ class ConversationMemory:
     # ─────────────────────────────────────────────
 
     def clear(self) -> None:
-        """Belleği hem RAM'den hem diskten temizle."""
+        """Aktif belleği temizle (dosyayı boşaltır ancak silmez)."""
         with self._lock:
             self._turns.clear()
             self._last_file = None
-            
-            # Dosyayı da sıfırla veya sil
-            if self.file_path.exists():
-                try:
-                    self.file_path.unlink()
-                except OSError:
-                    self._save() # Silinemezse boş kaydet
+            self._save()
 
     def __len__(self) -> int:
         with self._lock:
             return len(self._turns)
 
     def __repr__(self) -> str:
-        return f"<ConversationMemory turns={len(self._turns)} file={self.file_path.name}>"
+        return f"<ConversationMemory session={self.active_session_id} turns={len(self._turns)}>"

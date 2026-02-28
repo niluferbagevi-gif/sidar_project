@@ -88,6 +88,12 @@ async def chat(request: Request):
         """Asenkron SSE akışı: Ajan yanıtlarını dinler ve yayar."""
         try:
             agent = await get_agent()
+            
+            # Eğer aktif bir başlık yoksa ve bu ilk mesajsa, basit bir başlık üretelim
+            if len(agent.memory) == 0:
+                title = user_message[:30] + "..." if len(user_message) > 30 else user_message
+                agent.memory.update_title(title)
+
             # Ajanın asenkron stream yanıtını bekle ve akıt
             async for chunk in agent.respond(user_message):
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -135,13 +141,51 @@ async def status():
         "gpu_devices": gpu_info.get("devices", []),
     })
 
+# ─────────────────────────────────────────────
+#  ÇOKLU SOHBET (SESSIONS) ROTALARI
+# ─────────────────────────────────────────────
+
+@app.get("/sessions")
+async def get_sessions():
+    """Tüm oturumların listesini döndürür."""
+    agent = await get_agent()
+    return JSONResponse({
+        "active_session": agent.memory.active_session_id,
+        "sessions": agent.memory.get_all_sessions()
+    })
+
+@app.get("/sessions/{session_id}")
+async def load_session(session_id: str):
+    """Belirli bir oturumu yükler ve geçmişini döndürür."""
+    agent = await get_agent()
+    if agent.memory.load_session(session_id):
+        return JSONResponse({"success": True, "history": agent.memory.get_history()})
+    return JSONResponse({"success": False, "error": "Oturum bulunamadı."}, status_code=404)
+
+@app.post("/sessions/new")
+async def new_session():
+    """Yeni bir oturum oluşturur."""
+    agent = await get_agent()
+    session_id = agent.memory.create_session("Yeni Sohbet")
+    return JSONResponse({"success": True, "session_id": session_id})
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Belirli bir oturumu siler."""
+    agent = await get_agent()
+    if agent.memory.delete_session(session_id):
+        return JSONResponse({
+            "success": True, 
+            "active_session": agent.memory.active_session_id
+        })
+    return JSONResponse({"success": False, "error": "Silinemedi."}, status_code=500)
 
 @app.post("/clear")
 async def clear():
-    """Konuşma belleğini temizle."""
+    """Aktif konuşma belleğini temizle."""
     agent = await get_agent()
-    result = agent.clear_memory()
-    return JSONResponse({"result": result})
+    agent.memory.clear()
+    return JSONResponse({"result": True})
 
 
 # ─────────────────────────────────────────────
