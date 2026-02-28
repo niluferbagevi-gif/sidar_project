@@ -80,11 +80,20 @@ Doğrudan Komutlar (serbest metin):
 #  İNTERAKTİF DÖNGÜ
 # ─────────────────────────────────────────────
 
-def interactive_loop(agent: SidarAgent) -> None:
+async def _interactive_loop_async(agent: SidarAgent) -> None:
+    """
+    Tek asyncio.run() çağrısıyla yönetilen interaktif döngü.
+
+    Sorun (eski kod): while döngüsü içinde her mesajda asyncio.run() çağrılıyordu.
+    Her çağrı yeni bir Event Loop açıp kapattığından, ikinci mesajda
+    agent._lock eski (kapalı) loop'a bağlı kalıyordu → RuntimeError riski.
+
+    Çözüm: Tüm döngü tek bir async fonksiyon içine alındı.
+    asyncio.Lock() tüm oturum boyunca aynı loop'ta yaşar.
+    """
     print(BANNER)
     print(f"  Erişim Seviyesi : {agent.cfg.ACCESS_LEVEL.upper()}")
     print(f"  AI Sağlayıcı    : {agent.cfg.AI_PROVIDER} ({agent.cfg.CODING_MODEL})")
-    # GPU bilgisi
     if agent.cfg.USE_GPU:
         gpu_line = f"✓ {agent.cfg.GPU_INFO}"
         if getattr(agent.cfg, "CUDA_VERSION", "N/A") != "N/A":
@@ -103,8 +112,9 @@ def interactive_loop(agent: SidarAgent) -> None:
 
     while True:
         try:
-            user_input = input("Sen  > ").strip()
-        except (EOFError, KeyboardInterrupt):
+            # input() senkron olduğu için event loop'u bloke etmemesi için thread'e itilir
+            user_input = (await asyncio.to_thread(input, "Sen  > ")).strip()
+        except (EOFError, KeyboardInterrupt, asyncio.CancelledError):
             print("\nSidar > Görüşürüz. ✓")
             break
 
@@ -146,20 +156,19 @@ def interactive_loop(agent: SidarAgent) -> None:
             print(agent.docs.list_documents())
             continue
 
-        # Ajan yanıtı — respond() async generator olduğu için asyncio.run() gerekli
+        # Ajan yanıtı — aynı event loop içinde doğrudan async for kullanılır
         try:
             print("Sidar > ", end="", flush=True)
-
-            async def _stream(msg: str) -> None:
-                async for chunk in agent.respond(msg):
-                    print(chunk, end="", flush=True)
-                print("\n")
-
-            asyncio.run(_stream(user_input))
-
+            async for chunk in agent.respond(user_input):
+                print(chunk, end="", flush=True)
+            print("\n")
         except Exception as exc:
             print(f"\nSidar > ✗ Hata: {exc}\n")
             logging.exception("Ajan yanıt hatası")
+
+
+def interactive_loop(agent: SidarAgent) -> None:
+    asyncio.run(_interactive_loop_async(agent))
 
 
 # ─────────────────────────────────────────────
