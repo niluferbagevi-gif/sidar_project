@@ -8,27 +8,28 @@
   <link rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
 
   <style>
-    /* ── Reset & Kök değişkenler ───────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d1117;
-      --bg2:       #161b22;
-      --bg3:       #21262d;
-      --border:    #30363d;
-      --text:      #c9d1d9;
-      --text-dim:  #8b949e;
-      --accent:    #58a6ff;
-      --green:     #3fb950;
-      --red:       #f85149;
-      --yellow:    #e3b341;
-      --user-bg:   #1c2d3e;
-      --sidar-bg:  #161b22;
-      --radius:    8px;
+      --bg:        #0a0a0f;
+      --bg2:       #111118;
+      --bg3:       #1a1a24;
+      --bg4:       #22222e;
+      --border:    #2a2a38;
+      --border2:   #3a3a4e;
+      --text:      #e2e4f0;
+      --text-dim:  #6b6d82;
+      --text-muted:#3e4055;
+      --accent:    #a78bfa;
+      --accent2:   #7c3aed;
+      --green:     #34d399;
+      --red:       #f87171;
+      --yellow:    #fbbf24;
+      --radius:    10px;
+      --radius-lg: 16px;
     }
 
     html, body {
@@ -36,350 +37,446 @@
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 15px;
-      line-height: 1.65;
+      font-size: 14px;
+      line-height: 1.6;
     }
 
-    /* ── Ana düzen ─────────────────────────────────────────── */
-    .app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      max-width: 860px;
-      margin: 0 auto;
-    }
+    .app { display: flex; flex-direction: column; height: 100vh; }
 
-    /* ── Başlık (Header) ───────────────────────────────────── */
-    header {
+    /* ── Üst bar ─── */
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 20px;
+      padding: 10px 20px;
       border-bottom: 1px solid var(--border);
       background: var(--bg2);
       flex-shrink: 0;
       gap: 12px;
     }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .topbar-left  { display: flex; align-items: center; gap: 12px; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
 
     .logo-icon {
-      width: 34px;
-      height: 34px;
-      background: linear-gradient(135deg, var(--accent), var(--green));
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 13px;
-      color: #fff;
-      letter-spacing: -1px;
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 11px; color: #fff;
       flex-shrink: 0;
     }
+    .logo-name { font-size: 14px; font-weight: 600; }
 
-    .logo-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
-    .logo-sub  { font-size: 11px; color: var(--text-dim); }
+    .topbar-divider { width: 1px; height: 18px; background: var(--border2); }
 
-    .header-actions { display: flex; gap: 8px; }
+    .nav-tabs { display: flex; gap: 2px; }
+    .nav-tab {
+      padding: 5px 12px; border-radius: 6px; font-size: 13px;
+      color: var(--text-dim); cursor: pointer;
+      transition: color .15s, background .15s;
+      border: none; background: transparent; font-family: inherit;
+    }
+    .nav-tab:hover  { color: var(--text); background: var(--bg3); }
+    .nav-tab.active { color: var(--text); background: var(--bg3); }
 
-    .btn {
-      padding: 6px 13px;
-      border: 1px solid var(--border);
-      background: var(--bg3);
-      color: var(--text-dim);
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-family: inherit;
+    .btn-ghost {
+      padding: 5px 11px;
+      border: 1px solid var(--border2);
+      background: transparent; color: var(--text-dim);
+      border-radius: 7px; cursor: pointer; font-size: 12px;
+      font-family: inherit; transition: border-color .15s, color .15s, background .15s;
+      white-space: nowrap; display: flex; align-items: center; gap: 5px;
+    }
+    .btn-ghost:hover        { border-color: var(--accent); color: var(--accent); background: rgba(124,58,237,.08); }
+    .btn-ghost.danger:hover { border-color: var(--red);    color: var(--red);    background: rgba(248,113,113,.08); }
+
+    /* ── İçerik ─── */
+    .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* ── Görev paneli ─── */
+    #task-panel {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      flex: 1; padding: 40px 20px; gap: 28px;
+    }
+
+    .task-header { text-align: center; }
+    .task-title  { font-size: 22px; font-weight: 600; margin-bottom: 5px; letter-spacing: -.3px; }
+    .task-sub    { font-size: 13px; color: var(--text-dim); }
+
+    /* ── Görev kutusu ─── */
+    .task-box {
+      width: 100%; max-width: 680px;
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: var(--radius-lg); overflow: hidden;
+      box-shadow: 0 4px 32px rgba(0,0,0,.4);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .task-box:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 4px 32px rgba(124,58,237,.15);
+    }
+
+    #task-input {
+      width: 100%; background: transparent; border: none;
+      padding: 18px 20px 12px; color: var(--text);
+      font-size: 15px; font-family: inherit;
+      resize: none; min-height: 100px; max-height: 260px;
+      overflow-y: auto; outline: none; line-height: 1.6;
+    }
+    #task-input::placeholder { color: var(--text-muted); }
+
+    .task-box-footer {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 14px; gap: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .task-selectors { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    .selector-chip {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 10px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 20px; cursor: pointer;
+      font-size: 12px; color: var(--text-dim);
       transition: border-color .15s, color .15s;
+      white-space: nowrap; user-select: none;
+    }
+    .selector-chip:hover { border-color: var(--border2); color: var(--text); }
+    .selector-chip svg   { flex-shrink: 0; opacity: .7; }
+
+    .chip-label {
+      max-width: 160px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chip-caret { opacity: .5; font-size: 9px; margin-left: 1px; }
+
+    /* Multiplier düğmesi — tıklanabilir */
+    .multiplier-chip {
+      padding: 5px 10px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 20px; font-size: 12px; color: var(--text-dim);
+      cursor: pointer; transition: border-color .15s, color .15s;
+      font-family: inherit;
+    }
+    .multiplier-chip:hover { border-color: var(--border2); color: var(--text); }
+
+    .btn-start {
+      padding: 8px 20px;
+      background: var(--accent2); color: #fff;
+      border: none; border-radius: 8px;
+      cursor: pointer; font-size: 13px; font-weight: 600;
+      font-family: inherit; white-space: nowrap;
+      transition: opacity .15s, transform .1s;
+      display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn-start:hover    { opacity: .88; }
+    .btn-start:active   { transform: scale(.97); }
+    .btn-start:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── Hızlı görevler ─── */
+    .quick-section { width: 100%; max-width: 680px; }
+    .quick-label {
+      font-size: 11px; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .8px;
+      margin-bottom: 10px;
+    }
+    .quick-grid  { display: flex; flex-wrap: wrap; gap: 6px; }
+    .quick-chip {
+      padding: 6px 12px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 20px; cursor: pointer;
+      font-size: 12px; font-family: inherit; color: var(--text-dim);
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .quick-chip:hover {
+      border-color: var(--accent); color: var(--text);
+      background: rgba(124,58,237,.06);
+    }
+
+    /* ── Sohbet paneli ─── */
+    #chat-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+
+    #messages { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+    #messages::-webkit-scrollbar       { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Task progress (çalışan görevler) ─── */
+    #tasks-running {
+      display: none;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      gap: 8px;
+      flex-direction: column;
+    }
+    .running-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+    .task-progress-row {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px;
+    }
+    .task-progress-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(124,58,237,.2);
+      color: var(--accent);
+      font-size: 11px; font-weight: 600;
       white-space: nowrap;
     }
-    .btn:hover           { border-color: var(--accent); color: var(--accent); }
-    .btn-danger:hover    { border-color: var(--red);    color: var(--red);    }
-
-    /* ── Mesaj alanı ───────────────────────────────────────── */
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0 16px;
-      scroll-behavior: smooth;
+    .task-progress-text { color: var(--text-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-spinner {
+      width: 12px; height: 12px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
     }
-    #messages::-webkit-scrollbar       { width: 5px; }
-    #messages::-webkit-scrollbar-track { background: transparent; }
-    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Mesaj balonu ──────────────────────────────────────── */
+    /* ── Mesaj balonu ─── */
     .message {
-      padding: 14px 20px;
-      animation: fadeIn .18s ease;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      animation: fadeIn .16s ease;
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(3px); }
-      to   { opacity: 1; transform: translateY(0);   }
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-
-    .message-user  { background: var(--user-bg);  border-left: 3px solid var(--accent); }
-    .message-sidar { background: var(--sidar-bg); border-left: 3px solid var(--green);  }
+    .message-user  { background: var(--bg2); }
+    .message-sidar { background: var(--bg); }
 
     .msg-header {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      margin-bottom: 7px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .6px;
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12px; font-weight: 600; color: var(--text-dim);
     }
-    .badge-user  { color: var(--accent); }
-    .badge-sidar { color: var(--green);  }
+    .msg-avatar {
+      width: 22px; height: 22px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; flex-shrink: 0;
+    }
+    .avatar-user  { background: var(--bg4); color: var(--text-dim); }
+    .avatar-sidar { background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff; }
 
-    /* Mesaj içeriği (Markdown render sonrası) */
-    .msg-body { color: var(--text); word-break: break-word; }
+    .msg-context-tag {
+      margin-left: auto;
+      padding: 1px 7px;
+      background: rgba(124,58,237,.15);
+      border: 1px solid rgba(124,58,237,.3);
+      border-radius: 4px;
+      font-size: 10px; color: var(--accent);
+    }
 
+    .msg-body { color: var(--text); word-break: break-word; max-width: 820px; }
     .msg-body p              { margin-bottom: 10px; }
     .msg-body p:last-child   { margin-bottom: 0; }
-    .msg-body h1, .msg-body h2, .msg-body h3 { margin: 14px 0 6px; color: var(--text); }
-    .msg-body ul, .msg-body ol { padding-left: 22px; margin: 6px 0; }
+    .msg-body h1,.msg-body h2,.msg-body h3 { margin: 14px 0 6px; }
+    .msg-body ul,.msg-body ol { padding-left: 22px; margin: 6px 0; }
     .msg-body li             { margin: 3px 0; }
     .msg-body a              { color: var(--accent); text-decoration: none; }
     .msg-body a:hover        { text-decoration: underline; }
-
-    .msg-body blockquote {
-      border-left: 3px solid var(--border);
-      padding-left: 12px;
-      color: var(--text-dim);
-      margin: 8px 0;
-    }
-
-    /* İnline kod */
+    .msg-body blockquote     { border-left: 3px solid var(--border2); padding-left: 12px; color: var(--text-dim); margin: 8px 0; }
     .msg-body :not(pre) > code {
-      background: var(--bg3);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
-      font-size: 13px;
-      color: #e6edf3;
+      background: var(--bg4); padding: 2px 6px; border-radius: 4px;
+      font-family: "JetBrains Mono","Fira Code",monospace; font-size: 12.5px; color: var(--accent);
     }
-
-    /* Kod bloğu */
     .msg-body pre {
-      background: var(--bg3) !important;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      overflow-x: auto;
-      margin: 10px 0;
+      background: var(--bg3) !important; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; margin: 10px 0;
     }
     .msg-body pre code {
-      background: transparent !important;
-      padding: 0;
-      font-family: "JetBrains Mono", "Fira Code", monospace;
-      font-size: 13px;
-      line-height: 1.55;
+      background: transparent !important; padding: 0;
+      font-family: "JetBrains Mono","Fira Code",monospace; font-size: 12.5px; color: var(--text);
     }
+    .msg-body table          { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+    .msg-body th,.msg-body td { border: 1px solid var(--border); padding: 6px 12px; text-align: left; }
+    .msg-body th             { background: var(--bg3); color: var(--text-dim); }
 
-    /* Tablo */
-    .msg-body table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 10px 0;
-      font-size: 13px;
-    }
-    .msg-body th, .msg-body td {
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      text-align: left;
-    }
-    .msg-body th { background: var(--bg3); color: var(--text-dim); }
-
-    /* Sistem çıktı satırları (araç sonuçları vb.) */
-    .msg-body .sys-line {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 8px 12px;
-      font-family: monospace;
-      font-size: 13px;
-      color: var(--text-dim);
-      white-space: pre-wrap;
-      margin: 6px 0;
-    }
-
-    /* Streaming sırasında ham metin gösterimi */
-    .streaming-text {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 15px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--text);
-    }
-
-    /* Yanıp sönen imleç */
+    .streaming-text { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
     .cursor {
-      display: inline-block;
-      width: 2px;
-      height: 1em;
-      background: var(--green);
-      margin-left: 1px;
+      display: inline-block; width: 2px; height: 1em;
+      background: var(--accent); margin-left: 1px;
       vertical-align: text-bottom;
       animation: blink 1s step-end infinite;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
-    /* ── Karşılama ekranı ──────────────────────────────────── */
-    #welcome {
-      text-align: center;
-      padding: 56px 20px 40px;
-      color: var(--text-dim);
-    }
-
-    .welcome-logo {
-      font-size: 44px;
-      font-weight: 900;
-      letter-spacing: 5px;
-      background: linear-gradient(135deg, var(--accent), var(--green));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 8px;
-    }
-
-    .welcome-sub {
-      font-size: 15px;
-      color: var(--text-dim);
-      margin-bottom: 36px;
-    }
-
-    .quick-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-      max-width: 580px;
-      margin: 0 auto;
-    }
-
-    .quick-btn {
-      padding: 8px 14px;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-family: inherit;
-      color: var(--text-dim);
-      transition: border-color .15s, color .15s;
-    }
-    .quick-btn:hover { border-color: var(--accent); color: var(--text); }
-
-    /* ── Alt çubuk (input) ─────────────────────────────────── */
-    footer {
+    /* ── Yeni görev çubuğu (chat modunda) ─── */
+    .new-task-bar {
       border-top: 1px solid var(--border);
       background: var(--bg2);
-      padding: 14px 20px 16px;
+      padding: 10px 20px;
       flex-shrink: 0;
     }
-
-    .input-row {
-      display: flex;
-      gap: 10px;
-      align-items: flex-end;
+    .new-task-inner { max-width: 860px; margin: 0 auto; }
+    .new-task-box {
+      display: flex; align-items: flex-end;
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 8px 10px;
+      transition: border-color .15s; gap: 8px;
     }
+    .new-task-box:focus-within { border-color: var(--accent); }
 
     #input-area {
-      flex: 1;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      color: var(--text);
-      font-size: 15px;
-      font-family: inherit;
-      resize: none;
-      min-height: 44px;
-      max-height: 200px;
-      overflow-y: auto;
-      outline: none;
-      line-height: 1.5;
-      transition: border-color .15s;
+      flex: 1; background: transparent; border: none;
+      color: var(--text); font-size: 14px; font-family: inherit;
+      resize: none; min-height: 26px; max-height: 180px;
+      overflow-y: auto; outline: none; line-height: 1.5; padding: 2px 0;
     }
-    #input-area:focus       { border-color: var(--accent); }
-    #input-area::placeholder { color: var(--text-dim); }
+    #input-area::placeholder { color: var(--text-muted); }
+
+    .chat-actions {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+
+    .chat-chip {
+      padding: 4px 9px;
+      background: var(--bg4); border: 1px solid var(--border);
+      border-radius: 14px; cursor: pointer;
+      font-size: 11px; color: var(--text-dim);
+      transition: border-color .15s, color .15s;
+      white-space: nowrap; max-width: 120px;
+      overflow: hidden; text-overflow: ellipsis;
+      font-family: inherit;
+    }
+    .chat-chip:hover { border-color: var(--accent); color: var(--accent); }
 
     #send-btn {
-      padding: 10px 22px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      font-family: inherit;
-      white-space: nowrap;
-      height: 44px;
-      transition: opacity .15s;
+      padding: 5px 16px; background: var(--accent2); color: #fff;
+      border: none; border-radius: 7px; cursor: pointer;
+      font-size: 12px; font-weight: 600; font-family: inherit;
+      height: 30px; transition: opacity .15s; white-space: nowrap;
     }
     #send-btn:hover    { opacity: .85; }
     #send-btn:disabled { opacity: .35; cursor: not-allowed; }
 
-    .input-hint {
-      margin-top: 7px;
-      font-size: 11px;
-      color: var(--text-dim);
-    }
+    .chat-hint { margin-top: 5px; font-size: 11px; color: var(--text-muted); text-align: center; }
 
-    /* ── Durum Modalı ──────────────────────────────────────── */
+    /* ── Modal genel ─── */
     .modal-bg {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.75);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); z-index: 200;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
     }
     .modal-bg.open { display: flex; }
 
     .modal-box {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 460px;
-      width: 92%;
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: var(--radius-lg); padding: 0;
+      max-width: 480px; width: 92%;
+      box-shadow: 0 16px 64px rgba(0,0,0,.6); overflow: hidden;
     }
-    .modal-box h3 { font-size: 15px; margin-bottom: 14px; }
+    .modal-header {
+      padding: 14px 16px 12px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .modal-title { font-size: 13px; font-weight: 600; flex: 1; }
 
-    .stat-grid { display: grid; gap: 6px; }
+    .modal-search {
+      flex: 1; background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 8px; padding: 7px 12px;
+      color: var(--text); font-size: 13px; font-family: inherit;
+      outline: none; transition: border-color .15s;
+    }
+    .modal-search:focus { border-color: var(--accent); }
+    .modal-search::placeholder { color: var(--text-muted); }
 
+    .modal-close-btn {
+      background: transparent; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 16px; padding: 4px 8px;
+      border-radius: 6px; transition: color .15s, background .15s;
+      line-height: 1;
+    }
+    .modal-close-btn:hover { color: var(--text); background: var(--bg3); }
+
+    .list-area {
+      max-height: 340px; overflow-y: auto; padding: 8px;
+    }
+    .list-area::-webkit-scrollbar { width: 4px; }
+    .list-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .list-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 8px; cursor: pointer;
+      transition: background .12s;
+    }
+    .list-item:hover { background: var(--bg3); }
+    .list-item.selected { background: rgba(124,58,237,.15); }
+
+    .list-item-icon {
+      width: 32px; height: 32px; background: var(--bg4);
+      border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; font-size: 15px;
+    }
+    .list-item-info { flex: 1; min-width: 0; }
+    .list-item-name { font-size: 13px; color: var(--text); font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-item-meta { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+    .list-item-check { color: var(--accent); font-size: 14px; opacity: 0; transition: opacity .12s; }
+    .list-item.selected .list-item-check { opacity: 1; }
+
+    .list-empty { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+    .list-loading { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+    /* ── Durum modalı ─── */
+    .stat-modal-box {
+      background: var(--bg2); border: 1px solid var(--border2);
+      border-radius: var(--radius-lg); padding: 20px;
+      max-width: 440px; width: 92%;
+      box-shadow: 0 16px 64px rgba(0,0,0,.6);
+    }
+    .stat-modal-box h3 { font-size: 14px; margin-bottom: 14px; font-weight: 600; }
+    .stat-grid { display: grid; gap: 5px; }
     .stat-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 7px 12px;
-      background: var(--bg3);
-      border-radius: 6px;
-      font-size: 13px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 12px; background: var(--bg3); border-radius: 7px; font-size: 12.5px;
     }
     .stat-label { color: var(--text-dim); }
     .stat-val   { color: var(--text); font-weight: 500; }
     .ok   { color: var(--green); }
     .warn { color: var(--yellow); }
+    .stat-footer { margin-top: 14px; display: flex; justify-content: flex-end; }
 
-    .modal-close { margin-top: 14px; width: 100%; }
+    /* ── Multiplier modal ─── */
+    .mult-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 16px;
+    }
+    .mult-btn {
+      padding: 12px 8px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 700;
+      color: var(--text-dim); font-family: inherit;
+      transition: border-color .15s, color .15s, background .15s;
+      text-align: center;
+    }
+    .mult-btn:hover   { border-color: var(--accent); color: var(--accent); }
+    .mult-btn.active  { border-color: var(--accent); color: var(--accent); background: rgba(124,58,237,.15); }
+    .mult-desc { padding: 0 16px 16px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 
-    /* ── Responsive ────────────────────────────────────────── */
+    /* ── Toast bildirimi ─── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      padding: 8px 18px; background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 8px; font-size: 13px; color: var(--text);
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      opacity: 0; transition: opacity .2s; z-index: 999;
+      pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Responsive ─── */
     @media (max-width: 560px) {
-      .header-actions .btn:first-child { display: none; }
-      .welcome-logo { font-size: 32px; }
-      #welcome { padding: 36px 16px 28px; }
+      .nav-tabs { display: none; }
+      .task-title { font-size: 18px; }
+      #task-panel { padding: 28px 16px; }
+      .message { padding: 12px 16px; }
     }
   </style>
 </head>
@@ -387,210 +484,377 @@
 <body>
 <div class="app">
 
-  <header>
-    <div class="logo">
+  <!-- Üst bar -->
+  <div class="topbar">
+    <div class="topbar-left">
       <div class="logo-icon">SI</div>
-      <div>
-        <div class="logo-name">SİDAR</div>
-        <div class="logo-sub">Yazılım Mimarı &amp; Baş Mühendis AI</div>
-      </div>
+      <span class="logo-name">SİDAR</span>
+      <div class="topbar-divider"></div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" id="tab-task" onclick="showTaskPanel()">Görevler</button>
+        <button class="nav-tab" id="tab-chat"       onclick="showChatPanel()">Sohbet</button>
+      </nav>
     </div>
-    <div class="header-actions">
-      <button class="btn" onclick="openStatus()">⚡ Durum</button>
-      <button class="btn btn-danger" onclick="clearMemory()">🗑 Belleği Temizle</button>
-    </div>
-  </header>
-
-  <div id="messages">
-    <div id="welcome">
-      <div class="welcome-logo">SİDAR</div>
-      <div class="welcome-sub">Yazılım Mimarı &amp; Baş Mühendis AI — sormak için yaz</div>
-      <div class="quick-grid">
-        <button class="quick-btn" onclick="sendQuick('Proje dizinini listele')">📁 Dizini Listele</button>
-        <button class="quick-btn" onclick="sendQuick('Sistem sağlık raporu ver')">💻 Sistem Sağlığı</button>
-        <button class="quick-btn" onclick="sendQuick('Projeyi denetle ve hataları raporla')">🔍 Proje Denetimi</button>
-        <button class="quick-btn" onclick="sendQuick('Son 10 commit\'i listele')">📝 Son Commitler</button>
-        <button class="quick-btn" onclick="sendQuick('web\'de ara: Python async best practices 2024')">🌐 Web Araması</button>
-        <button class="quick-btn" onclick="sendQuick('pypi: fastapi')">📦 PyPI Bilgisi</button>
-        <button class="quick-btn" onclick="sendQuick('Erişim seviyesi ve güvenlik durumunu göster')">🔒 Güvenlik Durumu</button>
-        <button class="quick-btn" onclick="sendQuick('Belge deposunu listele')">📚 RAG Belgeler</button>
-      </div>
+    <div class="topbar-right">
+      <button class="btn-ghost" onclick="openStatus()">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="6" cy="6" r="4.5"/>
+          <path d="M6 4v2.2L7.2 7.4" stroke-linecap="round"/>
+        </svg>
+        Durum
+      </button>
+      <button class="btn-ghost danger" onclick="clearMemory()">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" opacity=".8">
+          <path d="M4.5 1.5h3a.5.5 0 0 1 .5.5v.5h2a.5.5 0 0 1 0 1H2a.5.5 0 0 1 0-1h2V2a.5.5 0 0 1 .5-.5zM3 5l.5 5h5l.5-5H3z"/>
+        </svg>
+        Temizle
+      </button>
     </div>
   </div>
 
-  <footer>
-    <div class="input-row">
-      <textarea
-        id="input-area"
-        placeholder="Sidar'a bir şey sor... (Enter: gönder, Shift+Enter: yeni satır)"
-        rows="1"
-      ></textarea>
-      <button id="send-btn" onclick="sendMessage()">Gönder</button>
-    </div>
-    <div class="input-hint">Enter ile gönder &nbsp;·&nbsp; Shift+Enter ile yeni satır</div>
-  </footer>
+  <div class="content">
 
-</div><div class="modal-bg" id="status-modal" onclick="modalBgClick(event)">
-  <div class="modal-box">
-    <h3>⚡ Sistem Durumu</h3>
-    <div class="stat-grid" id="stat-grid">
-      <div class="stat-row"><span class="stat-label">Yükleniyor…</span></div>
+    <!-- ── Görev paneli ── -->
+    <div id="task-panel">
+      <div class="task-header">
+        <div class="task-title">Sidar'a bir görev ver</div>
+        <div class="task-sub">Yazılım Mimarı &amp; Baş Mühendis AI</div>
+      </div>
+
+      <div class="task-box">
+        <textarea id="task-input" placeholder="Bir görevi tanımla..." rows="4"></textarea>
+        <div class="task-box-footer">
+          <div class="task-selectors">
+
+            <!-- Repo seçici -->
+            <div class="selector-chip" id="repo-chip" onclick="openRepoModal()" title="Depo seç">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8V1.5Z"/>
+              </svg>
+              <span class="chip-label" id="repo-label">Yükleniyor…</span>
+              <span class="chip-caret">▾</span>
+            </div>
+
+            <!-- Branch seçici -->
+            <div class="selector-chip" id="branch-chip" onclick="openBranchModal()" title="Dal seç">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0Z"/>
+              </svg>
+              <span class="chip-label" id="branch-label">main</span>
+              <span class="chip-caret">▾</span>
+            </div>
+
+            <!-- Multiplier -->
+            <button class="multiplier-chip" id="multiplier-chip" onclick="openMultiplierModal()" title="Paralel görev sayısı">
+              <span id="mult-label">1x</span>
+            </button>
+
+          </div>
+
+          <button class="btn-start" id="start-btn" onclick="startTask()">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5.25v5.5L11 8 6.5 5.25Z"/>
+            </svg>
+            Başlat
+          </button>
+        </div>
+      </div>
+
+      <!-- Hızlı görevler -->
+      <div class="quick-section">
+        <div class="quick-label">Hızlı görevler</div>
+        <div class="quick-grid">
+          <button class="quick-chip" onclick="quickTask('Proje dizinini listele ve yapıyı açıkla')">Dizini listele</button>
+          <button class="quick-chip" onclick="quickTask('Sistem sağlık raporu ver')">Sistem sağlığı</button>
+          <button class="quick-chip" onclick="quickTask('Projeyi denetle ve hataları raporla')">Proje denetimi</button>
+          <button class="quick-chip" onclick="quickTask('Son 10 commit\'i listele')">Son commitler</button>
+          <button class="quick-chip" onclick="quickTask('web\'de ara: Python async best practices 2025')">Web araması</button>
+          <button class="quick-chip" onclick="quickTask('pypi: fastapi')">PyPI bilgisi</button>
+          <button class="quick-chip" onclick="quickTask('Erişim seviyesi ve güvenlik durumunu göster')">Güvenlik durumu</button>
+          <button class="quick-chip" onclick="quickTask('Belge deposunu listele')">RAG belgeler</button>
+        </div>
+      </div>
     </div>
-    <button class="btn modal-close" onclick="closeStatus()">Kapat</button>
+
+    <!-- ── Sohbet paneli ── -->
+    <div id="chat-panel">
+      <!-- Çalışan görevler çubuğu -->
+      <div id="tasks-running"></div>
+
+      <div id="messages"></div>
+
+      <!-- Alt girdi çubuğu -->
+      <div class="new-task-bar">
+        <div class="new-task-inner">
+          <div class="new-task-box">
+            <textarea id="input-area" placeholder="Sidar'a bir şey sor..." rows="1"></textarea>
+            <div class="chat-actions">
+              <!-- Chat modunda da repo/branch göster -->
+              <button class="chat-chip" id="chat-repo-chip" onclick="openRepoModal()" title="Depo değiştir"></button>
+              <button class="chat-chip" id="chat-branch-chip" onclick="openBranchModal()" title="Branch değiştir"></button>
+              <button id="send-btn" onclick="sendMessage()">Gönder</button>
+            </div>
+          </div>
+          <div class="chat-hint">Enter: gönder &nbsp;·&nbsp; Shift+Enter: yeni satır &nbsp;·&nbsp; Görev paneli için Görevler sekmesine tıkla</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
+<!-- ── Repo Seçici Modal ── -->
+<div class="modal-bg" id="repo-modal" onclick="modalBgClose(event,'repo-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-dim)">
+        <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8V1.5Z"/>
+      </svg>
+      <input class="modal-search" id="repo-search" type="text" placeholder="Depo ara…" oninput="filterRepos(this.value)" />
+      <button class="modal-close-btn" onclick="closeModal('repo-modal')">✕</button>
+    </div>
+    <div class="list-area" id="repo-list">
+      <div class="list-loading">Yükleniyor…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Branch Seçici Modal ── -->
+<div class="modal-bg" id="branch-modal" onclick="modalBgClose(event,'branch-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-dim)">
+        <path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0Z"/>
+      </svg>
+      <input class="modal-search" id="branch-search" type="text" placeholder="Dal ara…" oninput="filterBranches(this.value)" />
+      <button class="modal-close-btn" onclick="closeModal('branch-modal')">✕</button>
+    </div>
+    <div class="list-area" id="branch-list">
+      <div class="list-loading">Yükleniyor…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Multiplier Modal ── -->
+<div class="modal-bg" id="mult-modal" onclick="modalBgClose(event,'mult-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:340px">
+    <div class="modal-header">
+      <span class="modal-title">Paralel görev sayısı</span>
+      <button class="modal-close-btn" onclick="closeModal('mult-modal')">✕</button>
+    </div>
+    <div class="mult-grid">
+      <button class="mult-btn" onclick="setMultiplier(1)">1x</button>
+      <button class="mult-btn" onclick="setMultiplier(2)">2x</button>
+      <button class="mult-btn" onclick="setMultiplier(3)">3x</button>
+      <button class="mult-btn" onclick="setMultiplier(4)">4x</button>
+    </div>
+    <div class="mult-desc">
+      Aynı görevi kaç kez paralel olarak çalıştırmak istediğini seç.
+      Birden fazla yanıt karşılaştırma için kullanışlıdır.
+    </div>
+  </div>
+</div>
+
+<!-- ── Durum Modalı ── -->
+<div class="modal-bg" id="status-modal" onclick="modalBgClose(event,'status-modal')">
+  <div class="stat-modal-box" onclick="event.stopPropagation()">
+    <h3>Sistem Durumu</h3>
+    <div class="stat-grid" id="stat-grid">
+      <div class="stat-row"><span class="stat-label">Yükleniyor…</span></div>
+    </div>
+    <div class="stat-footer">
+      <button class="btn-ghost" onclick="closeModal('status-modal')">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
 <script>
-/* ════════════════════════════════════════════
-   Marked.js yapılandırması
-   ════════════════════════════════════════════ */
 marked.setOptions({ breaks: true, gfm: true });
 
-/* ════════════════════════════════════════════
-   Global durum
-   ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   DURUM
+   ═══════════════════════════════════════════════════════ */
 let isStreaming  = false;
 let msgCounter   = 0;
+let multiplier   = 1;   // Paralel görev sayısı
 
-/* ════════════════════════════════════════════
-   Textarea otomatik boyutlandırma
-   ════════════════════════════════════════════ */
-const textarea = document.getElementById('input-area');
+// Seçili repo ve branch (sunucudan gelecek)
+let currentRepo   = '';
+let currentBranch = 'main';
 
-textarea.addEventListener('input', () => {
-  textarea.style.height = 'auto';
-  textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-});
+// Önbellekler
+let cachedRepos    = [];   // [{name, description, language, private}]
+let cachedBranches = [];   // string[]
 
-textarea.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
+/* ═══════════════════════════════════════════════════════
+   BAŞLANGIÇ — GitHub durumunu ve repo listesini yükle
+   ═══════════════════════════════════════════════════════ */
+(async function init() {
+  try {
+    const data = await apiFetch('/github/info');
+    if (data.available && data.repos.length > 0) {
+      cachedRepos  = data.repos;
+      currentRepo  = data.current_repo || data.repos[0].name;
+    } else {
+      // GitHub bağlı değil: chip'leri devre dışı bırak
+      currentRepo = data.current_repo || '—';
+      document.getElementById('repo-chip').style.opacity = '.45';
+      document.getElementById('repo-chip').style.cursor  = 'default';
+      document.getElementById('repo-chip').onclick = null;
+    }
+  } catch {
+    currentRepo = 'GitHub bağlı değil';
   }
-});
+  updateChipLabels();
 
-/* ════════════════════════════════════════════
-   Karşılama ekranı
-   ════════════════════════════════════════════ */
-function hideWelcome() {
-  const w = document.getElementById('welcome');
-  if (w) w.remove();
+  // Branch listesini yükle
+  await loadBranches();
+})();
+
+/* ═══════════════════════════════════════════════════════
+   API YARDIMCISI
+   ═══════════════════════════════════════════════════════ */
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
-function sendQuick(text) {
-  textarea.value = text;
-  sendMessage();
+/* ═══════════════════════════════════════════════════════
+   CHIP ETİKETLERİNİ GÜNCELLE
+   ═══════════════════════════════════════════════════════ */
+function updateChipLabels() {
+  const short = currentRepo.includes('/')
+    ? currentRepo.split('/').slice(-1)[0]
+    : currentRepo;
+
+  // Görev paneli chip'leri
+  document.getElementById('repo-label').textContent   = currentRepo || '—';
+  document.getElementById('branch-label').textContent = currentBranch;
+
+  // Chat modundaki chip'ler
+  document.getElementById('chat-repo-chip').textContent   = short || '—';
+  document.getElementById('chat-branch-chip').textContent = currentBranch;
+
+  // Multiplier
+  document.getElementById('mult-label').textContent = `${multiplier}x`;
+
+  // Multiplier modal'daki aktif düğme
+  document.querySelectorAll('.mult-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.textContent) === multiplier);
+  });
 }
 
-/* ════════════════════════════════════════════
-   Mesaj render yardımcıları
-   ════════════════════════════════════════════ */
-function escHtml(str) {
-  const d = document.createElement('div');
-  d.appendChild(document.createTextNode(str));
-  return d.innerHTML;
+/* ═══════════════════════════════════════════════════════
+   PANEL GEÇİŞLERİ
+   ═══════════════════════════════════════════════════════ */
+function showTaskPanel() {
+  document.getElementById('task-panel').style.display = '';
+  document.getElementById('chat-panel').style.display = 'none';
+  document.getElementById('tab-task').classList.add('active');
+  document.getElementById('tab-chat').classList.remove('active');
 }
 
-function scrollBottom() {
-  const msgs = document.getElementById('messages');
-  msgs.scrollTop = msgs.scrollHeight;
+function showChatPanel() {
+  document.getElementById('task-panel').style.display = 'none';
+  document.getElementById('chat-panel').style.display = 'flex';
+  document.getElementById('tab-task').classList.remove('active');
+  document.getElementById('tab-chat').classList.add('active');
+  document.getElementById('input-area').focus();
 }
 
-/* Kullanıcı mesajı ekle */
-function appendUser(text) {
-  hideWelcome();
-  const msgs = document.getElementById('messages');
-  const el = document.createElement('div');
-  el.className = 'message message-user';
-  el.innerHTML = `
-    <div class="msg-header"><span class="badge-user">👤 Sen</span></div>
-    <div class="msg-body" style="white-space:pre-wrap">${escHtml(text)}</div>`;
-  msgs.appendChild(el);
-  scrollBottom();
+/* ═══════════════════════════════════════════════════════
+   GÖREV BAŞLAT (multiplier destekli)
+   ═══════════════════════════════════════════════════════ */
+async function startTask() {
+  const text = document.getElementById('task-input').value.trim();
+  if (!text) { toast('Lütfen bir görev tanımla.'); return; }
+  document.getElementById('task-input').value = '';
+
+  showChatPanel();
+
+  // multiplier > 1 ise context bilgisini ekleyerek paralel çalıştır
+  const context = buildContext();
+  const fullMsg = context ? `${context}\n\n${text}` : text;
+
+  if (multiplier === 1) {
+    await sendText(fullMsg, { repo: currentRepo, branch: currentBranch, run: 1 });
+  } else {
+    // Paralel görevler — ardışık olarak başlat (sunucu SSE seri alır)
+    const runs = Array.from({ length: multiplier }, (_, i) => i + 1);
+    for (const run of runs) {
+      const label = `${context ? context + '\n\n' : ''}[Çalıştırma ${run}/${multiplier}]\n${text}`;
+      sendText(label, { repo: currentRepo, branch: currentBranch, run });
+    }
+  }
 }
 
-/* Sidar mesajı placeholder oluştur (streaming için) */
-function createSidarMsg() {
-  const msgs = document.getElementById('messages');
-  const id   = `m${++msgCounter}`;
-  const el   = document.createElement('div');
-  el.className = 'message message-sidar';
-  el.id = id;
-  el.innerHTML = `
-    <div class="msg-header"><span class="badge-sidar">⚡ Sidar</span></div>
-    <div class="msg-body">
-      <span class="streaming-text" id="${id}-txt"></span><span class="cursor" id="${id}-cur"></span>
-    </div>`;
-  msgs.appendChild(el);
-  scrollBottom();
-  return id;
+function buildContext() {
+  if (!currentRepo || currentRepo === '—' || currentRepo === 'GitHub bağlı değil') return '';
+  return `[Depo: ${currentRepo} | Branch: ${currentBranch}]`;
 }
 
-/* Streaming sırasında ham metni göster */
-function updateStreaming(id, rawText) {
-  const span = document.getElementById(`${id}-txt`);
-  if (span) span.textContent = rawText;
-  scrollBottom();
+function quickTask(text) {
+  document.getElementById('task-input').value = text;
+  startTask();
 }
 
-/* Streaming bitti → Markdown render et */
-function finalizeMsg(id, rawText) {
-  const el  = document.getElementById(id);
-  if (!el) return;
-
-  const body   = el.querySelector('.msg-body');
-  const cursor = document.getElementById(`${id}-cur`);
-  if (cursor) cursor.remove();
-
-  // Markdown render
-  body.innerHTML = marked.parse(rawText || '*(yanıt alınamadı)*');
-
-  // Syntax highlight
-  body.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-
-  scrollBottom();
-}
-
-/* ════════════════════════════════════════════
-   Mesaj gönderme (SSE streaming & Bağlantı Koruması)
-   ════════════════════════════════════════════ */
-async function sendMessage() {
-  if (isStreaming) return;
-
+/* ═══════════════════════════════════════════════════════
+   SOHBET — mesaj gönder
+   ═══════════════════════════════════════════════════════ */
+function sendMessage() {
+  const textarea = document.getElementById('input-area');
   const text = textarea.value.trim();
   if (!text) return;
-
   textarea.value = '';
   textarea.style.height = 'auto';
+  sendText(text, null);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TEMEL SSE GÖNDERME
+   ═══════════════════════════════════════════════════════ */
+async function sendText(text, meta) {
+  if (isStreaming) {
+    // Paralel çalıştırmalar için isStreaming bayrağını yönetme
+    // SSE tek kanallıdır; sıraya al
+    await waitNotStreaming();
+  }
 
   isStreaming = true;
-  document.getElementById('send-btn').disabled = true;
+  const sendBtn = document.getElementById('send-btn');
+  const startBtn = document.getElementById('start-btn');
+  if (sendBtn)  sendBtn.disabled  = true;
+  if (startBtn) startBtn.disabled = true;
 
-  appendUser(text);
-  const msgId = createSidarMsg();
+  // Kullanıcı mesajını göster
+  appendUser(text, meta);
+
+  // Sidar yanıt placeholder'ı
+  const msgId = createSidarMsg(meta);
+
+  // Çalışan görev çubuğu
+  const runningId = addRunningTask(meta ? `${meta.repo || ''} — ${text.slice(0, 60)}` : text.slice(0, 80));
 
   let accumulated = '';
-  
-  // İsteği iptal etmek için controller
   const controller = new AbortController();
   let timeoutId = null;
 
-  // 45 saniye boyunca sunucudan hiç veri gelmezse bağlantıyı zorla kes
   const resetTimeout = () => {
     if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      controller.abort();
-    }, 45000); 
+    timeoutId = setTimeout(() => controller.abort(), 50_000);
   };
 
   try {
-    resetTimeout(); // İlk timeout'u başlat
-    
+    resetTimeout();
     const response = await fetch('/chat', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message: text }),
-      signal:  controller.signal // İptal sinyalini bağla
+      body: JSON.stringify({ message: text }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -605,115 +869,369 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      
-      resetTimeout(); // Sunucudan yeni veri geldi, timeout süresini sıfırla
-
+      resetTimeout();
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // Tamamlanmamış satırı tut
-
+      buffer = lines.pop();
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
         try {
-          const parsed = JSON.parse(raw);
-          if (parsed.done) { break; }
-          if (parsed.chunk) {
-            accumulated += parsed.chunk;
-            updateStreaming(msgId, accumulated);
-          }
-        } catch { /* JSON parse skip */ }
+          const parsed = JSON.parse(line.slice(6).trim());
+          if (parsed.done) break;
+          if (parsed.chunk) { accumulated += parsed.chunk; updateStreaming(msgId, accumulated); }
+        } catch { /* skip */ }
       }
     }
   } catch (err) {
-    if (err.name === 'AbortError') {
-      accumulated += `\n\n[Sistem Hatası: Yanıt zaman aşımına uğradı veya ağ bağlantısı koptu.]`;
-    } else {
-      accumulated += `\n\n[Bağlantı Hatası: ${err.message}]`;
-    }
+    accumulated += err.name === 'AbortError'
+      ? '\n\n[Sistem Hatası: Yanıt zaman aşımına uğradı.]'
+      : `\n\n[Bağlantı Hatası: ${err.message}]`;
   } finally {
-    if (timeoutId) clearTimeout(timeoutId); // Temizlik
+    if (timeoutId) clearTimeout(timeoutId);
     finalizeMsg(msgId, accumulated);
+    removeRunningTask(runningId);
     isStreaming = false;
-    document.getElementById('send-btn').disabled = false;
-    textarea.focus();
+    if (sendBtn)  sendBtn.disabled  = false;
+    if (startBtn) startBtn.disabled = false;
   }
 }
 
-/* ════════════════════════════════════════════
-   Durum Modalı
-   ════════════════════════════════════════════ */
+// isStreaming düşene kadar bekle (paralel görevler için)
+function waitNotStreaming() {
+  return new Promise(resolve => {
+    const check = () => isStreaming ? setTimeout(check, 200) : resolve();
+    check();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   ÇALIŞAN GÖREV ÇUBUĞU
+   ═══════════════════════════════════════════════════════ */
+let runningCounter = 0;
+
+function addRunningTask(label) {
+  const bar = document.getElementById('tasks-running');
+  bar.style.display = 'flex';
+  const id = `run-${++runningCounter}`;
+  const el = document.createElement('div');
+  el.className = 'task-progress-row';
+  el.id = id;
+  el.innerHTML = `
+    <div class="task-spinner"></div>
+    <div class="task-progress-badge">Çalışıyor</div>
+    <div class="task-progress-text">${escHtml(label)}</div>`;
+  bar.appendChild(el);
+  return id;
+}
+
+function removeRunningTask(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  const bar = document.getElementById('tasks-running');
+  if (bar.children.length === 0) bar.style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════
+   MESAJ YARDIMCILARI
+   ═══════════════════════════════════════════════════════ */
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+
+function scrollBottom() {
+  const msgs = document.getElementById('messages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendUser(text, meta) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'message message-user';
+  const contextTag = meta && meta.repo
+    ? `<span class="msg-context-tag">${escHtml(meta.repo.split('/').pop())} · ${escHtml(meta.branch)}${meta.run > 1 ? ` · #${meta.run}` : ''}</span>`
+    : '';
+  el.innerHTML = `
+    <div class="msg-header">
+      <div class="msg-avatar avatar-user">S</div>
+      <span>Sen</span>
+      ${contextTag}
+    </div>
+    <div class="msg-body" style="white-space:pre-wrap">${escHtml(text)}</div>`;
+  msgs.appendChild(el);
+  scrollBottom();
+}
+
+function createSidarMsg(meta) {
+  const msgs = document.getElementById('messages');
+  const id   = `m${++msgCounter}`;
+  const el   = document.createElement('div');
+  el.className = 'message message-sidar';
+  el.id = id;
+  el.innerHTML = `
+    <div class="msg-header">
+      <div class="msg-avatar avatar-sidar">SI</div>
+      <span>Sidar</span>
+      ${meta && meta.run > 1 ? `<span class="msg-context-tag">Çalıştırma #${meta.run}</span>` : ''}
+    </div>
+    <div class="msg-body">
+      <span class="streaming-text" id="${id}-txt"></span><span class="cursor" id="${id}-cur"></span>
+    </div>`;
+  msgs.appendChild(el);
+  scrollBottom();
+  return id;
+}
+
+function updateStreaming(id, rawText) {
+  const span = document.getElementById(`${id}-txt`);
+  if (span) span.textContent = rawText;
+  scrollBottom();
+}
+
+function finalizeMsg(id, rawText) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const body   = el.querySelector('.msg-body');
+  const cursor = document.getElementById(`${id}-cur`);
+  if (cursor) cursor.remove();
+  body.innerHTML = marked.parse(rawText || '*(yanıt alınamadı)*');
+  body.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+  scrollBottom();
+}
+
+/* ═══════════════════════════════════════════════════════
+   TEXTAREA OTOMATİK BOYUTLANDIRMA
+   ═══════════════════════════════════════════════════════ */
+['task-input', 'input-area'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, id === 'task-input' ? 260 : 180) + 'px';
+  });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      id === 'task-input' ? startTask() : sendMessage();
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   REPO SEÇİCİ
+   ═══════════════════════════════════════════════════════ */
+async function openRepoModal() {
+  document.getElementById('repo-search').value = '';
+  document.getElementById('repo-list').innerHTML = '<div class="list-loading">Yükleniyor…</div>';
+  document.getElementById('repo-modal').classList.add('open');
+
+  if (cachedRepos.length === 0) {
+    try {
+      const data = await apiFetch('/github/info');
+      cachedRepos = data.repos || [];
+    } catch {
+      cachedRepos = [];
+    }
+  }
+  renderRepos(cachedRepos);
+  setTimeout(() => document.getElementById('repo-search').focus(), 60);
+}
+
+function renderRepos(list) {
+  if (list.length === 0) {
+    document.getElementById('repo-list').innerHTML =
+      '<div class="list-empty">Depo bulunamadı veya GitHub bağlı değil.</div>';
+    return;
+  }
+  document.getElementById('repo-list').innerHTML = list.map(r => `
+    <div class="list-item ${r.name === currentRepo ? 'selected' : ''}" onclick="selectRepo('${escHtml(r.name)}')">
+      <div class="list-item-icon">${r.private ? '🔒' : '📁'}</div>
+      <div class="list-item-info">
+        <div class="list-item-name">${escHtml(r.name)}</div>
+        ${r.description ? `<div class="list-item-meta">${escHtml(r.description.slice(0,80))}</div>` : ''}
+      </div>
+      <span class="list-item-check">✓</span>
+    </div>`).join('');
+}
+
+function filterRepos(q) {
+  const lower = q.toLowerCase();
+  renderRepos(cachedRepos.filter(r => r.name.toLowerCase().includes(lower)));
+}
+
+async function selectRepo(name) {
+  closeModal('repo-modal');
+  if (name === currentRepo) return;
+
+  currentRepo = name;
+  updateChipLabels();
+  toast(`Depo değiştiriliyor: ${name}…`);
+
+  // Sunucuda depoyu değiştir
+  try {
+    const data = await apiFetch('/github/repo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: name }),
+    });
+    if (data.ok) {
+      toast(`Depo: ${name}`);
+      cachedBranches = [];          // Branch önbelleğini temizle
+      await loadBranches();         // Yeni deponun branch'lerini yükle
+    } else {
+      toast(`Hata: ${data.message}`);
+    }
+  } catch (e) {
+    toast('Depo değiştirilemedi: ' + e.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BRANCH SEÇİCİ
+   ═══════════════════════════════════════════════════════ */
+async function loadBranches() {
+  try {
+    const data = await apiFetch('/github/branches');
+    cachedBranches = data.branches || ['main'];
+    // Aktif branch varsayılanı güncelle
+    if (data.default && !cachedBranches.includes(currentBranch)) {
+      currentBranch = data.default;
+      updateChipLabels();
+    }
+  } catch {
+    cachedBranches = ['main'];
+  }
+}
+
+async function openBranchModal() {
+  document.getElementById('branch-search').value = '';
+  document.getElementById('branch-modal').classList.add('open');
+
+  if (cachedBranches.length === 0) await loadBranches();
+  renderBranches(cachedBranches);
+  setTimeout(() => document.getElementById('branch-search').focus(), 60);
+}
+
+function renderBranches(list) {
+  if (list.length === 0) {
+    document.getElementById('branch-list').innerHTML =
+      '<div class="list-empty">Branch bulunamadı.</div>';
+    return;
+  }
+  document.getElementById('branch-list').innerHTML = list.map(b => `
+    <div class="list-item ${b === currentBranch ? 'selected' : ''}" onclick="selectBranch('${escHtml(b)}')">
+      <div class="list-item-icon">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="var(--text-dim)">
+          <path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0Z"/>
+        </svg>
+      </div>
+      <div class="list-item-info">
+        <div class="list-item-name">${escHtml(b)}</div>
+      </div>
+      <span class="list-item-check">✓</span>
+    </div>`).join('');
+}
+
+function filterBranches(q) {
+  const lower = q.toLowerCase();
+  renderBranches(cachedBranches.filter(b => b.toLowerCase().includes(lower)));
+}
+
+function selectBranch(name) {
+  currentBranch = name;
+  updateChipLabels();
+  closeModal('branch-modal');
+  toast(`Branch: ${name}`);
+}
+
+/* ═══════════════════════════════════════════════════════
+   MULTİPLİER
+   ═══════════════════════════════════════════════════════ */
+function openMultiplierModal() {
+  updateChipLabels(); // aktif düğmeyi güncelle
+  document.getElementById('mult-modal').classList.add('open');
+}
+
+function setMultiplier(n) {
+  multiplier = n;
+  updateChipLabels();
+  closeModal('mult-modal');
+  toast(`Paralel görev sayısı: ${n}x`);
+}
+
+/* ═══════════════════════════════════════════════════════
+   DURUM MODALİ
+   ═══════════════════════════════════════════════════════ */
 async function openStatus() {
   document.getElementById('status-modal').classList.add('open');
   const grid = document.getElementById('stat-grid');
   grid.innerHTML = '<div class="stat-row"><span class="stat-label">Yükleniyor…</span></div>';
-
   try {
-    const res  = await fetch('/status');
-    const data = await res.json();
-
-    const row = (label, value, cls='') =>
+    const data = await apiFetch('/status');
+    const row = (label, value, cls = '') =>
       `<div class="stat-row">
         <span class="stat-label">${label}</span>
         <span class="stat-val ${cls}">${value}</span>
       </div>`;
-
     grid.innerHTML = [
       row('Sürüm',           `v${data.version}`),
       row('AI Sağlayıcı',   `${data.provider} / ${data.model}`),
       row('Erişim Seviyesi', data.access_level.toUpperCase()),
       row('Bellek',          `${data.memory_count} mesaj`),
-      row('GitHub',   data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
-      row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
+      row('GitHub',    data.github      ? '✓ Bağlı'         : '✗ Bağlı değil', data.github      ? 'ok' : 'warn'),
+      row('Web Arama', data.web_search  ? '✓ Aktif'         : '✗ Kurulu değil',data.web_search  ? 'ok' : 'warn'),
       row('RAG',       data.rag_status),
       row('Paket Bilgi', '✓ PyPI + npm + GitHub', 'ok'),
+      row('GPU',       data.gpu_enabled ? (data.gpu_info || 'Aktif') : 'Pasif', data.gpu_enabled ? 'ok' : ''),
     ].join('');
-
   } catch (err) {
-    grid.innerHTML =
-      `<div class="stat-row"><span class="stat-label">Bağlantı hatası: ${escHtml(err.message)}</span></div>`;
+    grid.innerHTML = `<div class="stat-row"><span class="stat-label">Bağlantı hatası: ${escHtml(err.message)}</span></div>`;
   }
 }
 
-function closeStatus() {
-  document.getElementById('status-modal').classList.remove('open');
-}
-
-function modalBgClick(e) {
-  if (e.target === document.getElementById('status-modal')) closeStatus();
-}
-
-/* ════════════════════════════════════════════
-   Bellek Temizle
-   ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   BELLEK TEMİZLE
+   ═══════════════════════════════════════════════════════ */
 async function clearMemory() {
   if (!confirm('Konuşma belleği temizlenecek. Devam edilsin mi?')) return;
-
   try {
-    await fetch('/clear', { method: 'POST' });
+    await apiFetch('/clear', { method: 'POST' });
+    toast('Bellek temizlendi.');
   } catch { /* ignore */ }
-
-  // Mesajları ve karşılama ekranını sıfırla
-  const msgs = document.getElementById('messages');
-  msgs.innerHTML = `
-    <div id="welcome">
-      <div class="welcome-logo">SİDAR</div>
-      <div class="welcome-sub">Yazılım Mimarı &amp; Baş Mühendis AI — sormak için yaz</div>
-      <div class="quick-grid">
-        <button class="quick-btn" onclick="sendQuick('Proje dizinini listele')">📁 Dizini Listele</button>
-        <button class="quick-btn" onclick="sendQuick('Sistem sağlık raporu ver')">💻 Sistem Sağlığı</button>
-        <button class="quick-btn" onclick="sendQuick('Projeyi denetle ve hataları raporla')">🔍 Proje Denetimi</button>
-        <button class="quick-btn" onclick="sendQuick('Son 10 commit\\'i listele')">📝 Son Commitler</button>
-        <button class="quick-btn" onclick="sendQuick('web\\'de ara: Python async best practices 2024')">🌐 Web Araması</button>
-        <button class="quick-btn" onclick="sendQuick('pypi: fastapi')">📦 PyPI Bilgisi</button>
-        <button class="quick-btn" onclick="sendQuick('Erişim seviyesi ve güvenlik durumunu göster')">🔒 Güvenlik Durumu</button>
-        <button class="quick-btn" onclick="sendQuick('Belge deposunu listele')">📚 RAG Belgeler</button>
-      </div>
-    </div>`;
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('tasks-running').style.display = 'none';
+  document.getElementById('tasks-running').innerHTML = '';
+  showTaskPanel();
 }
 
-/* ── Başlangıç odağı ── */
-textarea.focus();
+/* ═══════════════════════════════════════════════════════
+   MODAL YARDIMCILARI
+   ═══════════════════════════════════════════════════════ */
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function modalBgClose(e, id) {
+  if (e.target === document.getElementById(id)) closeModal(id);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape')
+    ['repo-modal','branch-modal','mult-modal','status-modal'].forEach(closeModal);
+});
+
+/* ═══════════════════════════════════════════════════════
+   TOAST BİLDİRİMİ
+   ═══════════════════════════════════════════════════════ */
+let toastTimer = null;
+function toast(msg, ms = 2400) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
 </script>
 </body>
 </html>
