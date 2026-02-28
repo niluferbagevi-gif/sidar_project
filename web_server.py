@@ -144,6 +144,63 @@ async def clear():
     return JSONResponse({"result": result})
 
 
+@app.get("/github/info")
+async def github_info():
+    """GitHub bağlantı durumu, kullanıcı depo listesi ve mevcut depo."""
+    agent = await get_agent()
+    gh = agent.github
+    if not gh.is_available():
+        return JSONResponse({"available": False, "repos": [], "current_repo": ""})
+    repos = []
+    try:
+        user_repos = list(gh._gh.get_user().get_repos(sort="updated", type="all"))[:30]
+        repos = [
+            {
+                "name": r.full_name,
+                "description": r.description or "",
+                "language": r.language or "",
+                "private": r.private,
+            }
+            for r in user_repos
+        ]
+    except Exception as exc:
+        logger.warning("Repo listesi alınamadı: %s", exc)
+    return JSONResponse({
+        "available": True,
+        "repos": repos,
+        "current_repo": gh.repo_name,
+    })
+
+
+@app.get("/github/branches")
+async def github_branches():
+    """Mevcut deponun branch listesini döndür."""
+    agent = await get_agent()
+    gh = agent.github
+    if not gh.is_available() or not gh._repo:
+        return JSONResponse({"available": False, "branches": ["main"], "default": "main"})
+    try:
+        branch_objs = list(gh._repo.get_branches())
+        branches = [b.name for b in branch_objs]
+        default = gh._repo.default_branch
+        return JSONResponse({"available": True, "branches": branches, "default": default})
+    except Exception as exc:
+        logger.warning("Branch listesi alınamadı: %s", exc)
+        return JSONResponse({"available": False, "branches": ["main"], "default": "main"})
+
+
+@app.post("/github/repo")
+async def set_github_repo(request: Request):
+    """Aktif depoyu değiştir."""
+    body = await request.json()
+    repo_name = body.get("repo", "").strip()
+    if not repo_name:
+        return JSONResponse({"error": "Depo adı boş olamaz."}, status_code=400)
+    agent = await get_agent()
+    ok, msg = agent.github.set_repo(repo_name)
+    return JSONResponse({"ok": ok, "message": msg})
+
+
 # ─────────────────────────────────────────────
 #  BAŞLATMA
 # ─────────────────────────────────────────────
