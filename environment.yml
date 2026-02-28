@@ -1,7 +1,5 @@
 name: sidar-ai
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
   - defaults
 dependencies:
@@ -11,55 +9,69 @@ dependencies:
   - setuptools
   - wheel
   - packaging
-  # PyTorch CUDA kurulumu — pytorch-cuda hem CUDA toolkit'i hem de torch'u kapsar.
-  # cudatoolkit paketini AYRICA listelemeyin: pytorch-cuda=11.8 ile çakışır.
-  # GPU YOK ise bu iki satırı silin ve pip bölümüne torch>=2.0.0 ekleyin.
-  - pytorch-cuda=11.8
-  - pytorch>=2.0.0
-  - torchvision
+  # ─── PyTorch ───────────────────────────────────────────────────────────────
+  # WSL2 / Ubuntu / Conda ortamı için NOT:
+  #   Conda'nın pytorch-cuda paketi, WSL2'nin Windows sürücüsünden gelen
+  #   libcuda.so.1 stub'ı ile ÇAKIŞIR → GPU görünmez hale gelir.
+  #   Bu yüzden PyTorch'u CONDA yerine PIP (CUDA wheel) üzerinden kuruyoruz.
+  #
+  #   RTX 3070 Ti Laptop (Compute 8.6 / Ampere) — CUDA 12.1 tam desteklidir.
+  #   Pip bölümünde torch wheel ile kurulumu yapılmaktadır (aşağıya bakın).
+  #
+  #   GPU YOK ise pip bölümündeki torch satırını şu şekilde değiştirin:
+  #     - torch>=2.4.0
+  #     - torchvision>=0.19.0
+  #   (index-url satırını silin)
   - pip:
-      # ── Temel ─────────────────────────────────
+      # ── Temel ─────────────────────────────────────────────────────────────
       - python-dotenv>=1.0.0
-      # requests kaldırıldı — tüm HTTP istekleri httpx (aşağıda) ile yapılıyor
-      - pyyaml>=6.0.1  # Dockerfile parse işlemleri ve genel konfigürasyon için
+      - pyyaml>=6.0.1
+      - requests>=2.31.0
 
-      # ── Asenkron Geçiş ve Veri Doğrulama ──────
-      - httpx>=0.25.0  # Asenkron LLMClient, WebSearchManager, PackageInfoManager, RAG
-      - pydantic>=2.4.0  # ToolCall şeması (sidar_agent.py) ve test doğrulamaları için
+      # ── Asenkron HTTP & Veri Doğrulama ────────────────────────────────────
+      - httpx>=0.25.0
+      - pydantic>=2.4.0
 
-      # ── Sistem İzleme ─────────────────────────
+      # ── PyTorch — WSL2 CUDA 12.1 (RTX 3070 Ti / Ampere) ──────────────────
+      # CUDA 12.1 wheel — WSL2 ortamında Windows sürücüsü ile uyumlu
+      # Daha güncel sürücünüz varsa cu124 kullanabilirsiniz:
+      #   --index-url https://download.pytorch.org/whl/cu124
+      - --index-url https://download.pytorch.org/whl/cu121
+      - torch>=2.4.0
+      - torchvision>=0.19.0
+
+      # ── Sistem İzleme ─────────────────────────────────────────────────────
       - psutil>=5.9.5
-      # GPU sıcaklık, kullanım yüzdesi ve sürücü sürümü için (opsiyonel ama önerilir)
-      # NOT: CUDA sistemi yoksa kurulum başarısız olmaz; pynvml gracefully devre dışı kalır
+      # GPU sıcaklık, kullanım yüzdesi ve sürücü sürümü için (opsiyonel).
+      # WSL2'de NVML erişimi kısıtlı olabilir (Windows sürücüsü bağımlı);
+      # kod gracefully devre dışı kalır (hata vermez).
       - nvidia-ml-py>=12.535.77
 
-      # ── Docker (Güvenli Kod Çalıştırma / REPL Sandbox) ───
-      - docker>=6.0.0  # managers/code_manager.py içinde Docker izole REPL için
+      # ── Docker (Güvenli Kod Çalıştırma / REPL Sandbox) ────────────────────
+      - docker>=6.0.0
 
-      # ── AI Sağlayıcıları ──────────────────────
-      # NOT: ollama paketi kaldırıldı — Ollama API'sine httpx ile HTTP isteği atılıyor
+      # ── AI Sağlayıcıları ──────────────────────────────────────────────────
       - google-generativeai>=0.7.0
 
-      # ── GitHub Entegrasyonu ───────────────────
+      # ── GitHub Entegrasyonu ───────────────────────────────────────────────
       - PyGithub>=2.1.0
 
-      # ── Web Arama ─────────────────────────────
+      # ── Web Arama ─────────────────────────────────────────────────────────
       - duckduckgo-search>=6.1.0
 
-      # ── RAG (Vektör & BM25) ───────────────────
+      # ── RAG (Vektör & BM25) ───────────────────────────────────────────────
       - rank-bm25>=0.2.2
-      # ChromaDB ve bağımlılıkları (Hafif vektör DB)
       - chromadb>=0.4.0
-      # Vektör embed işlemleri için (ChromaDB varsayılan: all-MiniLM-L6-v2)
+      # sentence-transformers: USE_GPU=true ise CUDA üzerinde embedding yapar
       - sentence-transformers>=2.2.0
 
-      # ── Web Arayüzü ───────────────────────────
+      # ── Web Arayüzü ───────────────────────────────────────────────────────
       - fastapi>=0.104.0
       - uvicorn[standard]>=0.24.0
 
-      # ── Geliştirme & Test ─────────────────────
+      # ── Geliştirme & Test ─────────────────────────────────────────────────
       - pytest>=7.4.0
-      - pytest-asyncio>=0.21.0  # @pytest.mark.asyncio dekoratörü için zorunlu
+      - pytest-asyncio>=0.21.0
       - pytest-cov>=4.1.0
       - black>=23.0.0
       - flake8>=6.0.0

@@ -13,6 +13,7 @@ Sürüm: 2.6.0 (GPU Genişletilmiş İzleme)
 import gc
 import logging
 import platform
+import subprocess
 import threading
 from typing import Dict, List, Optional
 
@@ -70,7 +71,21 @@ class SystemHealthManager:
             self._nvml_initialized = True
             logger.debug("pynvml başlatıldı — GPU sıcaklık/kullanım izleme aktif.")
         except Exception as exc:
-            logger.debug("pynvml başlatılamadı (opsiyonel): %s", exc)
+            # WSL2'de NVML erişimi Windows sürücüsü proxy'si üzerinden kısıtlıdır
+            try:
+                with open("/proc/sys/kernel/osrelease") as _f:
+                    _wsl2 = "microsoft" in _f.read().lower()
+            except Exception:
+                _wsl2 = False
+            if _wsl2:
+                logger.info(
+                    "ℹ️  WSL2: pynvml başlatılamadı (beklenen davranış — "
+                    "GPU access blocked by the operating system). "
+                    "GPU sıcaklık/kullanım izleme kapalı; "
+                    "temel bilgiler için nvidia-smi kullanılacak. Hata: %s", exc
+                )
+            else:
+                logger.debug("pynvml başlatılamadı (opsiyonel): %s", exc)
 
     # ─────────────────────────────────────────────
     #  CPU & RAM
@@ -168,13 +183,24 @@ class SystemHealthManager:
             return {"available": False, "error": str(exc)}
 
     def _get_driver_version(self) -> str:
-        """NVIDIA sürücü sürümünü döndür (pynvml varsa)."""
+        """NVIDIA sürücü sürümünü döndür (pynvml; WSL2 fallback: nvidia-smi)."""
         if self._nvml_initialized:
             try:
                 import pynvml
                 return pynvml.nvmlSystemGetDriverVersion()
             except Exception:
                 pass
+        # WSL2 fallback: nvidia-smi subprocess ile sürücü sürümünü al
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=5,
+            )
+            version = result.stdout.strip().split("\n")[0]
+            if version:
+                return version
+        except Exception:
+            pass
         return "N/A"
 
     def optimize_gpu_memory(self) -> str:
