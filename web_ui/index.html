@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -33,6 +33,29 @@
       --radius:    10px;
       --radius-lg: 16px;
     }
+
+    /* ── Açık tema ──────────────────────────────────────────── */
+    [data-theme="light"] {
+      --bg:        #f5f5fb;
+      --bg2:       #ffffff;
+      --bg3:       #ebebf5;
+      --bg4:       #e0e0ee;
+      --border:    #d8d8e8;
+      --border2:   #c0c0d4;
+      --text:      #1a1a2e;
+      --text-dim:  #5a5a7a;
+      --text-muted:#9090b0;
+      --accent:    #7c3aed;
+      --accent2:   #6d28d9;
+      --green:     #059669;
+      --red:       #dc2626;
+      --yellow:    #d97706;
+      --user-bg:   #eeeef8;
+      --sidar-bg:  #f5f5fb;
+    }
+    [data-theme="light"] .msg-body :not(pre) > code { color: var(--accent2); }
+    [data-theme="light"] .msg-body pre { background: #f0f0f8 !important; }
+    [data-theme="light"] .streaming-text { color: var(--text); }
 
     html, body {
       height: 100%;
@@ -681,6 +704,196 @@
     }
     .btn-modal-action:hover { border-color: var(--accent); color: var(--accent); }
 
+    /* ── Kod bloğu kopyala butonu ──────────────────────────── */
+    .code-wrap { position: relative; }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 3px 8px;
+      background: var(--bg4);
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .15s, color .15s, border-color .15s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .code-wrap:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); opacity: 1; }
+
+    /* ── Streaming durdur butonu ────────────────────────────── */
+    #stop-btn {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      white-space: nowrap;
+      height: 32px;
+      flex-shrink: 0;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      transition: background .15s;
+    }
+    #stop-btn:hover { background: rgba(248,113,113,.1); }
+
+    /* ── Dosya ekle butonu ───────────────────────────────────── */
+    .attach-label {
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: color .15s, background .15s;
+      flex-shrink: 0;
+    }
+    .attach-label:hover { color: var(--accent); background: rgba(124,58,237,.08); }
+
+    /* ── Oturum arama ───────────────────────────────────────── */
+    .session-search-wrap { padding: 8px 0 0; }
+    .session-search {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .session-search:focus { border-color: var(--accent); }
+    .session-search::placeholder { color: var(--text-muted); }
+
+    /* ── Mesaj aksiyon butonları (düzenle/kopyala) ───────────── */
+    .msg-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+      opacity: 0;
+      transition: opacity .15s;
+    }
+    .message:hover .msg-actions { opacity: 1; }
+    .msg-action-btn {
+      padding: 3px 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .msg-action-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(124,58,237,.07); }
+
+    /* ── Tema & kısayol butonları ───────────────────────────── */
+    .btn-icon {
+      padding: 5px 8px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--text-dim);
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: border-color .15s, color .15s, background .15s;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,58,237,.08); }
+
+    /* ── Kısayollar modalı ──────────────────────────────────── */
+    .shortcuts-modal-box {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      max-width: 420px;
+      width: 92%;
+      box-shadow: 0 16px 64px rgba(0,0,0,.6);
+    }
+    .shortcuts-modal-box h3 {
+      font-size: 14px;
+      margin-bottom: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .shortcut-section { margin-bottom: 14px; }
+    .shortcut-section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .shortcut-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: var(--bg3);
+      border-radius: 6px;
+      margin-bottom: 3px;
+      font-size: 12.5px;
+    }
+    .shortcut-key {
+      display: flex;
+      gap: 4px;
+    }
+    .kbd {
+      background: var(--bg4);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-family: "JetBrains Mono", monospace;
+      color: var(--accent);
+    }
+    .shortcut-desc { color: var(--text-dim); }
+
+    /* ── Ekli dosya chip ────────────────────────────────────── */
+    .attached-file {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg4);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin: 0 0 6px;
+      max-width: 300px;
+    }
+    .attached-file-remove {
+      cursor: pointer;
+      color: var(--text-muted);
+      margin-left: auto;
+      font-size: 14px;
+      line-height: 1;
+      background: none;
+      border: none;
+      padding: 0 2px;
+    }
+    .attached-file-remove:hover { color: var(--red); }
+
     /* ── Responsive ────────────────────────────────────────── */
     @media (max-width: 768px) {
       .sidebar { display: none; /* Mobilde gizle */ }
@@ -708,13 +921,15 @@
       </nav>
     </div>
     <div class="topbar-right">
+      <button class="btn-icon" id="theme-btn" onclick="toggleTheme()" title="Tema değiştir">🌙</button>
+      <button class="btn-icon" onclick="openShortcuts()" title="Klavye kısayolları">⌨</button>
       <button class="btn-ghost" onclick="openStatus()">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 4v2.5L7.5 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>
         Durum
       </button>
       <button class="btn-ghost danger" onclick="clearMemory()">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" opacity=".7"><path d="M4.5 1.5h3a.5.5 0 0 1 .5.5v.5h2a.5.5 0 0 1 0 1H2a.5.5 0 0 1 0-1h2V2a.5.5 0 0 1 .5-.5zM3 5l.5 5h5l.5-5H3z"/></svg>
-        İçeriği Temizle
+        Temizle
       </button>
     </div>
   </div>
@@ -729,9 +944,13 @@
           </svg>
           Yeni Sohbet
         </button>
-      </div>
-      <div class="session-list" id="session-list">
+        <div class="session-search-wrap">
+          <input class="session-search" id="session-search" type="text"
+            placeholder="Sohbetlerde ara…"
+            oninput="filterSessions(this.value)" />
         </div>
+      </div>
+      <div class="session-list" id="session-list"></div>
     </div>
 
     <div class="content">
@@ -789,11 +1008,28 @@
         <div id="messages"></div>
         <div class="chat-footer">
           <div class="chat-input-wrap">
+            <div id="attached-file-preview"></div>
             <div class="chat-input-box">
-              <textarea id="input-area" placeholder="Sidar'a bir şey sor..." rows="1"></textarea>
+              <label class="attach-label" title="Dosya ekle (metin/kod)">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+                </svg>
+                <input type="file" id="file-input" style="display:none"
+                  accept=".txt,.md,.py,.js,.ts,.json,.yaml,.yml,.toml,.csv,.html,.css,.sh,.go,.rs,.java,.c,.cpp"
+                  onchange="handleFileAttach(event)" />
+              </label>
+              <textarea id="input-area" placeholder="Sidar'a bir şey sor…" rows="1"></textarea>
+              <button id="stop-btn" onclick="stopStreaming()" title="Yanıtı durdur">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10" rx="2"/></svg>
+                Durdur
+              </button>
               <button id="send-btn" onclick="sendMessage()">Gönder</button>
             </div>
-            <div class="chat-hint">Enter ile gönder &nbsp;·&nbsp; Shift+Enter ile yeni satır</div>
+            <div class="chat-hint">
+              <span>Enter → gönder</span>&nbsp;·&nbsp;
+              <span>Shift+Enter → yeni satır</span>&nbsp;·&nbsp;
+              <span>⌨ kısayollar</span>
+            </div>
           </div>
         </div>
       </div>
@@ -828,15 +1064,65 @@
   </div>
 </div>
 
+<div class="modal-bg" id="shortcuts-modal" onclick="modalBgClose(event,'shortcuts-modal')">
+  <div class="shortcuts-modal-box" onclick="event.stopPropagation()">
+    <h3>⌨ Klavye Kısayolları</h3>
+    <div class="shortcut-section">
+      <div class="shortcut-section-title">Mesajlaşma</div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Enter</span></div>
+        <span class="shortcut-desc">Mesaj gönder</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Shift</span><span class="kbd">Enter</span></div>
+        <span class="shortcut-desc">Yeni satır ekle</span>
+      </div>
+    </div>
+    <div class="shortcut-section">
+      <div class="shortcut-section-title">Arayüz</div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Esc</span></div>
+        <span class="shortcut-desc">Modalı kapat / Streaming durdur</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Ctrl</span><span class="kbd">K</span></div>
+        <span class="shortcut-desc">Yeni sohbet başlat</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Ctrl</span><span class="kbd">L</span></div>
+        <span class="shortcut-desc">Belleği temizle</span>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Ctrl</span><span class="kbd">T</span></div>
+        <span class="shortcut-desc">Tema değiştir (koyu/açık)</span>
+      </div>
+    </div>
+    <div class="shortcut-section">
+      <div class="shortcut-section-title">Kod Blokları</div>
+      <div class="shortcut-row">
+        <div class="shortcut-key"><span class="kbd">Kopyala</span></div>
+        <span class="shortcut-desc">Kod bloğunun üzerine gel → buton görünür</span>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding:12px 0 0; border-top:1px solid var(--border); margin-top:4px;">
+      <button class="btn-modal-action" onclick="closeModal('shortcuts-modal')">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <script>
 marked.setOptions({ breaks: true, gfm: true });
 
 /* ─── Değişkenler ───────────────────────────────────────── */
-let isStreaming = false;
-let msgCounter  = 0;
-let currentRepo   = 'niluferbagevi-gif/sidar_project';
-let currentBranch = 'main';
-let currentSessionId = null; 
+let isStreaming    = false;
+let msgCounter     = 0;
+let activeController = null;
+let currentRepo    = 'niluferbagevi-gif/sidar_project';
+let currentBranch  = 'main';
+let currentSessionId = null;
+let attachedFileContent = null;
+let attachedFileName    = null;
+let allSessions = [];
 
 const REPOS = [
   { name: 'niluferbagevi-gif/sidar_project', desc: 'Yazılım Mühendisi AI', emoji: '🤖' },
@@ -845,11 +1131,28 @@ const REPOS = [
 
 const BRANCHES = ['main', 'develop', 'feature/ai-core', 'hotfix/web-ui'];
 
+/* ─── Tema ───────────────────────────────────────────────── */
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('sidar-theme', next);
+  document.getElementById('theme-btn').textContent = next === 'dark' ? '🌙' : '☀';
+}
+
+function applyStoredTheme() {
+  const saved = localStorage.getItem('sidar-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀';
+}
+
 /* ─── Başlangıç ve Oturumlar (Sessions) ─────────────────── */
 window.addEventListener('DOMContentLoaded', async () => {
+  applyStoredTheme();
   await loadSessions();
   if (currentSessionId) {
-    // Sayfa açılışında seçili sohbetin içeriğini al (Sohbet tab'ına atlamadan)
     await loadSessionHistory(currentSessionId, false);
   }
 });
@@ -859,32 +1162,40 @@ async function loadSessions() {
     const res = await fetch('/sessions');
     const data = await res.json();
     currentSessionId = data.active_session;
-    
-    const listEl = document.getElementById('session-list');
-    listEl.innerHTML = '';
-    
-    if (data.sessions && data.sessions.length > 0) {
-      data.sessions.forEach(s => {
-        const isActive = s.id === currentSessionId;
-        const div = document.createElement('div');
-        div.className = `session-item ${isActive ? 'active' : ''}`;
-        div.onclick = () => selectSession(s.id);
-        
-        // Çöp kutusu ikonu (Sil)
-        div.innerHTML = `
-          <div class="session-item-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
-          <button class="session-item-delete" onclick="deleteSession('${s.id}', event)" title="Sohbeti Sil">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M5.5 1a.5.5 0 0 0-.5.5v1h6v-1a.5.5 0 0 0-.5-.5h-5ZM2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-1v9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-9h-1a.5.5 0 0 1-.5-.5Zm3 1v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-9H5Z"/>
-            </svg>
-          </button>
-        `;
-        listEl.appendChild(div);
-      });
-    }
+    allSessions = data.sessions || [];
+    renderSessionList(allSessions);
   } catch (err) {
     console.error("Oturumlar yüklenemedi:", err);
   }
+}
+
+function renderSessionList(sessions) {
+  const listEl = document.getElementById('session-list');
+  listEl.innerHTML = '';
+  if (!sessions || sessions.length === 0) return;
+  sessions.forEach(s => {
+    const isActive = s.id === currentSessionId;
+    const div = document.createElement('div');
+    div.className = `session-item ${isActive ? 'active' : ''}`;
+    div.onclick = () => selectSession(s.id);
+    div.innerHTML = `
+      <div class="session-item-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
+      <button class="session-item-delete" onclick="deleteSession('${s.id}', event)" title="Sohbeti Sil">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M5.5 1a.5.5 0 0 0-.5.5v1h6v-1a.5.5 0 0 0-.5-.5h-5ZM2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-1v9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-9h-1a.5.5 0 0 1-.5-.5Zm3 1v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-9H5Z"/>
+        </svg>
+      </button>`;
+    listEl.appendChild(div);
+  });
+}
+
+function filterSessions(q) {
+  if (!q.trim()) {
+    renderSessionList(allSessions);
+    return;
+  }
+  const lower = q.toLowerCase();
+  renderSessionList(allSessions.filter(s => s.title.toLowerCase().includes(lower)));
 }
 
 async function selectSession(id) {
@@ -1007,14 +1318,60 @@ function quickTask(text) {
   });
 });
 
+/* ─── Streaming durdur ──────────────────────────────────── */
+function stopStreaming() {
+  if (activeController) activeController.abort();
+}
+
+/* ─── Dosya ekleme ──────────────────────────────────────── */
+function handleFileAttach(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 200 * 1024) {
+    alert('Dosya boyutu 200 KB\'ı aşamaz.');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    attachedFileContent = ev.target.result;
+    attachedFileName    = file.name;
+    renderAttachedFile(file.name);
+  };
+  reader.readAsText(file, 'utf-8');
+  e.target.value = '';
+}
+
+function renderAttachedFile(name) {
+  const preview = document.getElementById('attached-file-preview');
+  preview.innerHTML = `
+    <div class="attached-file">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+      </svg>
+      <span>${escHtml(name)}</span>
+      <button class="attached-file-remove" onclick="removeAttachedFile()" title="Dosyayı kaldır">✕</button>
+    </div>`;
+}
+
+function removeAttachedFile() {
+  attachedFileContent = null;
+  attachedFileName    = null;
+  document.getElementById('attached-file-preview').innerHTML = '';
+}
+
 /* ─── Mesaj gönderme ────────────────────────────────────── */
 function sendMessage() {
   const textarea = document.getElementById('input-area');
   const text = textarea.value.trim();
-  if (!text) return;
+  if (!text && !attachedFileContent) return;
+  const finalText = attachedFileContent
+    ? `${text}\n\n**Dosya: ${attachedFileName}**\n\`\`\`\n${attachedFileContent}\n\`\`\``
+    : text;
   textarea.value = '';
   textarea.style.height = 'auto';
-  sendText(text);
+  removeAttachedFile();
+  sendText(finalText);
 }
 
 async function sendText(text) {
@@ -1022,18 +1379,20 @@ async function sendText(text) {
   isStreaming = true;
 
   const sendBtn = document.getElementById('send-btn');
-  if (sendBtn) sendBtn.disabled = true;
+  const stopBtn = document.getElementById('stop-btn');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.style.display = 'none'; }
+  if (stopBtn) stopBtn.style.display = 'flex';
 
   appendUser(text);
   const msgId = createSidarMsg();
 
   let accumulated = '';
-  const controller = new AbortController();
+  activeController = new AbortController();
   let timeoutId = null;
 
   const resetTimeout = () => {
     if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => controller.abort(), 45000);
+    timeoutId = setTimeout(() => activeController.abort(), 60000);
   };
 
   try {
@@ -1042,7 +1401,7 @@ async function sendText(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text }),
-      signal: controller.signal
+      signal: activeController.signal
     });
 
     if (!response.ok) {
@@ -1071,17 +1430,19 @@ async function sendText(text) {
       }
     }
   } catch (err) {
-    accumulated += err.name === 'AbortError'
-      ? '\n\n[Sistem Hatası: Yanıt zaman aşımına uğradı.]'
-      : `\n\n[Bağlantı Hatası: ${err.message}]`;
+    if (err.name === 'AbortError') {
+      accumulated += accumulated ? '\n\n*[Yanıt durduruldu.]*' : '*[Yanıt durduruldu.]*';
+    } else {
+      accumulated += `\n\n[Bağlantı Hatası: ${err.message}]`;
+    }
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
+    activeController = null;
     finalizeMsg(msgId, accumulated);
     isStreaming = false;
-    if (sendBtn) sendBtn.disabled = false;
-    
-    // Eğer yeni bir sohbet oluşturulduysa (ilk mesajsa) menüdeki başlığı yenilemek için yükle
-    loadSessions(); 
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.style.display = ''; }
+    if (stopBtn) stopBtn.style.display = 'none';
+    loadSessions();
   }
 }
 
@@ -1101,14 +1462,39 @@ function appendUser(text) {
   const msgs = document.getElementById('messages');
   const el = document.createElement('div');
   el.className = 'message message-user';
+  const safeText = escHtml(text);
   el.innerHTML = `
     <div class="msg-header">
       <div class="msg-avatar avatar-user">S</div>
       <span>Sen</span>
     </div>
-    <div class="msg-body" style="white-space:pre-wrap">${escHtml(text)}</div>`;
+    <div class="msg-body" style="white-space:pre-wrap">${safeText}</div>
+    <div class="msg-actions">
+      <button class="msg-action-btn" onclick="editMessage(this, ${JSON.stringify(text)})" title="Düzenle ve tekrar gönder">
+        ✏ Düzenle
+      </button>
+      <button class="msg-action-btn" onclick="copyText(${JSON.stringify(text)}, this)" title="Mesajı kopyala">
+        📋 Kopyala
+      </button>
+    </div>`;
   msgs.appendChild(el);
   scrollBottom();
+}
+
+function editMessage(btn, originalText) {
+  const inputArea = document.getElementById('input-area');
+  inputArea.value = originalText;
+  inputArea.style.height = 'auto';
+  inputArea.style.height = Math.min(inputArea.scrollHeight, 180) + 'px';
+  inputArea.focus();
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Kopyalandı';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
 }
 
 function createSidarMsg() {
@@ -1144,6 +1530,30 @@ function finalizeMsg(id, rawText) {
   if (cursor) cursor.remove();
   body.innerHTML = marked.parse(rawText || '*(yanıt alınamadı)*');
   body.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+
+  // Kod bloklarına kopyala butonu ekle
+  body.querySelectorAll('pre').forEach(pre => {
+    const wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg> Kopyala`;
+    btn.onclick = () => {
+      const code = pre.querySelector('code');
+      navigator.clipboard.writeText(code ? code.innerText : pre.innerText).then(() => {
+        btn.textContent = '✓ Kopyalandı';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg> Kopyala`;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    };
+    wrap.appendChild(btn);
+  });
+
   scrollBottom();
 }
 
@@ -1254,10 +1664,37 @@ async function clearMemory() {
   loadSessions(); // Menüyü yenile
 }
 
-/* ESC ile modal kapatma */
+/* ─── Kısayollar modalı ─────────────────────────────────── */
+function openShortcuts() {
+  document.getElementById('shortcuts-modal').classList.add('open');
+}
+
+/* ─── Global klavye kısayolları ─────────────────────────── */
 document.addEventListener('keydown', e => {
+  // ESC: Modal kapat veya streaming durdur
   if (e.key === 'Escape') {
-    ['repo-modal','branch-modal','status-modal'].forEach(id => closeModal(id));
+    ['repo-modal','branch-modal','status-modal','shortcuts-modal'].forEach(id => closeModal(id));
+    if (isStreaming) stopStreaming();
+    return;
+  }
+  // Aktif input/textarea içindeyken kısayolları tetikleme
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // Ctrl+K: Yeni sohbet
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    createNewSession();
+  }
+  // Ctrl+L: Belleği temizle
+  if (e.ctrlKey && e.key === 'l') {
+    e.preventDefault();
+    clearMemory();
+  }
+  // Ctrl+T: Tema değiştir
+  if (e.ctrlKey && e.key === 't') {
+    e.preventDefault();
+    toggleTheme();
   }
 });
 </script>
