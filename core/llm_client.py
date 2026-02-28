@@ -72,9 +72,9 @@ class LLMClient:
         options: dict = {"temperature": temperature}
         use_gpu = getattr(self.config, "USE_GPU", False)
         if use_gpu:
-            # num_gpu=-1 → Ollama mevcut tüm GPU katmanlarını otomatik atar
-            options["num_gpu"] = getattr(self.config, "GPU_DEVICE", -1) if \
-                getattr(self.config, "MULTI_GPU", False) else -1
+            # num_gpu=-1 → Ollama tüm model katmanlarını GPU'ya atar (0 = CPU-only).
+            # GPU_DEVICE, hangi cihazın kullanılacağını belirtir; katman sayısını değil.
+            options["num_gpu"] = -1
 
         payload = {
             "model": model,
@@ -87,7 +87,7 @@ class LLMClient:
         if json_mode:
             payload["format"] = "json"
         
-        timeout = getattr(self.config, "REACT_TIMEOUT", 120)
+        timeout = getattr(self.config, "OLLAMA_TIMEOUT", 60)
         
         try:
             # STREAM MODU

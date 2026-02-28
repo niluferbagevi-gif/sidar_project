@@ -111,9 +111,21 @@ class HardwareInfo:
     driver_version: str = "N/A"
 
 
+def _is_wsl2() -> bool:
+    """WSL2 ortamını tespit eder (/proc/sys/kernel/osrelease içinde 'microsoft' arar)."""
+    try:
+        return "microsoft" in Path("/proc/sys/kernel/osrelease").read_text().lower()
+    except Exception:
+        return False
+
+
 def check_hardware() -> HardwareInfo:
     """GPU/CPU donanımını tespit eder; PyTorch yoksa sessizce devam eder."""
     info = HardwareInfo(has_cuda=False, gpu_name="N/A")
+
+    wsl2 = _is_wsl2()
+    if wsl2:
+        logger.info("ℹ️  WSL2 ortamı tespit edildi — CUDA, Windows sürücüsü üzerinden erişilecek.")
 
     if not get_bool_env("USE_GPU", True):
         logger.info("ℹ️  GPU kullanımı .env ile devre dışı bırakıldı.")
@@ -131,8 +143,24 @@ def check_hardware() -> HardwareInfo:
                 "🚀 GPU Hızlandırma Aktif: %s  (%d GPU tespit edildi, CUDA %s)",
                 info.gpu_name, info.gpu_count, info.cuda_version,
             )
+            # VRAM fraksiyonunu hemen uygula (GPU_MEMORY_FRACTION env'den okunur)
+            frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
+            if 0.1 <= frac < 1.0:
+                try:
+                    torch.cuda.set_per_process_memory_fraction(frac, device=0)
+                    logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
+                except Exception as exc:
+                    logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
         else:
-            logger.info("ℹ️  CUDA bulunamadı — CPU modunda çalışılacak.")
+            if wsl2:
+                logger.warning(
+                    "⚠️  WSL2 — CUDA bulunamadı. Kontrol: "
+                    "Windows NVIDIA sürücüsü güncel mi? "
+                    "PyTorch CUDA 12.x wheel ile kuruldu mu? "
+                    "(pip install torch --index-url https://download.pytorch.org/whl/cu121)"
+                )
+            else:
+                logger.info("ℹ️  CUDA bulunamadı — CPU modunda çalışılacak.")
             info.gpu_name = "CUDA Bulunamadı"
     except ImportError:
         logger.warning("⚠️  PyTorch kurulu değil; GPU kontrolü atlanıyor.")
@@ -148,7 +176,7 @@ def check_hardware() -> HardwareInfo:
         info.driver_version = pynvml.nvmlSystemGetDriverVersion()
         pynvml.nvmlShutdown()
     except Exception:
-        pass  # opsiyonel bağımlılık
+        pass  # opsiyonel bağımlılık; WSL2'de NVML erişimi kısıtlı olabilir
 
     try:
         import multiprocessing
