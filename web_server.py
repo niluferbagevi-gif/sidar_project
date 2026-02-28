@@ -11,6 +11,8 @@ import argparse
 import asyncio
 import json
 import logging
+import time
+from collections import defaultdict
 from pathlib import Path
 
 import uvicorn
@@ -48,12 +50,50 @@ async def get_agent() -> SidarAgent:
 
 app = FastAPI(title="Sidar Web UI", docs_url=None, redoc_url=None)
 
+# CORS: Yalnızca localhost'tan gelen isteklere izin ver
+_ALLOWED_ORIGINS = [
+    "http://localhost:7860",
+    "http://127.0.0.1:7860",
+    "http://0.0.0.0:7860",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
+
+# ─────────────────────────────────────────────
+#  RATE LIMITING (basit in-memory)
+# ─────────────────────────────────────────────
+
+_rate_data: dict[str, list[float]] = defaultdict(list)
+_RATE_LIMIT  = 20   # maksimum istek sayısı
+_RATE_WINDOW = 60   # saniye cinsinden pencere
+
+
+def _is_rate_limited(ip: str) -> bool:
+    now = time.monotonic()
+    window_start = now - _RATE_WINDOW
+    calls = _rate_data[ip]
+    # Pencere dışındakileri temizle
+    _rate_data[ip] = [t for t in calls if t > window_start]
+    if len(_rate_data[ip]) >= _RATE_LIMIT:
+        return True
+    _rate_data[ip].append(now)
+    return False
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.url.path == "/chat":
+        client_ip = request.client.host if request.client else "unknown"
+        if _is_rate_limited(client_ip):
+            return JSONResponse(
+                {"error": "Çok fazla istek. Lütfen bir dakika bekleyin."},
+                status_code=429,
+            )
+    return await call_next(request)
 
 WEB_DIR = Path(__file__).parent / "web_ui"
 
