@@ -18,11 +18,16 @@ dependencies:
   #   RTX 3070 Ti Laptop (Compute 8.6 / Ampere) — CUDA 12.1 tam desteklidir.
   #   Pip bölümünde torch wheel ile kurulumu yapılmaktadır (aşağıya bakın).
   #
-  #   GPU YOK ise pip bölümündeki torch satırını şu şekilde değiştirin:
-  #     - torch>=2.4.0
-  #     - torchvision>=0.19.0
-  #   (index-url satırını silin)
+  #   GPU YOK ise pip bölümündeki extra-index-url satırını silin;
+  #   torch ve torchvision standart PyPI CPU build'ı ile kurulur.
   - pip:
+      # ── PyTorch CUDA 12.1 wheel index'i EK kaynak olarak ekle ────────────────
+      # --extra-index-url: PyPI korunur, PyTorch CUDA wheel'ları ek kaynak olur.
+      # (--index-url kullanmayın: PyPI'ı devre dışı bırakır, diğer paketler bulunamaz)
+      # Daha güncel sürücünüz varsa cu124 kullanabilirsiniz:
+      #   --extra-index-url https://download.pytorch.org/whl/cu124
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+
       # ── Temel ─────────────────────────────────────────────────────────────
       - python-dotenv>=1.0.0
       - pyyaml>=6.0.1
@@ -33,10 +38,7 @@ dependencies:
       - pydantic>=2.4.0
 
       # ── PyTorch — WSL2 CUDA 12.1 (RTX 3070 Ti / Ampere) ──────────────────
-      # CUDA 12.1 wheel — WSL2 ortamında Windows sürücüsü ile uyumlu
-      # Daha güncel sürücünüz varsa cu124 kullanabilirsiniz:
-      #   --index-url https://download.pytorch.org/whl/cu124
-      - --index-url https://download.pytorch.org/whl/cu121
+      # cu121 index'ten CUDA 12.1 build seçilir (CPU-only yerine)
       - torch>=2.4.0
       - torchvision>=0.19.0
 
