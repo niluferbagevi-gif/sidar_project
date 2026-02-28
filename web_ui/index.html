@@ -740,7 +740,7 @@
       <div class="quick-section">
         <div class="quick-label">Hızlı görevler</div>
         <div class="quick-grid">
-          <button class="quick-chip" onclick="quickTask('Proje dizinini listele ve yapıyı açıkla')">Dizini listele</button>
+          <button class="quick-chip" onclick="openProjectModal()">Projeler</button>
           <button class="quick-chip" onclick="quickTask('Sistem sağlık raporu ver')">Sistem sağlığı</button>
           <button class="quick-chip" onclick="quickTask('Projeyi denetle ve hataları raporla')">Proje denetimi</button>
           <button class="quick-chip" onclick="quickTask('Son 10 commit\'i listele')">Son commitler</button>
@@ -801,6 +801,22 @@
       <button class="modal-close-btn" onclick="closeModal('branch-modal')">✕</button>
     </div>
     <div class="repo-list" id="branch-list">
+      <!-- JS ile doldurulur -->
+    </div>
+  </div>
+</div>
+
+<!-- Proje Seçici Modal -->
+<div class="modal-bg" id="project-modal" onclick="modalBgClose(event,'project-modal')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="var(--text-dim)">
+        <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/>
+      </svg>
+      <input class="modal-search" id="project-search" type="text" placeholder="Proje ara..." oninput="filterProjects(this.value)" />
+      <button class="modal-close-btn" onclick="closeModal('project-modal')">✕</button>
+    </div>
+    <div class="repo-list" id="project-list">
       <!-- JS ile doldurulur -->
     </div>
   </div>
@@ -1077,6 +1093,60 @@ function selectBranch(name) {
   currentBranch = name;
   document.getElementById('branch-label').textContent = name;
   closeModal('branch-modal');
+}
+
+/* ─── Proje seçici ──────────────────────────────────────── */
+let allProjects = [];
+let currentProject = null;
+
+async function openProjectModal() {
+  document.getElementById('project-modal').classList.add('open');
+  document.getElementById('project-search').value = '';
+  const listEl = document.getElementById('project-list');
+  listEl.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">Taranıyor…</div>';
+  try {
+    const data = await (await fetch('/projects')).json();
+    allProjects = data.projects || [];
+    renderProjects(allProjects);
+    setTimeout(() => document.getElementById('project-search').focus(), 50);
+  } catch (err) {
+    listEl.innerHTML = `<div style="padding:16px;color:var(--text-dim)">Hata: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderProjects(list) {
+  const listEl = document.getElementById('project-list');
+  if (!list.length) {
+    listEl.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">Proje bulunamadı</div>';
+    return;
+  }
+  listEl.innerHTML = list.map((p, i) => `
+    <div class="repo-item ${currentProject && currentProject.path === p.path ? 'selected' : ''}" onclick="selectProject(${i})">
+      <div class="repo-item-icon">📁</div>
+      <div class="repo-item-info">
+        <div class="repo-item-name">${escHtml(p.name)}</div>
+        <div class="repo-item-meta">${escHtml(p.path)} &nbsp;·&nbsp; ${escHtml(p.type)}</div>
+      </div>
+      ${currentProject && currentProject.path === p.path ? '<span class="repo-item-check">✓</span>' : ''}
+    </div>`).join('');
+}
+
+function filterProjects(q) {
+  const lq = q.toLowerCase();
+  renderProjects(allProjects.filter(p =>
+    p.name.toLowerCase().includes(lq) || p.path.toLowerCase().includes(lq)
+  ));
+}
+
+function selectProject(idx) {
+  currentProject = allProjects[idx];
+  closeModal('project-modal');
+  quickTask(
+    `Proje seçildi: ${currentProject.path}\n` +
+    `Bu projenin dizin yapısını incele, ` +
+    `teknoloji yığınını (${currentProject.type}) ve bağımlılıklarını tespit et, ` +
+    `nasıl yardımcı olabileceğimi açıkla.`
+  );
 }
 
 /* ─── Modal yardımcıları ────────────────────────────────── */

@@ -144,6 +144,44 @@ async def clear():
     return JSONResponse({"result": result})
 
 
+@app.get("/projects")
+async def list_projects():
+    """Kullanıcının yerel proje dizinlerini tarar ve döndürür."""
+    home = Path.home()
+    indicators = {
+        'package.json':   'Node.js',
+        'pyproject.toml': 'Python',
+        'setup.py':       'Python',
+        'requirements.txt': 'Python',
+        'Cargo.toml':     'Rust',
+        'go.mod':         'Go',
+        'pom.xml':        'Java',
+        '.git':           'Git',
+    }
+    search_dirs = [home] + [home / d for d in ('projects', 'dev', 'workspace', 'repos', 'src')]
+    projects = []
+    seen: set = set()
+
+    for search_dir in search_dirs:
+        if not search_dir.is_dir():
+            continue
+        try:
+            for entry in sorted(search_dir.iterdir()):
+                key = str(entry.resolve())
+                if not entry.is_dir() or entry.name.startswith('.') or key in seen:
+                    continue
+                proj_type = next(
+                    (t for ind, t in indicators.items() if (entry / ind).exists()), None
+                )
+                if proj_type:
+                    seen.add(key)
+                    projects.append({"name": entry.name, "path": str(entry), "type": proj_type})
+        except PermissionError:
+            pass
+
+    return JSONResponse({"projects": projects})
+
+
 # ─────────────────────────────────────────────
 #  BAŞLATMA
 # ─────────────────────────────────────────────
