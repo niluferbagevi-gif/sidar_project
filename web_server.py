@@ -277,6 +277,75 @@ async def delete_session(session_id: str):
         })
     return JSONResponse({"success": False, "error": "Silinemedi."}, status_code=500)
 
+@app.get("/files")
+async def list_project_files(path: str = ""):
+    """
+    Proje dizinindeki dosya ve klasörleri listeler.
+    path parametresi boşsa proje kök dizinini listeler.
+    """
+    _root = Path(__file__).parent
+    target = (_root / path).resolve()
+
+    # Güvenlik: proje kökünün dışına çıkma
+    try:
+        target.relative_to(_root)
+    except ValueError:
+        return JSONResponse({"error": "Güvenlik: proje dışına çıkılamaz."}, status_code=403)
+
+    if not target.exists():
+        return JSONResponse({"error": f"Dizin bulunamadı: {path}"}, status_code=404)
+    if not target.is_dir():
+        return JSONResponse({"error": f"Belirtilen yol bir dizin değil: {path}"}, status_code=400)
+
+    items = []
+    for item in sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
+        # Gizli ve sanal ortam klasörlerini atla
+        if item.name.startswith(".") or item.name in ("__pycache__", "node_modules"):
+            continue
+        rel = str(item.relative_to(_root))
+        items.append({
+            "name": item.name,
+            "path": rel,
+            "type": "file" if item.is_file() else "dir",
+            "size": item.stat().st_size if item.is_file() else 0,
+        })
+
+    return JSONResponse({"path": str(target.relative_to(_root)) if path else ".", "items": items})
+
+
+@app.get("/file-content")
+async def file_content(path: str):
+    """
+    Proje içindeki bir dosyanın içeriğini döndürür.
+    Güvenli metin tabanlı uzantılarla sınırlandırılmıştır.
+    """
+    _SAFE_EXTENSIONS = {
+        ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".ini", ".cfg",
+        ".toml", ".html", ".css", ".js", ".ts", ".sh", ".env", ".example",
+        ".gitignore", ".dockerignore", ".sql", ".csv", ".xml",
+    }
+    _root = Path(__file__).parent
+    target = (_root / path).resolve()
+
+    try:
+        target.relative_to(_root)
+    except ValueError:
+        return JSONResponse({"error": "Güvenlik: proje dışına çıkılamaz."}, status_code=403)
+
+    if not target.exists():
+        return JSONResponse({"error": f"Dosya bulunamadı: {path}"}, status_code=404)
+    if target.is_dir():
+        return JSONResponse({"error": "Belirtilen yol bir dizin."}, status_code=400)
+    if target.suffix.lower() not in _SAFE_EXTENSIONS:
+        return JSONResponse({"error": f"Desteklenmeyen dosya türü: {target.suffix}"}, status_code=415)
+
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        return JSONResponse({"path": path, "content": content, "size": len(content)})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 @app.get("/git-info")
 async def git_info():
     """Git deposu bilgilerini (dal adı, repo adı) döndürür."""

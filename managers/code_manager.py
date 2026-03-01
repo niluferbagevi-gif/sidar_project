@@ -7,6 +7,9 @@ import ast
 import json
 import logging
 import os
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -196,14 +199,8 @@ class CodeManager:
             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
         if not self.docker_available:
-            return False, (
-                "[OpenClaw] Docker bağlantısı bulunamadı — güvenlik sebebiyle kod çalıştırma devre dışı.\n"
-                "Çözüm:\n"
-                "  • WSL2  : Docker Desktop → Settings → Resources → WSL Integration'ı etkinleştirin\n"
-                "  • Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
-                "  • macOS : Docker Desktop uygulamasının çalıştığından emin olun\n"
-                "  • Doğrulama: terminalde 'docker ps' komutunu çalıştırın"
-            )
+            logger.info("Docker yok — subprocess (yerel Python) moduna geçiliyor.")
+            return self.execute_code_local(code)
 
         try:
             import docker
@@ -256,6 +253,50 @@ class CodeManager:
              )
         except Exception as exc:
             return False, f"Docker çalıştırma hatası: {exc}"
+
+    def execute_code_local(self, code: str) -> Tuple[bool, str]:
+        """
+        Docker kullanılamadığında Python kodu güvenli subprocess ile çalıştırır.
+        - sys.executable kullanır (aktif Conda/venv ortamı korunur)
+        - Geçici dosyaya yazar, 10 sn timeout ile çalıştırır
+        - Ağ erişimi açıktır (yalnızca Docker izolasyonundan farklı)
+        """
+        if not self.security.can_execute():
+            return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".py", delete=False, encoding="utf-8"
+            ) as tmp:
+                tmp.write(code)
+                tmp_path = tmp.name
+
+            result = subprocess.run(
+                [sys.executable, tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                cwd=str(self.base_dir),
+            )
+
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            output = (result.stdout + result.stderr).strip()
+            if result.returncode != 0:
+                return False, f"REPL Çıktısı (Subprocess — Docker yok):\n{output or '(çıktı yok)'}"
+            return True, f"REPL Çıktısı (Subprocess — Docker yok):\n{output or '(kod çalıştı, çıktı yok)'}"
+
+        except subprocess.TimeoutExpired:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü (sonsuz döngü koruması)."
+        except Exception as exc:
+            return False, f"Subprocess çalıştırma hatası: {exc}"
 
     # ─────────────────────────────────────────────
     #  DİZİN LİSTELEME

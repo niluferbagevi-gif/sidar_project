@@ -346,6 +346,63 @@ class SidarAgent:
         _, result = self.github.read_remote_file(a)
         return result
 
+    async def _tool_github_list_files(self, a: str) -> str:
+        """GitHub deposundaki dizin içeriğini listele. Argüman: 'path[|||branch]'"""
+        parts = a.split("|||")
+        path = parts[0].strip() if parts else ""
+        branch = parts[1].strip() if len(parts) > 1 else None
+        _, result = self.github.list_files(path, branch)
+        return result
+
+    async def _tool_github_write(self, a: str) -> str:
+        """GitHub'a dosya yaz/güncelle. Argüman: 'path|||content|||commit_message[|||branch]'"""
+        parts = a.split("|||")
+        if len(parts) < 3:
+            return "⚠ Hatalı format. Kullanım: path|||içerik|||commit_mesajı[|||branch]"
+        path = parts[0].strip()
+        content = parts[1]
+        message = parts[2].strip()
+        branch = parts[3].strip() if len(parts) > 3 else None
+        if not self.github.is_available():
+            return "⚠ GitHub token ayarlanmamış."
+        _, result = self.github.create_or_update_file(path, content, message, branch)
+        return result
+
+    async def _tool_github_create_branch(self, a: str) -> str:
+        """GitHub'da yeni dal oluştur. Argüman: 'branch_adı[|||kaynak_branch]'"""
+        if not a:
+            return "⚠ Dal adı belirtilmedi."
+        parts = a.split("|||")
+        branch_name = parts[0].strip()
+        from_branch = parts[1].strip() if len(parts) > 1 else None
+        if not self.github.is_available():
+            return "⚠ GitHub token ayarlanmamış."
+        _, result = self.github.create_branch(branch_name, from_branch)
+        return result
+
+    async def _tool_github_create_pr(self, a: str) -> str:
+        """GitHub Pull Request oluştur. Argüman: 'başlık|||açıklama|||head_branch[|||base_branch]'"""
+        parts = a.split("|||")
+        if len(parts) < 3:
+            return "⚠ Hatalı format. Kullanım: başlık|||açıklama|||head_branch[|||base_branch]"
+        title = parts[0].strip()
+        body = parts[1]
+        head = parts[2].strip()
+        base = parts[3].strip() if len(parts) > 3 else None
+        if not self.github.is_available():
+            return "⚠ GitHub token ayarlanmamış."
+        _, result = self.github.create_pull_request(title, body, head, base)
+        return result
+
+    async def _tool_github_search_code(self, a: str) -> str:
+        """GitHub deposunda kod ara. Argüman: arama_sorgusu"""
+        if not a:
+            return "⚠ Arama sorgusu belirtilmedi."
+        if not self.github.is_available():
+            return "⚠ GitHub token ayarlanmamış."
+        _, result = self.github.search_code(a)
+        return result
+
     async def _tool_web_search(self, a: str) -> str:
         if not a: return "⚠ Arama sorgusu belirtilmedi."
         _, result = await self.web.search(a)
@@ -421,31 +478,36 @@ class SidarAgent:
         """Dispatch tablosu aracılığıyla araç handler'ını çağırır."""
         tool_arg = str(tool_arg).strip()
         dispatch = {
-            "list_dir":             self._tool_list_dir,
-            "read_file":            self._tool_read_file,
-            "write_file":           self._tool_write_file,
-            "patch_file":           self._tool_patch_file,
-            "execute_code":         self._tool_execute_code,
-            "audit":                self._tool_audit,
-            "health":               self._tool_health,
-            "gpu_optimize":         self._tool_gpu_optimize,
-            "github_commits":       self._tool_github_commits,
-            "github_info":          self._tool_github_info,
-            "github_read":          self._tool_github_read,
-            "web_search":           self._tool_web_search,
-            "fetch_url":            self._tool_fetch_url,
-            "search_docs":          self._tool_search_docs,
-            "search_stackoverflow": self._tool_search_stackoverflow,
-            "pypi":                 self._tool_pypi,
-            "pypi_compare":         self._tool_pypi_compare,
-            "npm":                  self._tool_npm,
-            "gh_releases":          self._tool_gh_releases,
-            "gh_latest":            self._tool_gh_latest,
-            "docs_search":          self._tool_docs_search,
-            "docs_add":             self._tool_docs_add,
-            "docs_list":            self._tool_docs_list,
-            "docs_delete":          self._tool_docs_delete,
-            "get_config":           self._tool_get_config,
+            "list_dir":               self._tool_list_dir,
+            "read_file":              self._tool_read_file,
+            "write_file":             self._tool_write_file,
+            "patch_file":             self._tool_patch_file,
+            "execute_code":           self._tool_execute_code,
+            "audit":                  self._tool_audit,
+            "health":                 self._tool_health,
+            "gpu_optimize":           self._tool_gpu_optimize,
+            "github_commits":         self._tool_github_commits,
+            "github_info":            self._tool_github_info,
+            "github_read":            self._tool_github_read,
+            "github_list_files":      self._tool_github_list_files,
+            "github_write":           self._tool_github_write,
+            "github_create_branch":   self._tool_github_create_branch,
+            "github_create_pr":       self._tool_github_create_pr,
+            "github_search_code":     self._tool_github_search_code,
+            "web_search":             self._tool_web_search,
+            "fetch_url":              self._tool_fetch_url,
+            "search_docs":            self._tool_search_docs,
+            "search_stackoverflow":   self._tool_search_stackoverflow,
+            "pypi":                   self._tool_pypi,
+            "pypi_compare":           self._tool_pypi_compare,
+            "npm":                    self._tool_npm,
+            "gh_releases":            self._tool_gh_releases,
+            "gh_latest":              self._tool_gh_latest,
+            "docs_search":            self._tool_docs_search,
+            "docs_add":               self._tool_docs_add,
+            "docs_list":              self._tool_docs_list,
+            "docs_delete":            self._tool_docs_delete,
+            "get_config":             self._tool_get_config,
         }
         handler = dispatch.get(tool_name)
         return await handler(tool_arg) if handler else None
@@ -457,18 +519,19 @@ class SidarAgent:
     def _build_context(self) -> str:
         """Tüm alt sistem durumlarını özetleyen bağlam dizesi."""
         lines = ["[Araç Durumu]"]
-        lines.append(f"  Güvenlik   : {self.security.level_name.upper()}")
-        lines.append(f"  GitHub     : {'Bağlı' if self.github.is_available() else 'Bağlı değil'}")
-        lines.append(f"  GPU        : {'Mevcut' if self.health._gpu_available else 'Yok'}")
-        lines.append(f"  WebSearch  : {'Aktif' if self.web.is_available() else 'Kurulu değil'}")
-        lines.append(f"  RAG        : {self.docs.status()}")
+        lines.append(f"  Proje Dizini: {self.cfg.BASE_DIR}")
+        lines.append(f"  Güvenlik    : {self.security.level_name.upper()}")
+        lines.append(f"  GitHub      : {'Bağlı — ' + self.cfg.GITHUB_REPO if self.github.is_available() else 'Bağlı değil'}")
+        lines.append(f"  GPU         : {'Mevcut' if self.health._gpu_available else 'Yok'}")
+        lines.append(f"  WebSearch   : {'Aktif' if self.web.is_available() else 'Kurulu değil'}")
+        lines.append(f"  RAG         : {self.docs.status()}")
 
         m = self.code.get_metrics()
-        lines.append(f"  Okunan     : {m['files_read']} dosya | Yazılan: {m['files_written']}")
+        lines.append(f"  Okunan      : {m['files_read']} dosya | Yazılan: {m['files_written']}")
 
         last_file = self.memory.get_last_file()
         if last_file:
-            lines.append(f"  Son dosya  : {last_file}")
+            lines.append(f"  Son dosya   : {last_file}")
 
         return "\n".join(lines)
 

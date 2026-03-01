@@ -191,6 +191,104 @@ class GitHubManager:
         except Exception as exc:
             return False, f"Branch listesi alınamadı: {exc}"
 
+    def list_files(self, path: str = "", branch: str = None) -> Tuple[bool, str]:
+        """Depodaki bir dizinin içeriğini listele."""
+        if not self._repo:
+            return False, "Aktif depo yok."
+        try:
+            kwargs = {}
+            if branch:
+                kwargs["ref"] = branch
+            contents = self._repo.get_contents(path or "", **kwargs)
+            if not isinstance(contents, list):
+                contents = [contents]
+            lines = [f"[GitHub Dosya Listesi: {path or '/'}]"]
+            for item in sorted(contents, key=lambda x: (x.type != "dir", x.name)):
+                icon = "📂" if item.type == "dir" else "📄"
+                lines.append(f"  {icon} {item.name}")
+            return True, "\n".join(lines)
+        except Exception as exc:
+            return False, f"Dosya listesi alınamadı: {exc}"
+
+    def create_or_update_file(
+        self,
+        file_path: str,
+        content: str,
+        message: str,
+        branch: str = None,
+    ) -> Tuple[bool, str]:
+        """GitHub deposuna dosya oluştur veya güncelle."""
+        if not self._repo:
+            return False, "Aktif depo yok."
+        try:
+            kwargs = {}
+            if branch:
+                kwargs["branch"] = branch
+            # Mevcut dosyayı kontrol et (güncelleme mi, oluşturma mı?)
+            try:
+                existing = self._repo.get_contents(file_path, **kwargs)
+                self._repo.update_file(
+                    path=file_path,
+                    message=message,
+                    content=content,
+                    sha=existing.sha,
+                    **kwargs,
+                )
+                return True, f"✓ Dosya güncellendi: {file_path}"
+            except Exception:
+                # Dosya yok → oluştur
+                self._repo.create_file(
+                    path=file_path,
+                    message=message,
+                    content=content,
+                    **kwargs,
+                )
+                return True, f"✓ Dosya oluşturuldu: {file_path}"
+        except Exception as exc:
+            return False, f"GitHub dosya yazma hatası: {exc}"
+
+    def create_branch(self, branch_name: str, from_branch: str = None) -> Tuple[bool, str]:
+        """Yeni git dalı oluştur."""
+        if not self._repo:
+            return False, "Aktif depo yok."
+        try:
+            source = from_branch or self._repo.default_branch
+            source_ref = self._repo.get_branch(source)
+            self._repo.create_git_ref(
+                ref=f"refs/heads/{branch_name}",
+                sha=source_ref.commit.sha,
+            )
+            return True, f"✓ Dal oluşturuldu: {branch_name} ({source} kaynağından)"
+        except Exception as exc:
+            return False, f"Dal oluşturma hatası: {exc}"
+
+    def create_pull_request(
+        self,
+        title: str,
+        body: str,
+        head: str,
+        base: str = None,
+    ) -> Tuple[bool, str]:
+        """Pull request oluştur."""
+        if not self._repo:
+            return False, "Aktif depo yok."
+        try:
+            base_branch = base or self._repo.default_branch
+            pr = self._repo.create_pull(
+                title=title,
+                body=body,
+                head=head,
+                base=base_branch,
+            )
+            return True, (
+                f"✓ Pull Request oluşturuldu:\n"
+                f"  Başlık : {pr.title}\n"
+                f"  URL    : {pr.html_url}\n"
+                f"  Numara : #{pr.number}"
+            )
+        except Exception as exc:
+            return False, f"Pull Request oluşturma hatası: {exc}"
+
     def search_code(self, query: str) -> Tuple[bool, str]:
         """Depoda kod araması yap."""
         if not self._gh or not self._repo:

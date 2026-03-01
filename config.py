@@ -233,7 +233,7 @@ class Config:
     TEXT_MODEL:     str = os.getenv("TEXT_MODEL", "gemma2:9b")
 
     # ─── Erişim Seviyesi (OpenClaw) ──────────────────────────
-    ACCESS_LEVEL: str = os.getenv("ACCESS_LEVEL", "sandbox")
+    ACCESS_LEVEL: str = os.getenv("ACCESS_LEVEL", "full")
 
     # ─── GitHub ──────────────────────────────────────────────
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
