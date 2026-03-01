@@ -26,11 +26,13 @@ class CodeManager:
 
     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
 
-    def __init__(self, security: SecurityManager, base_dir: Path) -> None:
+    def __init__(self, security: SecurityManager, base_dir: Path,
+                 docker_image: str = "python:3.11-alpine") -> None:
         self.security = security
         self.base_dir = base_dir
+        self.docker_image = docker_image  # Config'den veya varsayılan değer
         self._lock = threading.RLock()
-        
+
         # Metrikler
         self._files_read = 0
         self._files_written = 0
@@ -205,7 +207,7 @@ class CodeManager:
 
             # Konteyneri başlat (Arka planda ayrılmış olarak)
             container = self.docker_client.containers.run(
-                image="python:3.11-alpine", # Çok hafif ve hızlı bir imaj
+                image=self.docker_image,  # Config'den alınan veya varsayılan imaj
                 command=command,
                 detach=True,
                 remove=False, # Çıktıyı okuyabilmek için anında silmiyoruz, manuel sileceğiz

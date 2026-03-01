@@ -237,3 +237,104 @@ def test_rag_gpu_params(test_config):
     # CUDA yoksa ChromaDB CPU'ya düşmeli; collection ya None ya da başlatılmış olmalı
     status = docs.status()
     assert "RAG" in status
+
+
+# ─────────────────────────────────────────────
+# 9. SESSION LIFECYCLE TESTLERİ
+# ─────────────────────────────────────────────
+
+def test_session_create(test_config):
+    """ConversationMemory: Yeni oturum oluşturma ve aktif hale getirme."""
+    from core.memory import ConversationMemory
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    session_id = mem.create_session("Test Sohbeti")
+
+    assert session_id is not None
+    assert len(session_id) == 36  # UUID4 formatı
+    assert mem.active_session_id == session_id
+    assert mem.active_title == "Test Sohbeti"
+    assert (test_config.DATA_DIR / "sessions" / f"{session_id}.json").exists()
+
+
+def test_session_add_and_load(test_config):
+    """ConversationMemory: Mesaj ekleme ve oturumu yeniden yükleme."""
+    from core.memory import ConversationMemory
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    session_id = mem.create_session("Yükleme Testi")
+    mem.add("user", "Merhaba Sidar!")
+    mem.add("assistant", "Merhaba! Nasıl yardımcı olabilirim?")
+
+    # Yeni bir bellek nesnesi oluştur ve oturumu yeniden yükle
+    mem2 = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+    ok = mem2.load_session(session_id)
+
+    assert ok is True
+    assert mem2.active_session_id == session_id
+    history = mem2.get_history()
+    assert len(history) == 2
+    assert history[0]["role"] == "user"
+    assert history[0]["content"] == "Merhaba Sidar!"
+    assert history[1]["role"] == "assistant"
+
+
+def test_session_delete(test_config):
+    """ConversationMemory: Oturum silme ve dosyanın kaldırıldığını doğrulama."""
+    from core.memory import ConversationMemory
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    sid = mem.create_session("Silinecek Oturum")
+    session_file = test_config.DATA_DIR / "sessions" / f"{sid}.json"
+    assert session_file.exists()
+
+    result = mem.delete_session(sid)
+
+    assert result is True
+    assert not session_file.exists()
+
+
+def test_session_get_all_sorted(test_config):
+    """ConversationMemory: Tüm oturumları en yeniden en eskiye sıralı listeler."""
+    from core.memory import ConversationMemory
+    import time as _time
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    id1 = mem.create_session("Birinci")
+    _time.sleep(0.01)
+    id2 = mem.create_session("İkinci")
+    _time.sleep(0.01)
+    id3 = mem.create_session("Üçüncü")
+
+    sessions = mem.get_all_sessions()
+    ids = [s["id"] for s in sessions]
+
+    # En son oluşturulan en üstte olmalı
+    assert ids[0] == id3
+    assert id1 in ids
+    assert id2 in ids
+
+
+def test_session_update_title(test_config):
+    """ConversationMemory: Aktif oturum başlığını güncelleme."""
+    from core.memory import ConversationMemory
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    sid = mem.create_session("Eski Başlık")
+    mem.update_title("Yeni Başlık")
+
+    assert mem.active_title == "Yeni Başlık"
+
+    # Yeniden yükleme ile kalıcılığı doğrula
+    mem2 = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+    mem2.load_session(sid)
+    assert mem2.active_title == "Yeni Başlık"
+
+
+def test_session_load_nonexistent(test_config):
+    """ConversationMemory: Var olmayan oturum yüklenmeye çalışıldığında False döner."""
+    from core.memory import ConversationMemory
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+
+    result = mem.load_session("00000000-0000-0000-0000-000000000000")
+    assert result is False

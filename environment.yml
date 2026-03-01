@@ -31,7 +31,7 @@ dependencies:
       # ── Temel ─────────────────────────────────────────────────────────────
       - python-dotenv>=1.0.0
       - pyyaml>=6.0.1
-      - requests>=2.31.0
+      # requests kaldırıldı — tüm HTTP istekleri httpx ile yapılmaktadır
 
       # ── Asenkron HTTP & Veri Doğrulama ────────────────────────────────────
       - httpx>=0.25.0
