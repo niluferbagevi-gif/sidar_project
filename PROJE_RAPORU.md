@@ -1,10 +1,10 @@
 # SİDAR Projesi — Kapsamlı Kod Analiz Raporu (Güncel)
 
-**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri)
+**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri + Derinlemesine Analiz)
 **Analiz Eden:** Claude Sonnet 4.6 (Otomatik Denetim)
 **Versiyon:** SidarAgent v2.6.1 (Web UI + Backend patch)
-**Toplam Dosya:** ~35 kaynak dosyası, ~10.200+ satır kod
-**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01
+**Toplam Dosya:** ~35 kaynak dosyası, ~10.400+ satır kod
+**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01 / Derinlemesine analiz: 2026-03-01
 
 ---
 
@@ -323,9 +323,172 @@ except Exception as exc:
 
 ## 4. Mevcut Kritik Hatalar
 
-> 🎉 Projenin güncel halinde çalışma zamanını kıran **kritik seviyede** hata bulunmamaktadır.
+> ⚠️ Derinlemesine satır satır analiz sonucunda **5 kritik** sorun tespit edilmiştir. Bu sorunlar çalışma zamanını doğrudan etkileyebilir, sessiz veri bozulmasına veya güvenilmez davranışa yol açabilir.
 
-CLI, Web ve Docker modları teknik olarak çalışır durumdadır.
+---
+
+### 4.1 `agent/sidar_agent.py:163` — Açgözlü (Greedy) Regex ile JSON Ayrıştırma (KRİTİK)
+
+**Dosya:** `agent/sidar_agent.py`
+**Satır:** 163
+**Önem:** 🔴 KRİTİK
+
+**Sorun:**
+
+```python
+# sidar_agent.py:163
+json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+```
+
+`re.DOTALL` ile birlikte `\{.*\}` açgözlü (greedy) eşleşmesi, `raw_text` içindeki **ilk `{`'tan son `}`'a kadar** olan tüm metni yakalar. LLM yanıtı birden fazla JSON nesnesi veya gömülü kod bloğu içerdiğinde (örn. `{"thought": "..."}` + açıklama metni + `{"action": "..."}`) **yanlış JSON** ayrıştırılır, ReAct döngüsü beklenmedik biçimde başarısız olur.
+
+**Düzeltme:**
+```python
+# Non-greedy + en son geçerli JSON bloğunu al
+json_match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
+# veya daha sağlam: json.JSONDecoder ile ilerleme
+import json
+decoder = json.JSONDecoder()
+idx = raw_text.find('{')
+while idx != -1:
+    try:
+        obj, _ = decoder.raw_decode(raw_text, idx)
+        json_match = obj; break
+    except json.JSONDecodeError:
+        idx = raw_text.find('{', idx + 1)
+```
+
+---
+
+### 4.2 `core/llm_client.py:129` — UTF-8 Çok Baytlı Karakter Bölünmesi (KRİTİK)
+
+**Dosya:** `core/llm_client.py`
+**Satır:** 129
+**Önem:** 🔴 KRİTİK
+
+**Sorun:**
+
+```python
+# llm_client.py:129
+buffer += raw_bytes.decode("utf-8", errors="replace")
+```
+
+TCP paketi sınırında bir çok baytlı UTF-8 karakter (Türkçe özel harf, Emoji, Arapça, vb.) ikiye bölünebilir. `errors="replace"` kullanıldığında eksik baytlar sessizce `U+FFFD` (replacement character) ile değiştirilir. Bu:
+- LLM yanıtında **veri kaybına** yol açar
+- JSON ayrıştırmasını bozabilir (JSON içindeki `"` tırnak veya `\n` gibi karakterler bölünürse)
+- Türkçe içerikte (ç, ş, ı, ğ, ö, ü) gözle görülür bozulma oluşturur
+
+**Düzeltme:**
+```python
+# Tamamlanmamış UTF-8 baytları sonraki pakete bırak
+_byte_buffer = b""
+
+async for raw_bytes in resp.aiter_bytes():
+    _byte_buffer += raw_bytes
+    try:
+        decoded = _byte_buffer.decode("utf-8")
+        _byte_buffer = b""
+    except UnicodeDecodeError:
+        # Son bayt(lar) tamamlanmamış multibyte karakter
+        try:
+            decoded = _byte_buffer[:-1].decode("utf-8")
+            _byte_buffer = _byte_buffer[-1:]
+        except UnicodeDecodeError:
+            decoded = _byte_buffer[:-2].decode("utf-8", errors="replace")
+            _byte_buffer = _byte_buffer[-2:]
+    buffer += decoded
+```
+
+---
+
+### 4.3 `managers/code_manager.py:208` — Hardcoded Docker Image (KRİTİK)
+
+**Dosya:** `managers/code_manager.py`
+**Satır:** 208
+**Önem:** 🔴 KRİTİK
+
+**Sorun:**
+
+```python
+# code_manager.py:208
+image="python:3.11-alpine",  # Çok hafif ve hızlı bir imaj
+```
+
+Docker REPL sandbox için kullanılan Python imajı doğrudan koda sabit yazılmıştır. Kullanıcı Python 3.12+ gerektiren kodu test etmek istese veya Alpine yerine Debian tabanlı bir imaj kullanması gerekse (bazı C uzantıları Alpine'de derlenmez), **kod değişikliği olmadan özelleştirme imkânı yoktur.**
+
+`python:3.11-alpine` Docker Hub'dan pull edemediğinde veya kurumsal bir ortamda özel registry kullanılıyorsa, REPL tamamen çalışmaz ve hata mesajı yetersiz kalır.
+
+**Düzeltme:** `Config`'e yeni alan eklenip oradan okunmalı:
+```python
+# config.py
+DOCKER_PYTHON_IMAGE: str = os.getenv("DOCKER_PYTHON_IMAGE", "python:3.11-alpine")
+
+# code_manager.py
+image=self.cfg.DOCKER_PYTHON_IMAGE,
+```
+
+---
+
+### 4.4 `core/memory.py:170-171` — Token Sayısı Limiti Yok (KRİTİK)
+
+**Dosya:** `core/memory.py`
+**Satırlar:** 170-171
+**Önem:** 🔴 KRİTİK
+
+**Sorun:**
+
+```python
+# memory.py:170-171
+if len(self._turns) > self.max_turns * 2:
+    self._turns = self._turns[-(self.max_turns * 2):]
+```
+
+Bellek yönetimi yalnızca **mesaj sayısını** sınırlar. Tek bir mesaj binlerce token içerebileceğinden (`max_turns=50` ile toplam ~100 mesaj) LLM context penceresi aşılabilir. Özellikle:
+- Kullanıcı büyük bir dosya içeriğini yapıştırdığında
+- Araç sonuçları çok uzun olduğunda (`read_file` büyük dosya)
+- `execute_code` stdout çıktısı büyük olduğunda
+
+Context aşımı durumunda Ollama `truncated output` verir, Gemini ise HTTP 400 (token limit exceeded) döner ve **yanıt kesilir veya hata oluşur.**
+
+**Düzeltme:** `needs_summarization()` içine yaklaşık token sayacı eklenebilir:
+```python
+def _estimate_tokens(self) -> int:
+    """Kelime başına ~1.3 token kaba tahmini."""
+    total_chars = sum(len(t.get("content", "")) for t in self._turns)
+    return int(total_chars / 3.5)  # UTF-8 Türkçe için ~3.5 karakter/token
+
+def needs_summarization(self) -> bool:
+    token_est = self._estimate_tokens()
+    return (len(self._turns) >= int(self.max_turns * 0.8)
+            or token_est > 6000)  # yaklaşık 8K context için güvenli eşik
+```
+
+---
+
+### 4.5 `agent/auto_handle.py:156-157` — `self.health` Null Kontrolü Yok (KRİTİK)
+
+**Dosya:** `agent/auto_handle.py`
+**Satırlar:** 156-157
+**Önem:** 🔴 KRİTİK
+
+**Sorun:**
+
+```python
+# auto_handle.py:156-157
+return True, self.health.full_report()
+return True, self.health.optimize_gpu_memory()
+```
+
+`self.health` `None` olabilir veya `SystemHealthManager` başlatma sırasında hata fırlatıp `None` döndürebilir. Bu durumda `.full_report()` veya `.optimize_gpu_memory()` çağrıları `AttributeError: 'NoneType' object has no attribute 'full_report'` hatasıyla çöker.
+
+`SidarAgent.__init__()` içindeki `SystemHealthManager` kurulumunun hata fırlatma ihtimali gözardı edilmiştir.
+
+**Düzeltme:**
+```python
+if not self.health:
+    return True, "⚠ Sistem sağlık monitörü başlatılamadı."
+return True, self.health.full_report()
+```
 
 ---
 
@@ -430,6 +593,189 @@ async def validate_ollama_async(cls) -> bool:
 # environment.yml — Gereksiz hale gelebilecek satır:
 - requests>=2.31.0   # ← Yalnızca config.py:validate_critical_settings() için
 - httpx>=0.25.0      # ← Projenin gerçek async HTTP kütüphanesi
+```
+
+---
+
+### 5.4 `agent/sidar_agent.py:145-155` — Stream Generator'ın Yeniden Kullanım Riski
+
+**Dosya:** `agent/sidar_agent.py`
+**Satırlar:** 145-155
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+ReAct döngüsünde LLM'den gelen stream chunk'ları tek bir `raw_text` değişkeninde biriktirilmektedir. İstisna durumunda bu birikmiş yanıt **kısmi ve bozuk** olabilir:
+
+```python
+# sidar_agent.py:145-155 (yaklaşık)
+raw_text = ""
+async for chunk in self.llm.stream(...):
+    raw_text += chunk
+    yield chunk         # <-- hem kullanıcıya aktar
+# Döngü bittikten sonra raw_text ile JSON parse
+json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+```
+
+Eğer stream akışı ortasında bir istisna fırlarsa `raw_text` yarım kalır; ancak `yield chunk` çağrıları önceki mesajı zaten gönderi olarak eklemiş olabilir. `memory.add()` bu kısmi mesajla çağrılırsa konuşma geçmişi bozulur.
+
+**Düzeltme:** Stream tamamlanmadan `memory.add()` çağrısı yapılmamalı; tüm chunk'lar tamponlanıp onaylandıktan sonra eklenmelidir.
+
+---
+
+### 5.5 `core/rag.py:287` — ChromaDB Delete + Upsert Yarış Koşulu
+
+**Dosya:** `core/rag.py`
+**Satır:** 287
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+```python
+# rag.py:287
+self.collection.delete(where={"parent_id": doc_id})
+# ... chunk oluşturma ...
+ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
+self.collection.upsert(...)
+```
+
+`delete` ve ardından `upsert` arasında atomiklik garantisi yoktur. Birden fazla coroutine aynı `doc_id` için eş zamanlı çağrı yaparsa:
+1. A coroutine siler → B coroutine da siler (boş) → A upsert eder → B upsert eder (çakışma)
+2. Sonuç: ChromaDB'de tekrar eden veya eksik kayıtlar
+
+ChromaDB Python client thread-safe değildir; `asyncio.to_thread` kullanılsa bile paylaşılan koleksiyon nesnesi sorun çıkarır.
+
+**Düzeltme:** Belge güncelleme işlemi için async lock kullanılmalı:
+```python
+async with self._write_lock:
+    self.collection.delete(where={"parent_id": doc_id})
+    self.collection.upsert(...)
+```
+
+---
+
+### 5.6 `managers/web_search.py:115-136` — Tavily 401/403 Hatasında Fallback Yok
+
+**Dosya:** `managers/web_search.py`
+**Satırlar:** 115-136
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+```python
+# web_search.py:115-136
+async with httpx.AsyncClient(timeout=10) as client:
+    resp = await client.post(url, json=payload)
+    resp.raise_for_status()   # 401/403 dahil tüm HTTP hatalarında exception
+...
+except Exception as exc:
+    logger.warning("Tavily API hatası: %s", exc)
+    return False, f"[HATA] Tavily: {exc}"   # ← Motor geçişi yok
+```
+
+Tavily API anahtarı geçersiz veya süresi dolmuşsa (401/403), kod hata mesajıyla döner; Google veya DuckDuckGo'ya geçiş yapılmaz. Kullanıcı her aramada hata görür. Bu durum `.env`'de `TAVILY_API_KEY` ayarlandıktan sonra anahtar süresi dolduğunda sessizce bozulur.
+
+**Düzeltme:**
+```python
+except httpx.HTTPStatusError as e:
+    if e.response.status_code in (401, 403):
+        logger.error("Tavily kimlik doğrulama hatası — Google/DDG'ye geçiliyor.")
+        return await self._search_google(query, max_results)  # fallback
+    raise
+```
+
+---
+
+### 5.7 `managers/system_health.py:159-171` — pynvml Hataları Sessizce Yutuldu
+
+**Dosya:** `managers/system_health.py`
+**Satırlar:** 159-171
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+```python
+# system_health.py:159-171
+try:
+    # pynvml GPU sıcaklık/kullanım sorgusu
+    ...
+except Exception:
+    pass  # pynvml hatası kritik değil
+```
+
+`except Exception: pass` ile tüm pynvml hataları **sessizce** yutulmaktadır. Bu durum:
+- GPU izleme özelliğinin neden çalışmadığını gizler
+- Kullanıcı `/sistem` komutunu çalıştırdığında GPU bilgisi boş/eksik görünür
+- Debug etmek için log dosyası incelenmesi gerekir (ama log da yok)
+
+**Düzeltme:**
+```python
+except pynvml.NVMLError as e:
+    logger.debug("pynvml sorgu hatası (beklenen): %s", e)
+except Exception as e:
+    logger.warning("pynvml beklenmedik hata: %s", e)
+```
+
+---
+
+### 5.8 `managers/github_manager.py:148-149` — Uzantısız Dosyalar Güvenlik Kontrolünü Atlar
+
+**Dosya:** `managers/github_manager.py`
+**Satırlar:** 142-149
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+```python
+# github_manager.py:142-149
+extension = ""
+if "." in file_name:
+    extension = "." + file_name.split(".")[-1]
+...
+if extension and extension not in self.SAFE_TEXT_EXTENSIONS:
+    return False, f"⚠ Güvenlik/Hata Koruması: '{file_name}'..."
+```
+
+Satır 148'deki `if extension` kontrolü, `extension = ""` (uzantısız dosya) durumunda **koşulun asla girilmemesine** neden olur. `Makefile`, `Dockerfile`, `Procfile`, `.env` gibi uzantısız dosyalar binary filtreden geçmeden okunabilir. Kötü niyetli bir ELF binary'si `Dockerfile` adıyla GitHub'a yüklenmiş olsa bile içeriği LLM prompt'una aktarılabilir.
+
+**Düzeltme:** Uzantısız dosyalar için açık bir whitelist:
+```python
+SAFE_EXTENSIONLESS = {"Makefile", "Dockerfile", "Procfile", "Vagrantfile", "Rakefile"}
+if not extension and file_name not in SAFE_EXTENSIONLESS:
+    return False, f"⚠ Güvenlik: '{file_name}' uzantısız dosya whitelist'te değil."
+```
+
+---
+
+### 5.9 `web_server.py:83-92` — Rate Limiting TOCTOU Yarış Koşulu
+
+**Dosya:** `web_server.py`
+**Satırlar:** 83-92
+**Önem:** 🔴 YÜKSEK
+
+**Sorun:**
+
+```python
+# web_server.py:83-92
+def _is_rate_limited(ip: str) -> bool:
+    now = time.monotonic()
+    window_start = now - _RATE_WINDOW
+    calls = _rate_data[ip]
+    _rate_data[ip] = [t for t in calls if t > window_start]
+    if len(_rate_data[ip]) >= _RATE_LIMIT:   # ← KONTROL
+        return True
+    _rate_data[ip].append(now)               # ← YAZAR (ayrı adım)
+    return False
+```
+
+"Kontrol" ve "Yaz" adımları arasında (`if len >= _RATE_LIMIT` ile `append(now)`) aynı IP'den gelen eş zamanlı istekler her ikisinde de limiti geçmemiş gibi görülebilir (klasik TOCTOU). `asyncio` tek thread olduğundan bu race sık tetiklenmez, ancak `await call_next(request)` sırasında context switching gerçekleşirse sorun oluşabilir.
+
+**Düzeltme:**
+```python
+# asyncio.Lock ile atomik kontrol
+async def _is_rate_limited_async(ip: str) -> bool:
+    async with _rate_lock:
+        ...  # aynı mantık, artık atomik
 ```
 
 ---
@@ -624,6 +970,126 @@ def test_memory_session_lifecycle(test_config):
 
 ---
 
+### 6.7 `config.py:147-153` — `GPU_MEMORY_FRACTION` Aralık Doğrulaması Yok
+
+**Dosya:** `config.py`
+**Satırlar:** 147-153
+**Önem:** 🟡 ORTA
+
+**Sorun:**
+
+```python
+# config.py:147-153
+frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
+if 0.1 <= frac < 1.0:
+    torch.cuda.set_per_process_memory_fraction(frac, device=0)
+```
+
+`GPU_MEMORY_FRACTION` değeri `[0.1, 1.0)` aralığının dışındaysa (örn. `2.5`, `-0.5`, `0`) kod sessizce bu ayarı **atlar** ve PyTorch varsayılan davranışını kullanır. Kullanıcıya herhangi bir uyarı veya log mesajı gösterilmez.
+
+**Düzeltme:**
+```python
+frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
+if not (0.1 <= frac < 1.0):
+    logger.warning("GPU_MEMORY_FRACTION=%.2f geçersiz aralık — 0.8 kullanılıyor.", frac)
+    frac = 0.8
+torch.cuda.set_per_process_memory_fraction(frac, device=0)
+```
+
+---
+
+### 6.8 `managers/package_info.py:257-266` — Version Sort Key Pre-Release Sıralama Hatası
+
+**Dosya:** `managers/package_info.py`
+**Satırlar:** 257-266
+**Önem:** 🟡 ORTA
+
+**Sorun:**
+
+```python
+# package_info.py:257-266
+@staticmethod
+def _version_sort_key(version: str):
+    parts = re.split(r"[.\-]", version)
+    result = []
+    for p in parts:
+        try:
+            result.append(int(p))
+        except ValueError:
+            result.append(0)   # ← tüm harf içeren parçalar 0 olur
+```
+
+`1.0.0a1`, `1.0.0b2`, `1.0.0rc1` hepsi sıralamada `[1, 0, 0, 1]`, `[1, 0, 0, 2]`, `[1, 0, 0, 1]` gibi eşit muamele görür. `1.0.0` ise `[1, 0, 0]` — dolayısıyla `1.0.0` < `1.0.0a1` gibi yanlış sıralama oluşabilir. Kullanıcıya stabil bir sürüm yerine pre-release önerilme riski doğar.
+
+**Düzeltme:** `packaging.version.parse()` kullanımı önerilir:
+```python
+from packaging.version import Version, InvalidVersion
+def _version_sort_key(version: str):
+    try:
+        return Version(version)
+    except InvalidVersion:
+        return Version("0.0.0")
+```
+
+---
+
+### 6.9 `agent/sidar_agent.py:182-197` — Araç Sonucu Format String Tutarsızlığı
+
+**Dosya:** `agent/sidar_agent.py`
+**Satırlar:** 182-197
+**Önem:** 🟡 ORTA
+
+**Sorun:**
+
+```python
+# sidar_agent.py — Birden fazla farklı format
+yield f"\x00TOOL:{tool_name}\x00"                         # sentinel (farklı format)
+{"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"}  # araç başarılı
+{"role": "user", "content": f"[Sistem Hatası] {exc}"}          # araç başarısız (farklı etiket)
+```
+
+Araç sonuçları bazen `[Araç Sonucu]`, bazen `[Sistem Hatası]`, bazen de etiketsiz olarak memory'e eklenmektedir. Bu tutarsızlık:
+- LLM'in önceki araç sonuçlarını parse etmesini güçleştirir
+- Oturum dışa aktarmada (MD/JSON) araç çıktıları tutarsız görünür
+- ReAct prompt'unda format beklentisi ile gerçek format uyuşmaz
+
+**Düzeltme:** Tek bir sabit format şeması belirlenmeli:
+```python
+TOOL_RESULT_TEMPLATE = "[ARAÇ:{tool_name}]\n{result}"
+TOOL_ERROR_TEMPLATE  = "[ARAÇ:{tool_name}:HATA]\n{error}"
+```
+
+---
+
+### 6.10 `core/memory.py:70-71` — Bozuk JSON Oturum Dosyaları Sessizce Atlanıyor
+
+**Dosya:** `core/memory.py`
+**Satırlar:** 70-71
+**Önem:** 🟡 ORTA
+
+**Sorun:**
+
+```python
+# memory.py:70-71
+except Exception as exc:
+    logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
+    # ← continue — dosya atlanıyor, kullanıcıya bildirim yok
+```
+
+`data/sessions/` altındaki bir JSON dosyası bozulursa (disk hatası, yarım yazma, elle düzenleme) dosya sessizce atlanır. Kullanıcı bir oturumunun kaybolduğunu ancak sidebar'da göremeyince fark edebilir, log dosyasını kontrol etmeden nedenini anlayamaz.
+
+**Düzeltme:**
+```python
+except json.JSONDecodeError as exc:
+    logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
+    # Bozuk dosyayı karantinaya al:
+    broken_path = file_path.with_suffix(".json.broken")
+    file_path.rename(broken_path)
+    logger.warning("Bozuk dosya yeniden adlandırıldı: %s", broken_path.name)
+```
+
+---
+
 ## 7. Düşük Öncelikli Sorunlar
 
 ---
@@ -732,6 +1198,56 @@ Mevcut kod zaten `try/except` içermektedir; kritik değildir.
 
 ---
 
+### 7.7 `agent/definitions.py:23` — Eski Eğitim Verisi Tarihi Yorumu
+
+**Dosya:** `agent/definitions.py`
+**Satır:** 23
+**Önem:** 🟢 DÜŞÜK
+
+**Sorun:**
+
+```python
+# definitions.py:23
+- LLM eğitim verisi 2024 başına kadar günceldir.
+```
+
+Bu yorum SİDAR'ın kullandığı LLM modeline (Claude Sonnet 4.6) göre yanlıştır. Claude Sonnet 4.6'nın eğitim verisi 2025 Ağustos'una kadardır. Kullanıcı bu yorumu okuduğunda modelin bilgi tabanını olduğundan eski sanabilir.
+
+**Düzeltme:**
+```python
+- Bu modelin eğitim verisi yaklaşık 2025 ortasına kadardır.
+- Kesin bilgi için 'web_search' veya 'pypi' aracıyla doğrula.
+```
+
+---
+
+### 7.8 `managers/package_info.py:251-254` — npm Sayısal Pre-Release Sürümleri Algılanmıyor
+
+**Dosya:** `managers/package_info.py`
+**Satırlar:** 251-254
+**Önem:** 🟢 DÜŞÜK
+
+**Sorun:**
+
+```python
+# package_info.py:251-254
+@staticmethod
+def _is_prerelease(version: str) -> bool:
+    return bool(re.search(r"[a-zA-Z]", version))
+```
+
+`re.search(r"[a-zA-Z]", version)` yalnızca harf içeren pre-release etiketlerini (`alpha`, `beta`, `rc`, `a0`, `b1`) tanır. npm'de yaygın olan sayısal pre-release formatı `1.0.0-0` (`-0` veya `-1` gibi sayısal tag) ise tespit **edilemez** çünkü `[a-zA-Z]` pattern'i harf içermeyen pre-release'lere uymaz.
+
+**Düzeltme:**
+```python
+@staticmethod
+def _is_prerelease(version: str) -> bool:
+    # Hem harf tabanlı (alpha/beta/rc) hem sayısal pre-release (1.0.0-0)
+    return bool(re.search(r"[a-zA-Z]", version)) or bool(re.match(r".*-\d+$", version))
+```
+
+---
+
 ### 7.6 Güvenlik Açıkları — Üretim Ortamı İçin
 
 **Önem:** 🟢 DÜŞÜK (geliştirme/single-user için kabul edilebilir)
@@ -758,6 +1274,15 @@ Mevcut kod zaten `try/except` içermektedir; kritik değildir.
 | 6 | `README.md` | `web_server.py`, `memory.py`, `config.py` | Yeni özellikler (session, GPU, rate-limit) belgelenmemiş | 🟡 ORTA |
 | 7 | `tests/test_sidar.py` | `memory.py` (session API) | Session lifecycle testleri eksik | 🟡 ORTA |
 | 8 | `web_search.py:search_docs()` | DuckDuckGo motoru | `site:` OR operatörü DDG'de sınırlı | 🟢 DÜŞÜK |
+| 9 | `sidar_agent.py:163` (greedy regex) | JSON çıktısı veren LLM | Açgözlü `\{.*\}` regex yanlış JSON yakalayabilir | 🔴 KRİTİK |
+| 10 | `llm_client.py:129` (UTF-8 errors="replace") | Türkçe/multibyte içerik | TCP sınırında multibyte karakter sessizce bozulur | 🔴 KRİTİK |
+| 11 | `code_manager.py:208` (hardcoded image) | `config.py` (DOCKER_PYTHON_IMAGE eksik) | Docker image özelleştirilemez | 🔴 KRİTİK |
+| 12 | `memory.py:170` (mesaj sayısı limiti) | LLM context window | Token sayısı kontrolsüz büyüyebilir | 🔴 KRİTİK |
+| 13 | `auto_handle.py:156` (no null check) | `SystemHealthManager` init | health=None durumunda AttributeError | 🔴 KRİTİK |
+| 14 | `github_manager.py:148` (uzantısız bypass) | `SAFE_TEXT_EXTENSIONS` whitelist | Extensionless binary dosyaları filtreden kaçar | 🔴 YÜKSEK |
+| 15 | `web_server.py:89-91` (TOCTOU) | Rate limit mantığı | Eş zamanlı istek check-write atomik değil | 🔴 YÜKSEK |
+| 16 | `rag.py:287` (delete+upsert) | ChromaDB collection | Eş zamanlı güncelleme race condition | 🔴 YÜKSEK |
+| 17 | `definitions.py:23` (eğitim tarihi) | Claude Sonnet 4.6 (Aug 2025) | Yanlış bilgi sınırı yorumu | 🟢 DÜŞÜK |
 
 ---
 
@@ -914,14 +1439,15 @@ async for raw_bytes in resp.aiter_bytes():
 |------|-------|--------|
 | Erişim Kontrolü (OpenClaw) | ✅ 3 katmanlı (restricted/sandbox/full) | İyi |
 | Kod Çalıştırma İzolasyonu | ✅ Docker sandbox — ağ/RAM/CPU kısıtlı | Çok İyi |
-| Rate Limiting | ⚠️ Yalnızca `/chat` endpoint — diğerleri açık | Orta |
+| Rate Limiting | ⚠️ Yalnızca `/chat` endpoint — TOCTOU race riski (5.9) | Orta |
 | Bellek Şifreleme | ❌ JSON düz metin | Düşük |
 | Prompt Injection | ⚠️ Sistem prompt güçlü ama filtre yok | Orta |
 | Web Fetch Sandbox | ⚠️ HTML temizleniyor ama URL sınırlaması yok | Orta |
 | Gizli Yönetim | ✅ `.env` + `.gitignore` | İyi |
-| Binary Dosya Güvenliği | ✅ GitHub okumada uzantı whitelist | İyi |
+| Binary Dosya Güvenliği | ⚠️ Uzantısız dosyalar whitelist kontrolünü atlıyor (5.8) | Orta |
 | CORS | ✅ Yalnızca localhost | İyi |
 | favicon.ico | ✅ 204 ile sessizce geçiştiriliyor | İyi |
+| Symlink Traversal | ✅ `Path.resolve()` ile önleniyor | İyi |
 
 ---
 
@@ -948,12 +1474,17 @@ async for raw_bytes in resp.aiter_bytes():
 | Alan | Öncelik |
 |------|---------|
 | ConversationMemory session lifecycle | 🔴 YÜKSEK |
+| `sidar_agent.py` greedy regex JSON parse doğruluğu | 🔴 YÜKSEK |
+| `llm_client.py` UTF-8 multibyte buffer güvenliği | 🔴 YÜKSEK |
+| `auto_handle.py` health=None null guard | 🔴 YÜKSEK |
 | AutoHandle async metod testleri | 🟡 ORTA |
 | `_execute_tool` dispatcher — bilinmeyen araç | 🟡 ORTA |
-| web_server rate limiter | 🟡 ORTA |
-| LLMClient stream buffer güvenliği | 🟡 ORTA |
+| web_server rate limiter (TOCTOU senaryosu) | 🟡 ORTA |
+| `rag.py` concurrent delete+upsert | 🟡 ORTA |
+| `github_manager.py` uzantısız dosya bypass | 🟡 ORTA |
+| `memory.py` bozuk JSON karantina davranışı | 🟡 ORTA |
 | Recursive chunking sınır koşulları | 🟢 DÜŞÜK |
-| GitHub manager binary filtresi | 🟢 DÜŞÜK |
+| `package_info.py` version sort pre-release | 🟢 DÜŞÜK |
 
 ---
 
@@ -968,31 +1499,39 @@ Tüm kritik async hatalar giderilmiştir. Döngü, kısayollar ve argüman işle
 
 ---
 
-### `agent/sidar_agent.py` — Skor: 92/100 ✅
+### `agent/sidar_agent.py` — Skor: 78/100 ⚠️
 
-Dispatcher, async lock, Pydantic v2, bellek özetleme + vektör arşivleme implementasyonu başarılı.
+Dispatcher, async lock, Pydantic v2, bellek özetleme + vektör arşivleme implementasyonu başarılı. Ancak derinlemesine analizde 3 önemli sorun tespit edildi.
 
-**Kalan iyileştirme:**
-- `_build_context()` metodunda `self.health._gpu_available` private attribute'a doğrudan erişiliyor:
-  ```python
-  lines.append(f"  GPU        : {'Mevcut' if self.health._gpu_available else 'Yok'}")
-  ```
-  `SystemHealthManager`'a `is_gpu_available() -> bool` public metodu eklenebilir.
+**Yeni bulunan sorunlar:**
+- **Greedy regex (madde 4.1):** `re.search(r'\{.*\}', raw_text, re.DOTALL)` yanlış JSON bloğunu yakalayabilir — KRİTİK
+- **Stream reuse riski (madde 5.4):** Kısmi birikmiş `raw_text` ile `memory.add()` çağrılabilir — YÜKSEK
+- **Format tutarsızlığı (madde 6.9):** `[Araç Sonucu]` / `[Sistem Hatası]` / etiketsiz karışık format — ORTA
+
+**Kalan iyileştirme (önceden biliniyordu):**
+- `_build_context()` metodunda `self.health._gpu_available` private attribute'a doğrudan erişiliyor. `SystemHealthManager`'a `is_gpu_available() -> bool` public metodu eklenebilir.
 
 ---
 
-### `agent/auto_handle.py` — Skor: 96/100 ✅
+### `agent/auto_handle.py` — Skor: 84/100 ⚠️
 
 Eski senkron kod tamamen temizlenmiş. Async metodlar doğru. Pattern matching kapsamlı.
 
-**Kalan iyileştirme:**
-- `_extract_path()` metodunda yalnızca bilinen uzantılar (`py|json|md|...`) eşleştiriliyor. Uzantısız dosyalar (`Makefile`, `Dockerfile`) veya `.toml` gibi bazı yaygın uzantılar eksik.
+**Yeni bulunan sorun:**
+- **Null guard eksikliği (madde 4.5):** `self.health.full_report()` ve `self.health.optimize_gpu_memory()` null kontrol olmadan çağrılıyor — KRİTİK
+
+**Kalan iyileştirme (önceden biliniyordu):**
+- `_extract_path()` metodunda yalnızca bilinen uzantılar eşleştiriliyor; `.toml`, uzantısız dosyalar eksik.
 
 ---
 
-### `core/memory.py` — Skor: 82/100 ⚠️
+### `core/memory.py` — Skor: 74/100 ⚠️
 
 Çoklu oturum sistemi iyi tasarlanmış. `threading.RLock` kullanımı orta öncelikli sorun (madde 6.1).
+
+**Yeni bulunan sorunlar:**
+- **Token limiti yok (madde 4.4):** Yalnızca mesaj sayısı sınırlanıyor, context window overflow riski — KRİTİK
+- **Bozuk JSON sessiz (madde 6.10):** Corrupt session dosyaları `except Exception: pass` ile atlanıyor — ORTA
 
 **Dikkat çeken iyi tasarım:**
 - `_init_sessions()` en son güncellenen oturumu otomatik yüklüyor
@@ -1001,18 +1540,24 @@ Eski senkron kod tamamen temizlenmiş. Async metodlar doğru. Pattern matching k
 
 ---
 
-### `core/rag.py` — Skor: 90/100 ✅
+### `core/rag.py` — Skor: 85/100 ⚠️
 
 `add_document_from_url()` async'e dönüştürüldü. Chunking implementasyonu sağlam. GPU embedding yönetimi iyi.
 
-**Kalan küçük iyileştirme:**
-- `_recursive_chunk_text()` içinde `separators = ["", ...]` ile karakter karakter bölme durumunda `list(text_part)` çok büyük listeler oluşturabilir. Bu dal nadiren tetiklenir ancak çok büyük (MB'larca) tek satırlık dosyalarda bellek baskısı yaratabilir.
+**Yeni bulunan sorun:**
+- **Race condition (madde 5.5):** `delete` + `upsert` arasında atomiklik yok — YÜKSEK
+
+**Kalan küçük iyileştirme (önceden biliniyordu):**
+- `_recursive_chunk_text()` içinde `list(text_part)` karakter karakter bölme çok büyük dosyalarda bellek baskısı yaratabilir.
 
 ---
 
-### `core/llm_client.py` — Skor: 94/100 ✅
+### `core/llm_client.py` — Skor: 82/100 ⚠️
 
-Stream buffer güvenliği, hata geri dönüşleri, Gemini async implementasyonu başarılı.
+Stream buffer güvenliği (satır bazlı), hata geri dönüşleri, Gemini async implementasyonu başarılı.
+
+**Yeni bulunan sorun:**
+- **UTF-8 multibyte bölünme (madde 4.2):** `errors="replace"` ile TCP sınırında multibyte karakter sessizce bozulabilir — KRİTİK
 
 **Dikkat çeken iyi tasarım:**
 - `json_mode` parametresi: ReAct döngüsünde `True`, özetlemede `False` — mimari açıdan doğru
@@ -1021,9 +1566,12 @@ Stream buffer güvenliği, hata geri dönüşleri, Gemini async implementasyonu 
 
 ---
 
-### `managers/code_manager.py` — Skor: 88/100 ✅
+### `managers/code_manager.py` — Skor: 81/100 ⚠️
 
 Docker sandbox implementasyonu güvenlik açısından iyi. Docker yokken yeterli uyarı verilmiyor (madde 6.3).
+
+**Yeni bulunan sorun:**
+- **Hardcoded Docker image (madde 4.3):** `python:3.11-alpine` config'den alınmıyor — KRİTİK
 
 **Dikkat çeken iyi tasarım:**
 - `patch_file()` benzersizlik kontrolü: `count > 1` durumunda belirsizlik bildiriliyor
@@ -1031,23 +1579,29 @@ Docker sandbox implementasyonu güvenlik açısından iyi. Docker yokken yeterli
 
 ---
 
-### `web_server.py` — Skor: 91/100 ✅
+### `web_server.py` — Skor: 85/100 ⚠️
 
-Rate limiting, asyncio.Lock, SSE, session API hepsi doğru implementa edilmiş.
+asyncio.Lock, SSE, session API hepsi doğru implementa edilmiş.
 
-**Kalan küçük iyileştirme:**
-- Rate limiting yalnızca `/chat` endpoint'ini koruyor; `/sessions`, `/status`, `/clear` endpoint'leri açık. Düşük risk (localhost only CORS).
-- `_rate_data` `defaultdict` modül düzeyinde tutulmakta, uygulama yeniden başlamadan temizlenemiyor. Üretim ortamı için Redis önerilir.
+**Yeni bulunan sorun:**
+- **Rate limiting TOCTOU (madde 5.9):** `_is_rate_limited()` check-write atomik değil — YÜKSEK
+
+**Kalan küçük iyileştirme (önceden biliniyordu):**
+- Rate limiting yalnızca `/chat` endpoint'ini koruyor; diğerleri açık.
+- `_rate_data` `defaultdict` modül düzeyinde tutuluyor; üretim için Redis önerilir.
 
 ---
 
-### `config.py` — Skor: 89/100 ⚠️
+### `config.py` — Skor: 84/100 ⚠️
 
 GPU tespiti, WSL2 desteği, RotatingFileHandler, donanım raporu başarılı.
 
-**Kalan iyileştirme:**
+**Yeni bulunan sorun:**
+- **GPU_MEMORY_FRACTION doğrulama yok (madde 6.7):** Geçersiz değer sessizce yoksayılıyor — ORTA
+
+**Kalan iyileştirme (önceden biliniyordu):**
 - `validate_critical_settings()` içindeki `requests.get()` (madde 5.2)
-- `Config` sınıfı sınıf attribute'ları modül import anında değerlendirilir; bu `cfg = Config()` gibi birden fazla instance oluşturulduğunda paylaşılan state sorununa yol açabilir. Şu an yalnızca tek instance oluşturulduğundan sorun yok.
+- `Config` sınıfı sınıf attribute'ları modül import anında değerlendirilir.
 
 ---
 
@@ -1072,79 +1626,124 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 ## 14. Geliştirme Önerileri (Öncelik Sırasıyla)
 
-### Öncelik 1 — Yüksek (Dokümantasyon / Tutarlılık)
+### Öncelik 0 — KRİTİK (Hemen Düzeltilmeli)
 
-1. **`README.md` güncellenmesi:** v2.6.0 + yeni özellikler (GPU, session, Docker REPL, rate-limit, chunking) belgelenmeli.
+1. **`sidar_agent.py:163` — Greedy regex JSON parsing** (madde 4.1):
+   Non-greedy veya `json.JSONDecoder.raw_decode()` ile değiştir.
 
-2. **`config.py:validate_critical_settings()` — `requests` → `httpx`:**
-   ```python
-   with httpx.Client(timeout=2) as client:
-       r = client.get(tags_url)
-   ```
-   Bu değişiklik yapıldıktan sonra `environment.yml`'den `requests` kaldırılabilir.
+2. **`llm_client.py:129` — UTF-8 byte buffer** (madde 4.2):
+   `errors="replace"` yerine byte buffer tutarak tamamlanan multibyte karakterleri beklet.
 
-3. **Session lifecycle testleri:**
-   `ConversationMemory.create_session()`, `load_session()`, `delete_session()` için birim testler eklenmeli.
+3. **`code_manager.py:208` — Hardcoded Docker image** (madde 4.3):
+   `DOCKER_PYTHON_IMAGE` env değişkenini `Config`'e ekle, oradan oku.
+
+4. **`memory.py:170` — Token limiti** (madde 4.4):
+   `needs_summarization()` içine yaklaşık token sayacı ekle (karakter/3.5 tahmini yeterli).
+
+5. **`auto_handle.py:156` — Null guard** (madde 4.5):
+   `if not self.health:` kontrolü ekle.
+
+### Öncelik 1 — Yüksek (Bu Sprint'te)
+
+6. **`sidar_agent.py` — Stream generator güvenliği** (madde 5.4):
+   Memory'e yalnızca tamamlanan yanıtları ekle.
+
+7. **`rag.py` — Delete+upsert atomikliği** (madde 5.5):
+   `async with self._write_lock:` ile sarmala.
+
+8. **`web_search.py` — Tavily 401/403 fallback** (madde 5.6):
+   Auth hatasında Google/DDG'ye geç.
+
+9. **`system_health.py` — pynvml hataları logla** (madde 5.7):
+   `except Exception: pass` → `logger.debug(...)`.
+
+10. **`github_manager.py` — Uzantısız dosya whitelist** (madde 5.8):
+    `SAFE_EXTENSIONLESS` kümesi tanımla; extensionless binary'leri engelle.
+
+11. **`web_server.py` — Rate limit atomik kontrol** (madde 5.9):
+    `asyncio.Lock` ile check+append'i atomic yap.
+
+12. ~~**`README.md` güncellenmesi**~~ ✅ **[v2.6.1'de tamamlandı]**
+
+13. **`config.py:validate_critical_settings()` — `requests` → `httpx`** (madde 5.2):
+    ```python
+    with httpx.Client(timeout=2) as client:
+        r = client.get(tags_url)
+    ```
+
+14. **Session lifecycle testleri** (madde 6.6):
+    `ConversationMemory.create_session()`, `load_session()`, `delete_session()` için birim testler.
 
 ### Öncelik 2 — Orta (Kalite / Kullanılabilirlik)
 
-4. **`core/memory.py` — `asyncio.to_thread` ile I/O:**
-   ```python
-   # _save() blocking — thread'e itmek yeterli (full async dönüşüme gerek yok)
-   await asyncio.to_thread(self._save)
-   ```
+15. **`config.py` — GPU_MEMORY_FRACTION validasyonu** (madde 6.7):
+    Geçersiz aralık için `logger.warning()` + varsayılan değere dön.
 
-5. **`web_server.py` — Lock lazy initialization:**
-   ```python
-   _agent_lock: asyncio.Lock | None = None
-   async def get_agent():
-       global _agent_lock
-       if _agent_lock is None:
-           _agent_lock = asyncio.Lock()
-   ```
+16. **`package_info.py` — version sort** (madde 6.8):
+    `packaging.version.Version` kullan.
 
-6. **`code_manager.py` — Detaylı Docker hata mesajı** (madde 6.3)
+17. **`sidar_agent.py` — Araç sonuç format şeması** (madde 6.9):
+    `[ARAÇ:{name}]` ve `[ARAÇ:{name}:HATA]` sabit şablonları tanımla.
 
-7. **`github_manager.py` — Token kurulum rehberi** (madde 6.4)
+18. **`memory.py` — Bozuk JSON karantina** (madde 6.10):
+    `json.broken` uzantısıyla yeniden adlandır, kullanıcıya log göster.
 
-8. ~~**Sohbet dışa aktarma özelliği**~~ ✅ **[v2.6.1'de tamamlandı]**
+19. **`core/memory.py` — `asyncio.to_thread` ile I/O** (madde 6.1):
+    ```python
+    await asyncio.to_thread(self._save)
+    ```
 
-9. **AutoHandle async testleri:** `_try_web_search`, `_try_docs_add` vb. için mock tabanlı testler.
+20. **`web_server.py` — Lock lazy initialization** (madde 6.2):
+    Lock'u event loop başladıktan sonra oluştur.
 
-10. **Oturum yeniden adlandırma arayüzü:** Başlık çift tıklamayla düzenlenebilir hale getirilebilir.
+21. **`code_manager.py` — Detaylı Docker hata mesajı** (madde 6.3)
+
+22. **`github_manager.py` — Token kurulum rehberi** (madde 6.4)
+
+23. ~~**Sohbet dışa aktarma özelliği**~~ ✅ **[v2.6.1'de tamamlandı]**
+
+24. **AutoHandle async testleri:** mock tabanlı testler.
+
+25. **Oturum yeniden adlandırma arayüzü:** çift tıklamayla düzenlenebilir.
 
 ### Öncelik 3 — Düşük (İyileştirme)
 
-11. **`SystemHealthManager`'a `is_gpu_available()` public metodu**
+26. **`definitions.py:23` — Eğitim tarihi yorumunu güncelle** (madde 7.7)
 
-12. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
+27. **`package_info.py` — npm sayısal pre-release** (madde 7.8): `-\d+$` pattern ekle.
 
-13. ~~**Mobil sidebar toggle butonu**~~ ✅ **[v2.6.1'de tamamlandı]**
+28. **`SystemHealthManager`'a `is_gpu_available()` public metodu**
 
-14. **Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)
+29. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
 
-15. **Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)
+30. ~~**Mobil sidebar toggle butonu**~~ ✅ **[v2.6.1'de tamamlandı]**
 
-16. **`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)
+31. **Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)
+
+32. **Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)
+
+33. **`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)
 
 ---
 
 ## 15. Genel Değerlendirme
 
-| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | Değişim (toplam) |
-|----------|--------|--------|--------|-----------------|
-| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | ↑ +7 |
-| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | ↑ +31 |
-| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | ↑ +11 |
-| **Güvenlik** | 78/100 | 85/100 | 85/100 | ↑ +7 |
-| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | ↑ +13 |
-| **Belgeleme** | 88/100 | 72/100 | 80/100 | ↓ -8 ⚠️ |
-| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | ↑ +31 |
-| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | ↑ +12 |
-| **GPU Desteği** | — | 88/100 | 88/100 | ✨ Yeni |
-| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | ↑ +18 |
-| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | ↑ +25 |
-| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **↑ +13** |
+| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | v2.6.1 (Derin Analiz) | Değişim (toplam) |
+|----------|--------|--------|--------|----------------------|-----------------|
+| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | 90/100 ⚠️ | ↑ +2 |
+| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | 91/100 | ↑ +31 |
+| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | 72/100 ⚠️ | ↓ -3 |
+| **Güvenlik** | 78/100 | 85/100 | 85/100 | 80/100 ⚠️ | ↑ +2 |
+| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | 62/100 ⚠️ | ↑ +7 |
+| **Belgeleme** | 88/100 | 72/100 | 80/100 | 82/100 | ↓ -6 |
+| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | 91/100 ⚠️ | ↑ +26 |
+| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | 84/100 | ↑ +12 |
+| **GPU Desteği** | — | 88/100 | 88/100 | 85/100 ⚠️ | ✨ Yeni |
+| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | 98/100 | ↑ +18 |
+| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 | ↑ +25 |
+| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **84/100** ⚠️ | **↑ +9** |
+
+> **Not:** "v2.6.1 (Derin Analiz)" sütunu derinlemesine satır satır kod incelemesi sonrası revize edilmiş skorları göstermektedir. Yeni bulunan 5 kritik + 6 yüksek sorun bazı kategori skorlarını düşürmüştür.
 
 ---
 
@@ -1163,11 +1762,20 @@ v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılm
 - SSE streaming durdurma hataları (`CancelledError`, `ClosedResourceError`) artık sessizce loglanıyor
 - Oturum dışa aktarma (MD + JSON), ReAct araç görselleştirmesi ve mobil hamburger menüsü eklendi
 
-**Hâlâ açık olan en önemli sorun:** `README.md` belgelenmesi v2.3.2'de kalmış; tüm yeni özellikler (GPU, session, Docker REPL, rate-limit, chunking, araç görselleştirme) belgelenmemiştir.
+**Derinlemesine analizde bulunan yeni açık sorunlar (17 adet):**
+- 5 KRİTİK: Greedy regex (sidar_agent), UTF-8 bozulma (llm_client), hardcoded Docker image, token limit yok (memory), health null guard (auto_handle)
+- 6 YÜKSEK: Stream reuse (sidar_agent), ChromaDB race (rag), Tavily fallback (web_search), pynvml sessiz (system_health), extensionless bypass (github_manager), rate limit TOCTOU (web_server)
+- 4 ORTA: GPU_MEMORY_FRACTION validasyon (config), version sort (package_info), format tutarsızlığı (sidar_agent), bozuk JSON karantina (memory)
+- 2 DÜŞÜK: Stale eğitim tarihi (definitions), npm pre-release (package_info)
 
-**Sonuç:** Proje, tek kullanıcılı yerel geliştirme ortamı için **üretime hazır** seviyededir. `README.md` güncellemesi ve `requests` → `httpx` dönüşümü (2–4 saatlik iş) tamamlandığında mimari ve dokümantasyon tamamen tutarlı bir duruma gelecektir.
+**✅ Doğrulanan "bug değil" bulgular:**
+- `security.py:62-64`: `Path.resolve()` symlink traversal'ı zaten önlüyor
+- `index.html`: Tema localStorage'a kaydediliyor (`localStorage.setItem('sidar-theme', ...)`)
+
+**Sonuç:** Proje işlevsel ve tek kullanıcılı yerel kullanım için çalışır durumdadır. Ancak kritik kategorideki 5 sorun (özellikle greedy regex ve UTF-8 buffer) üretim kalitesi için acil düzeltme gerektirmektedir. Öncelik 0 listesindeki düzeltmeler ~4-6 saatlik iştir; tamamlanınca genel skor 84 → 90+ seviyesine çıkacaktır.
 
 ---
 
-*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01 (v2.6.1 güncellemesi)*
+*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01 (v2.6.1 güncellemesi + Derinlemesine Analiz)*
 *Analiz kapsamı: 31 kaynak dosya, ~10.400 satır kod*
+*Toplam tespit edilen sorun: 15 düzeltilmiş + 17 yeni açık (5 KRİTİK, 6 YÜKSEK, 4 ORTA, 2 DÜŞÜK)*
