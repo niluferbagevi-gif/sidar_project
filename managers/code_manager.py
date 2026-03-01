@@ -26,9 +26,10 @@ class CodeManager:
 
     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
 
-    def __init__(self, security: SecurityManager, base_dir: Path) -> None:
+    def __init__(self, security: SecurityManager, base_dir: Path, docker_image: str = "python:3.11-alpine") -> None:
         self.security = security
         self.base_dir = base_dir
+        self._docker_image = docker_image
         self._lock = threading.RLock()
         
         # Metrikler
@@ -205,7 +206,7 @@ class CodeManager:
 
             # Konteyneri başlat (Arka planda ayrılmış olarak)
             container = self.docker_client.containers.run(
-                image="python:3.11-alpine", # Çok hafif ve hızlı bir imaj
+                image=self._docker_image,
                 command=command,
                 detach=True,
                 remove=False, # Çıktıyı okuyabilmek için anında silmiyoruz, manuel sileceğiz
@@ -241,7 +242,7 @@ class CodeManager:
                 return True, "(Kod başarıyla çalıştı ancak konsola bir çıktı üretmedi)"
 
         except docker.errors.ImageNotFound:
-             return False, "Çalıştırma hatası: 'python:3.11-alpine' imajı bulunamadı. Lütfen terminalde 'docker pull python:3.11-alpine' komutunu çalıştırın."
+             return False, f"Çalıştırma hatası: '{self._docker_image}' imajı bulunamadı. Lütfen terminalde 'docker pull {self._docker_image}' komutunu çalıştırın."
         except Exception as exc:
             return False, f"Docker çalıştırma hatası: {exc}"
 

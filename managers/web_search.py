@@ -131,6 +131,16 @@ class WebSearchManager:
                 lines.append(f"   → {href}\n")
 
             return True, "\n".join(lines)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (401, 403):
+                logger.error("Tavily kimlik doğrulama hatası (%d) — yedek motora geçiliyor.", exc.response.status_code)
+                if self.google_key and self.google_cx:
+                    return await self._search_google(query, n)
+                if self._ddg_available:
+                    return await self._search_duckduckgo(query, n)
+                return False, "[HATA] Tavily kimlik doğrulama başarısız; yedek motor bulunamadı."
+            logger.warning("Tavily API hatası: %s", exc)
+            return False, f"[HATA] Tavily: {exc}"
         except Exception as exc:
             logger.warning("Tavily API hatası: %s", exc)
             return False, f"[HATA] Tavily: {exc}"

@@ -154,11 +154,15 @@ class AutoHandle:
 
     def _try_health(self, t: str) -> Tuple[bool, str]:
         if re.search(r"sistem.*sağlık|donanım|hardware|cpu|ram|memory.*report|sağlık.*rapor", t):
+            if not self.health:
+                return True, "⚠ Sistem sağlık monitörü başlatılamadı."
             return True, self.health.full_report()
         return False, ""
 
     def _try_gpu_optimize(self, t: str) -> Tuple[bool, str]:
         if re.search(r"gpu.*(optimize|temizle|boşalt|clear)|vram", t):
+            if not self.health:
+                return True, "⚠ Sistem sağlık monitörü başlatılamadı."
             return True, self.health.optimize_gpu_memory()
         return False, ""
 

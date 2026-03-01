@@ -285,6 +285,9 @@ class Config:
     RAG_CHUNK_SIZE:    int = get_int_env("RAG_CHUNK_SIZE", 1000)
     RAG_CHUNK_OVERLAP: int = get_int_env("RAG_CHUNK_OVERLAP", 200)
 
+    # ─── Docker REPL Sandbox ─────────────────────────────────
+    DOCKER_PYTHON_IMAGE: str = os.getenv("DOCKER_PYTHON_IMAGE", "python:3.11-alpine")
+
     # ─── Web Arayüzü ─────────────────────────────────────────
     WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
     WEB_PORT: int = get_int_env("WEB_PORT", 7860)
@@ -338,13 +341,14 @@ class Config:
 
         if cls.AI_PROVIDER == "ollama":
             try:
-                import requests
+                import httpx
                 base = cls.OLLAMA_URL.rstrip("/")
                 if base.endswith("/api"):
                     tags_url = base + "/tags"
                 else:
                     tags_url = base + "/api/tags"
-                r = requests.get(tags_url, timeout=2)
+                with httpx.Client(timeout=2) as client:
+                    r = client.get(tags_url)
                 if r.status_code == 200:
                     logger.info("✅ Ollama bağlantısı başarılı.")
                 else:

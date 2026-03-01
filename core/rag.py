@@ -16,6 +16,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -105,6 +106,9 @@ class DocumentStore:
         self._use_gpu          = use_gpu
         self._gpu_device       = gpu_device
         self._mixed_precision  = mixed_precision
+
+        # ChromaDB delete+upsert atomikliği için lock
+        self._write_lock = threading.Lock()
 
         # Meta verileri yükle
         self._index: Dict[str, Dict] = self._load_index()
@@ -283,13 +287,8 @@ class DocumentStore:
         # 3. ChromaDB'ye parçalayarak (Chunking) ekle
         if self._chroma_available and self.collection:
             try:
-                # Önce eski parçaları temizle (Update senaryosu)
-                self.collection.delete(where={"parent_id": doc_id})
-
-                # Metni parçala
+                # Metni önce parçala (lock dışında — sadece saf hesaplama)
                 chunks = self._recursive_chunk_text(content)
-                
-                # Vektör verilerini hazırla
                 ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
                 metadatas = [
                     {
@@ -298,16 +297,22 @@ class DocumentStore:
                         "tags": ",".join(tags),
                         "parent_id": doc_id,
                         "chunk_index": i
-                    } 
+                    }
                     for i in range(len(chunks))
                 ]
 
+                # delete + upsert atomik olmalı: aynı doc_id için eş zamanlı
+                # çağrılar çakışmasın diye _write_lock ile korunuyor.
+                with self._write_lock:
+                    # Önce eski parçaları temizle (Update senaryosu)
+                    self.collection.delete(where={"parent_id": doc_id})
+                    if chunks:
+                        self.collection.upsert(
+                            ids=ids,
+                            documents=chunks,
+                            metadatas=metadatas
+                        )
                 if chunks:
-                    self.collection.upsert(
-                        ids=ids,
-                        documents=chunks,
-                        metadatas=metadatas
-                    )
                     logger.info("ChromaDB: %s belgesi %d parçaya ayrılarak eklendi.", doc_id, len(chunks))
             except Exception as exc:
                 logger.error("ChromaDB belge ekleme hatası: %s", exc)

@@ -22,6 +22,12 @@ class GitHubManager:
         ".sql", ".env", ".example", ".gitignore", ".dockerignore"
     }
 
+    # Uzantısız ama güvenli olduğu bilinen dosyalar (küçük harf karşılaştırma)
+    SAFE_EXTENSIONLESS = {
+        "makefile", "dockerfile", "procfile", "vagrantfile",
+        "rakefile", "brewfile", "jenkinsfile", "gemfile",
+    }
+
     def __init__(self, token: str, repo_name: str = "") -> None:
         self.token = token
         self.repo_name = repo_name
@@ -138,15 +144,26 @@ class GitHubManager:
             
             # Eğer bu bir dosyaysa, içeriği UTF-8 mi yoksa Binary mi diye kontrol et
             file_name = content_file.name.lower()
-            
-            # Uzantısız dosyalar (Makefile, Dockerfile vb.) için uzantıyı boş varsayıyoruz
+
+            # Uzantıyı çıkar (varsa)
             extension = ""
             if "." in file_name:
                 extension = "." + file_name.split(".")[-1]
 
-            # Uzantı güvenli listede değilse ve bilinen bir uzantısız dosya değilse reddet
+            # Uzantısız dosyalar: yalnızca bilinen-güvenli adlar whitelist'te kabul edilir
+            if not extension and file_name not in self.SAFE_EXTENSIONLESS:
+                return False, (
+                    f"⚠ Güvenlik: '{content_file.name}' uzantısız dosya whitelist'te değil. "
+                    "Binary (ELF, PE vb.) içerebilir; okuma iptal edildi."
+                )
+
+            # Uzantılı dosyalar: yalnızca bilinen metin uzantıları kabul edilir
             if extension and extension not in self.SAFE_TEXT_EXTENSIONS:
-                 return False, f"⚠ Güvenlik/Hata Koruması: '{file_name}' dosyasının binary (ikili) veya desteklenmeyen bir veri formatı (.png, .zip, vb.) olduğu varsayılarak okuma işlemi iptal edildi. Yalnızca metin tabanlı dosyalar okunabilir."
+                return False, (
+                    f"⚠ Güvenlik/Hata Koruması: '{content_file.name}' dosyasının binary (ikili) "
+                    "veya desteklenmeyen bir veri formatı (.png, .zip, vb.) olduğu varsayılarak "
+                    "okuma işlemi iptal edildi. Yalnızca metin tabanlı dosyalar okunabilir."
+                )
 
             # Güvenli olduğuna ikna olduysak, decode et
             decoded = content_file.decoded_content.decode("utf-8", errors="replace")
