@@ -401,6 +401,19 @@ class SidarAgent:
     async def _tool_docs_delete(self, a: str) -> str:
         return self.docs.delete_document(a)
 
+    async def _tool_get_config(self, _: str) -> str:
+        """Çalışma anındaki Config değerlerini döndürür (.env'den yüklenmiş gerçek değerler)."""
+        _SAFE_KEYS = [
+            "AI_PROVIDER", "CODING_MODEL", "TEXT_MODEL", "USE_GPU", "ACCESS_LEVEL",
+            "MAX_REACT_STEPS", "MAX_MEMORY_TURNS", "MEMORY_FILE", "OLLAMA_URL",
+            "GITHUB_REPO", "BASE_DIR", "DEBUG",
+        ]
+        lines = []
+        for key in _SAFE_KEYS:
+            val = getattr(self.cfg, key, "—")
+            lines.append(f"{key}: {val}")
+        return "\n".join(lines)
+
     async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
         """Dispatch tablosu aracılığıyla araç handler'ını çağırır."""
         tool_arg = str(tool_arg).strip()
@@ -429,6 +442,7 @@ class SidarAgent:
             "docs_add":             self._tool_docs_add,
             "docs_list":            self._tool_docs_list,
             "docs_delete":          self._tool_docs_delete,
+            "get_config":           self._tool_get_config,
         }
         handler = dispatch.get(tool_name)
         return await handler(tool_arg) if handler else None

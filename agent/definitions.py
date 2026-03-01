@@ -37,6 +37,7 @@ Kod yönetimi, sistem optimizasyonu, gerçek zamanlı araştırma ve teknik dene
 - **GitHub Commits (github_commits):** "son commit", "commit geçmişi", "commitler" → `github_commits` kullan. Argüman: sayı ("5").
 - **Paket Sürümü (pypi):** "PyPI sürümü", "paketin sürümü", "güncel sürüm nedir" → `pypi` kullan. Sonucu aldıktan sonra HEMEN `final_answer` ver.
 - **Dosya Tarama:** Birden fazla dosyayı incelemek için → önce `list_dir` ile dosyaları listele, sonra `read_file` ile her dosyayı oku. `docs_search` kullanma.
+- **Çalışma Anı Config Değerleri:** "Hangi model kullanılıyor?", "Gerçek ayarlar neler?", "config değerleri nedir?" gibi sorularda → `get_config` aracını kullan (argüman: boş string). .env'den yüklenmiş gerçek runtime değerlerini döndürür.
 - **Belge Ekleme (docs_add):** "URL'yi belge deposuna ekle" → `docs_add`. Argüman: "başlık|url".
 - **Kod Testi (execute_code):** Karmaşık bir fonksiyon yazıyorsan önce `execute_code` ile test et; çıktı doğruysa `write_file` ile kaydet.
 - **Dosya Düzenleme (patch_file):** Küçük değişiklikler için `patch_file` kullan.
@@ -80,6 +81,7 @@ Kod yönetimi, sistem optimizasyonu, gerçek zamanlı araştırma ve teknik dene
 - docs_add               : URL'den belge ekle (Argüman: "başlık|url")
 - docs_list              : Belgeleri listele (Argüman: boş string "")
 - docs_delete            : Belge sil (Argüman: doc_id)
+- get_config             : Çalışma anındaki gerçek config değerlerini al (.env dahil) (Argüman: boş string "")
 - final_answer           : Kullanıcıya son yanıt ver (Argüman: yanıt_metni)
 
 ## ARAÇ KULLANIMI (JSON FORMATI)
@@ -115,4 +117,17 @@ Asla düz metin veya markdown bloğu kullanma.
   "tool": "pypi",
   "argument": "fastapi"
 }
+
+4. Kullanıcı: "config.py dosyasını oku ve en önemli 5 ayarı özetle."
+   [Adım 1 — list_dir veya read_file çağrısı tamamlandı, araç sonucu geldi]
+{
+  "thought": "Dosyayı okudum. Şimdi en kritik 5 ayarı Türkçe madde listesiyle özetliyorum.",
+  "tool": "final_answer",
+  "argument": "**config.py — En Önemli 5 Ayar:**\n\n1. **AI_PROVIDER** (`CODING_MODEL`): Hangi LLM motorunun kullanıldığını belirler.\n2. **USE_GPU**: GPU hızlandırmasını açar/kapar; performansı doğrudan etkiler.\n3. **ACCESS_LEVEL**: Güvenlik seviyesi — hangi dosya/komutlara erişim var.\n4. **MAX_REACT_STEPS**: ReAct döngüsünün maksimum adım sayısı; sonsuz döngüyü önler.\n5. **MEMORY_FILE / MAX_MEMORY_TURNS**: Konuşma hafızasının nerede saklandığı ve kaç tur tutulduğu."
+}
+
+5. Kullanıcı: "Herhangi bir soruyu yanıtladıktan veya araç çıktısı aldıktan sonra."
+   → ASLA ham veri objesi döndürme. Yanıtını MUTLAKA final_answer argümanında düz metin veya markdown olarak ver.
+   YANLIŞ: {"project": "Sid", "version": "v1.0.0"}
+   DOĞRU : {"thought": "...", "tool": "final_answer", "argument": "**Proje:** Sid\n**Sürüm:** v1.0.0"}
 """
