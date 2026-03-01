@@ -779,7 +779,7 @@
     .session-search:focus { border-color: var(--accent); }
     .session-search::placeholder { color: var(--text-muted); }
 
-    /* ── Sidebar Meta Alanı (model, auto-accept, repo, branch) ── */
+    /* ── Sidebar Meta Alanı (model, repo, branch) ── */
     .sidebar-meta {
       padding: 12px 14px 10px;
       border-bottom: 1px solid var(--border);
@@ -809,24 +809,6 @@
       letter-spacing: .2px;
       white-space: nowrap;
     }
-
-    .auto-accept-wrap {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-left: auto;
-      white-space: nowrap;
-    }
-    .auto-accept-wrap input[type="checkbox"] {
-      accent-color: var(--accent2);
-      width: 12px;
-      height: 12px;
-      cursor: pointer;
-    }
-    .auto-accept-wrap:hover { color: var(--text); }
 
     .context-chip {
       display: inline-flex;
@@ -941,7 +923,7 @@
     }
     .pr-view-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,58,237,.08); }
 
-    /* ── Input footer (model chip + auto-accept + hint) ────── */
+    /* ── Input footer (model chip + hint) ────── */
     .input-footer {
       display: flex;
       align-items: center;
@@ -970,22 +952,6 @@
       white-space: nowrap;
       cursor: default;
     }
-
-    .auto-accept-sm {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-    .auto-accept-sm input[type="checkbox"] {
-      accent-color: var(--accent2);
-      width: 11px;
-      height: 11px;
-      cursor: pointer;
-    }
-    .auto-accept-sm:hover { color: var(--text-dim); }
 
     /* ── Mesaj aksiyon butonları (düzenle/kopyala) ───────────── */
     .msg-actions {
