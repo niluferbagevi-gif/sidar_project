@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import json
 import logging
+import subprocess
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -225,6 +226,33 @@ async def delete_session(session_id: str):
             "active_session": agent.memory.active_session_id
         })
     return JSONResponse({"success": False, "error": "Silinemedi."}, status_code=500)
+
+@app.get("/git-info")
+async def git_info():
+    """Git deposu bilgilerini (dal adı, repo adı) döndürür."""
+    _root = Path(__file__).parent
+
+    def _run(cmd):
+        try:
+            return subprocess.check_output(
+                cmd, cwd=str(_root), stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            return ""
+
+    branch  = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+    remote  = _run(["git", "remote", "get-url", "origin"]) or ""
+
+    # GitHub URL'sini "owner/repo" biçimine çevir
+    repo = ""
+    if remote:
+        # https://github.com/owner/repo.git  →  owner/repo
+        # git@github.com:owner/repo.git      →  owner/repo
+        repo = remote.rstrip(".git")
+        repo = repo.split("github.com/")[-1].split("github.com:")[-1]
+
+    return JSONResponse({"branch": branch, "repo": repo or "sidar_project"})
+
 
 @app.post("/clear")
 async def clear():

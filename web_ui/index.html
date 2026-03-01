@@ -214,22 +214,22 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
+      padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
       color: var(--text-dim);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       transition: background 0.15s, color 0.15s;
+      gap: 6px;
     }
     .session-item:hover { background: var(--bg3); color: var(--text); }
     .session-item.active { background: rgba(124,58,237,.12); color: var(--text); border: 1px solid rgba(124,58,237,.3); }
 
     .session-item-title {
-      font-size: 13px;
+      font-size: 12.5px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      flex: 1;
     }
 
     .session-item-delete {
@@ -779,6 +779,214 @@
     .session-search:focus { border-color: var(--accent); }
     .session-search::placeholder { color: var(--text-muted); }
 
+    /* ── Sidebar Meta Alanı (model, auto-accept, repo, branch) ── */
+    .sidebar-meta {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .meta-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .model-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      background: rgba(124,58,237,.13);
+      border: 1px solid rgba(124,58,237,.3);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: .2px;
+      white-space: nowrap;
+    }
+
+    .auto-accept-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .auto-accept-wrap input[type="checkbox"] {
+      accent-color: var(--accent2);
+      width: 12px;
+      height: 12px;
+      cursor: pointer;
+    }
+    .auto-accept-wrap:hover { color: var(--text); }
+
+    .context-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .context-chip:hover { border-color: var(--border2); color: var(--text); }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      background: rgba(124,58,237,.1);
+      border: 1px solid rgba(124,58,237,.25);
+      border-radius: 20px;
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 500;
+      letter-spacing: .3px;
+    }
+
+    /* ── Oturum item meta bilgisi (diff stats + zaman) ─────── */
+    .session-item-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .session-item-stats {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+    }
+
+    .diff-add { color: var(--green); font-weight: 600; }
+    .diff-del { color: var(--red);   font-weight: 600; }
+    .session-time {
+      color: var(--text-muted);
+      font-size: 10px;
+      margin-left: auto;
+    }
+
+    /* ── PR Bar ────────────────────────────────────────────── */
+    .pr-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      gap: 10px;
+    }
+
+    .pr-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--text-dim);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .pr-base-branch {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .pr-arrow {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .pr-head-branch {
+      color: var(--accent);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .pr-view-btn {
+      padding: 3px 10px;
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
+      text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .pr-view-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,58,237,.08); }
+
+    /* ── Input footer (model chip + auto-accept + hint) ────── */
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      gap: 10px;
+    }
+
+    .input-meta-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .model-chip-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      background: rgba(124,58,237,.1);
+      border: 1px solid rgba(124,58,237,.2);
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .auto-accept-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .auto-accept-sm input[type="checkbox"] {
+      accent-color: var(--accent2);
+      width: 11px;
+      height: 11px;
+      cursor: pointer;
+    }
+    .auto-accept-sm:hover { color: var(--text-dim); }
+
     /* ── Mesaj aksiyon butonları (düzenle/kopyala) ───────────── */
     .msg-actions {
       display: flex;
@@ -937,6 +1145,32 @@
   <div class="main-wrapper">
 
     <div class="sidebar">
+      <!-- Meta bilgi alanı: model, auto-accept, repo, branch, etiket -->
+      <div class="sidebar-meta">
+        <div class="meta-row">
+          <span class="model-chip">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0L7.5 4.5H12L8.25 7.25L9.75 12L6 9.25L2.25 12L3.75 7.25L0 4.5H4.5Z"/></svg>
+            Sonnet 4.6
+          </span>
+          <label class="auto-accept-wrap" title="Düzenlemeleri otomatik kabul et">
+            <input type="checkbox" id="auto-accept-sidebar" onchange="syncAutoAccept('sidebar')" />
+            <span>Auto accept edits</span>
+          </label>
+        </div>
+        <div class="meta-row">
+          <div class="context-chip" onclick="openRepoModal()" title="Depo seç">
+            📁 <span id="sidebar-repo-label">sidar_project</span>
+          </div>
+          <div class="context-chip" onclick="openBranchModal()" title="Dal seç">
+            ⎇ <span id="sidebar-branch-label">main</span>
+          </div>
+        </div>
+        <div class="meta-row">
+          <span class="tag-chip" id="session-tag">deneme</span>
+        </div>
+      </div>
+
+      <!-- Yeni sohbet + Arama -->
       <div class="sidebar-header">
         <button class="btn-new-chat" onclick="createNewSession()">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1008,6 +1242,20 @@
         <div id="messages"></div>
         <div class="chat-footer">
           <div class="chat-input-wrap">
+
+            <!-- PR / Git Dal Çubuğu -->
+            <div class="pr-bar" id="pr-bar" style="display:none">
+              <div class="pr-info">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0">
+                  <path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0Z"/>
+                </svg>
+                <span class="pr-base-branch" id="pr-base">main</span>
+                <span class="pr-arrow">←</span>
+                <span class="pr-head-branch" id="pr-head">claude/branch</span>
+              </div>
+              <a class="pr-view-btn" id="pr-view-btn" href="#" target="_blank">View PR</a>
+            </div>
+
             <div id="attached-file-preview"></div>
             <div class="chat-input-box">
               <label class="attach-label" title="Dosya ekle (metin/kod)">
@@ -1025,11 +1273,26 @@
               </button>
               <button id="send-btn" onclick="sendMessage()">Gönder</button>
             </div>
-            <div class="chat-hint">
-              <span>Enter → gönder</span>&nbsp;·&nbsp;
-              <span>Shift+Enter → yeni satır</span>&nbsp;·&nbsp;
-              <span>⌨ kısayollar</span>
+
+            <!-- Input footer: model chip + auto-accept + ipucu -->
+            <div class="input-footer">
+              <div class="input-meta-left">
+                <span class="model-chip-sm">
+                  <svg width="8" height="8" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0L7.5 4.5H12L8.25 7.25L9.75 12L6 9.25L2.25 12L3.75 7.25L0 4.5H4.5Z"/></svg>
+                  Sonnet 4.6
+                </span>
+                <label class="auto-accept-sm" title="Düzenlemeleri otomatik kabul et">
+                  <input type="checkbox" id="auto-accept-input" onchange="syncAutoAccept('input')" />
+                  <span>Auto accept edits</span>
+                </label>
+              </div>
+              <div class="chat-hint" style="margin:0">
+                <span>Enter → gönder</span>&nbsp;·&nbsp;
+                <span>Shift+Enter → yeni satır</span>&nbsp;·&nbsp;
+                <span onclick="openShortcuts()" style="cursor:pointer;text-decoration:underline">⌨ kısayollar</span>
+              </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -1148,13 +1411,67 @@ function applyStoredTheme() {
   if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀';
 }
 
+/* ─── Auto-accept senkronizasyonu ───────────────────────── */
+function syncAutoAccept(source) {
+  const sidebarCb = document.getElementById('auto-accept-sidebar');
+  const inputCb   = document.getElementById('auto-accept-input');
+  const val = source === 'sidebar' ? sidebarCb.checked : inputCb.checked;
+  if (sidebarCb) sidebarCb.checked = val;
+  if (inputCb)   inputCb.checked   = val;
+  localStorage.setItem('sidar-auto-accept', val ? '1' : '0');
+}
+
+function applyStoredAutoAccept() {
+  const val = localStorage.getItem('sidar-auto-accept') !== '0';
+  const sidebarCb = document.getElementById('auto-accept-sidebar');
+  const inputCb   = document.getElementById('auto-accept-input');
+  if (sidebarCb) sidebarCb.checked = val;
+  if (inputCb)   inputCb.checked   = val;
+}
+
+/* ─── Git bilgisi yükleme ───────────────────────────────── */
+async function loadGitInfo() {
+  try {
+    const data = await (await fetch('/git-info')).json();
+    const branch = data.branch || 'main';
+    const repo   = data.repo   || '';
+
+    // Sidebar dal etiketi
+    const sbl = document.getElementById('sidebar-branch-label');
+    if (sbl) sbl.textContent = branch;
+
+    // Sidebar repo etiketi (sadece repo adı)
+    const srl = document.getElementById('sidebar-repo-label');
+    if (srl) {
+      const short = repo.split('/').pop() || repo;
+      srl.textContent = short || 'sidar_project';
+    }
+
+    // PR Çubuğu: sadece main dışı dallarda göster
+    const prBar = document.getElementById('pr-bar');
+    if (prBar && branch && branch !== 'main' && branch !== 'master') {
+      document.getElementById('pr-base').textContent = 'main';
+      document.getElementById('pr-head').textContent = branch;
+      const viewBtn = document.getElementById('pr-view-btn');
+      if (viewBtn && repo) {
+        viewBtn.href = `https://github.com/${repo}/compare/main...${branch}`;
+      }
+      prBar.style.display = 'flex';
+    }
+  } catch (e) {
+    // Git bilgisi alınamazsa sessizce geç
+  }
+}
+
 /* ─── Başlangıç ve Oturumlar (Sessions) ─────────────────── */
 window.addEventListener('DOMContentLoaded', async () => {
   applyStoredTheme();
+  applyStoredAutoAccept();
   await loadSessions();
   if (currentSessionId) {
     await loadSessionHistory(currentSessionId, false);
   }
+  loadGitInfo();
 });
 
 async function loadSessions() {
@@ -1169,6 +1486,16 @@ async function loadSessions() {
   }
 }
 
+function formatRelTime(ts) {
+  if (!ts) return '';
+  const diffSec = Math.floor((Date.now() / 1000) - ts);
+  if (diffSec < 60)  return 'az önce';
+  if (diffSec < 3600) return `${Math.floor(diffSec/60)} dk önce`;
+  if (diffSec < 86400) return `${Math.floor(diffSec/3600)} sa önce`;
+  if (diffSec < 604800) return `${Math.floor(diffSec/86400)} gün önce`;
+  return `${Math.floor(diffSec/604800)} hf önce`;
+}
+
 function renderSessionList(sessions) {
   const listEl = document.getElementById('session-list');
   listEl.innerHTML = '';
@@ -1178,8 +1505,20 @@ function renderSessionList(sessions) {
     const div = document.createElement('div');
     div.className = `session-item ${isActive ? 'active' : ''}`;
     div.onclick = () => selectSession(s.id);
+    const userCount = s.user_count || 0;
+    const astCount  = s.asst_count || 0;
+    const relTime   = formatRelTime(s.updated_at);
+    const statsHtml = (userCount > 0 || astCount > 0)
+      ? `<span class="diff-add">+${userCount}</span><span class="diff-del">-${astCount}</span>`
+      : '';
     div.innerHTML = `
-      <div class="session-item-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
+      <div class="session-item-main">
+        <div class="session-item-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
+        <div class="session-item-stats">
+          ${statsHtml}
+          <span class="session-time">${relTime}</span>
+        </div>
+      </div>
       <button class="session-item-delete" onclick="deleteSession('${s.id}', event)" title="Sohbeti Sil">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
           <path d="M5.5 1a.5.5 0 0 0-.5.5v1h6v-1a.5.5 0 0 0-.5-.5h-5ZM2 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-1v9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-9h-1a.5.5 0 0 1-.5-.5Zm3 1v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-9H5Z"/>
@@ -1584,6 +1923,8 @@ function filterRepos(q) {
 function selectRepo(name) {
   currentRepo = name;
   document.getElementById('repo-label').textContent = name;
+  const srl = document.getElementById('sidebar-repo-label');
+  if (srl) srl.textContent = name.split('/').pop() || name;
   closeModal('repo-modal');
 }
 
@@ -1616,6 +1957,8 @@ function filterBranches(q) {
 function selectBranch(name) {
   currentBranch = name;
   document.getElementById('branch-label').textContent = name;
+  const sbl = document.getElementById('sidebar-branch-label');
+  if (sbl) sbl.textContent = name;
   closeModal('branch-modal');
 }
 
