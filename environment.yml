@@ -21,12 +21,11 @@ dependencies:
   #   GPU YOK ise pip bölümündeki extra-index-url satırını silin;
   #   torch ve torchvision standart PyPI CPU build'ı ile kurulur.
   - pip:
-      # ── PyTorch CUDA 12.1 wheel index'i EK kaynak olarak ekle ────────────────
+      # ── PyTorch CUDA 12.4 wheel index'i EK kaynak olarak ekle ────────────────
       # --extra-index-url: PyPI korunur, PyTorch CUDA wheel'ları ek kaynak olur.
       # (--index-url kullanmayın: PyPI'ı devre dışı bırakır, diğer paketler bulunamaz)
-      # Daha güncel sürücünüz varsa cu124 kullanabilirsiniz:
-      #   --extra-index-url https://download.pytorch.org/whl/cu124
-      - --extra-index-url https://download.pytorch.org/whl/cu121
+      # docker-compose.yml ile tutarlı: cu124 (CUDA 12.4)
+      - --extra-index-url https://download.pytorch.org/whl/cu124
 
       # ── Temel ─────────────────────────────────────────────────────────────
       - python-dotenv>=1.0.0
@@ -37,8 +36,8 @@ dependencies:
       - httpx>=0.25.0
       - pydantic>=2.4.0
 
-      # ── PyTorch — WSL2 CUDA 12.1 (RTX 3070 Ti / Ampere) ──────────────────
-      # cu121 index'ten CUDA 12.1 build seçilir (CPU-only yerine)
+      # ── PyTorch — CUDA 12.4 (cu124 wheel) ────────────────────────────────────
+      # cu124 index'ten CUDA 12.4 build seçilir (docker-compose.yml ile uyumlu)
       - torch>=2.4.0
       - torchvision>=0.19.0
 

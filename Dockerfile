@@ -78,9 +78,11 @@ USER sidar
 # Web arayüzü portu
 EXPOSE 7860
 
-# Sağlık kontrolü
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD ps aux | grep "[p]ython" || exit 1
+# Sağlık kontrolü — HTTP servis yanıtını doğrular (web_server.py modu)
+# Web modu: curl ile /status endpoint'i kontrol edilir
+# CLI modu: python sürecini kontrol et (fallback)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -sf http://localhost:7860/status > /dev/null 2>&1 || ps aux | grep "[p]ython" || exit 1
 
 # Varsayılan başlatma (CLI)
 # Web için: docker run ... python web_server.py

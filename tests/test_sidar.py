@@ -190,7 +190,7 @@ def test_system_health_manager_cpu_only():
     """SystemHealthManager'ın GPU olmadan CPU/RAM raporunu ürettiğini test eder."""
     health = SystemHealthManager(use_gpu=False)
 
-    assert health._gpu_available is False
+    assert health.get_gpu_info()["available"] is False
 
     report = health.full_report()
     assert "Sistem Sağlık Raporu" in report
@@ -371,7 +371,9 @@ def test_rag_chunking_small_text(test_config):
     assert doc_id is not None
     ok, retrieved = docs.get_document(doc_id)
     assert ok is True
-    assert retrieved == small
+    # get_document() "[doc_id] başlık\nKaynak: ...\n\nİçerik" formatında döner
+    content_part = retrieved.split("\n\n", 1)[1]
+    assert content_part == small
 
 
 def test_rag_chunking_large_text(test_config):
@@ -383,7 +385,9 @@ def test_rag_chunking_large_text(test_config):
     assert doc_id is not None
     ok, retrieved = docs.get_document(doc_id)
     assert ok is True
-    assert len(retrieved) == len(large)
+    # get_document() "[doc_id] başlık\nKaynak: ...\n\nİçerik" formatında döner
+    content_part = retrieved.split("\n\n", 1)[1]
+    assert len(content_part) == len(large)
 
 
 # ─────────────────────────────────────────────
@@ -403,10 +407,8 @@ async def test_auto_handle_clear_command(agent):
     # Önce birkaç mesaj ekle
     agent.memory.add("user", "test mesajı")
     handled, response = await agent.auto.handle("belleği temizle")
-    # Bu komut tanınmalı (handled=True) veya tanınmamalı (handled=False)
-    # Her iki durumda da çökme olmamalı
-    assert isinstance(handled, bool)
-    assert isinstance(response, str)
+    assert handled is True
+    assert "temizlendi" in response.lower()
 
 
 # ─────────────────────────────────────────────

@@ -61,7 +61,7 @@ class SidarAgent:
     Tamamen asenkron ağ istekleri, stream, yapısal veri ve sonsuz vektör hafıza uyumlu yapı.
     """
 
-    VERSION = "2.6.0"  # GPU Hızlandırma + WSL2 Desteği
+    VERSION = "2.6.1"  # GPU Hızlandırma + WSL2 Desteği + Uyumsuzluk Yamaları
 
     def __init__(self, cfg: Config = None) -> None:
         self.cfg = cfg or Config()
@@ -676,11 +676,12 @@ class SidarAgent:
         )
         
         try:
-            self.docs.add_document(
+            await asyncio.to_thread(
+                self.docs.add_document,
                 title=f"Sohbet Geçmişi Arşivi ({time.strftime('%Y-%m-%d %H:%M')})",
                 content=full_turns_text,
                 source="memory_archive",
-                tags=["memory", "archive", "conversation"]
+                tags=["memory", "archive", "conversation"],
             )
             logger.info("Eski konuşmalar RAG (Vektör) belleğine arşivlendi.")
         except Exception as exc:

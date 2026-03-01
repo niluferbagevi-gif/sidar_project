@@ -209,7 +209,7 @@ class Config:
 
     # ─── Genel ───────────────────────────────────────────────
     PROJECT_NAME: str = "Sidar"
-    VERSION: str      = "2.6.0"
+    VERSION: str      = "2.6.1"
     DEBUG_MODE: bool  = get_bool_env("DEBUG_MODE", False)
 
     # ─── Dizinler ────────────────────────────────────────────

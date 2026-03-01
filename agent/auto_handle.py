@@ -69,6 +69,9 @@ class AutoHandle:
             return False, ""
 
         # ── Temel araçlar (Senkron) ──────────────────────────
+        result = self._try_clear_memory(t)
+        if result[0]: return result
+
         result = self._try_list_directory(t, text)
         if result[0]: return result
 
@@ -260,6 +263,19 @@ class AutoHandle:
             t,
         ):
             return True, self.code.security.status_report()
+        return False, ""
+
+    def _try_clear_memory(self, t: str) -> Tuple[bool, str]:
+        """'belleği temizle', 'sohbeti sıfırla' gibi doğal dil komutlarını işler."""
+        if re.search(
+            r"bell[eə][ğg]i?\s+(temizle|sıfırla|sil|resetle)"
+            r"|sohbet[i]?\s+(temizle|sıfırla|sil|resetle)"
+            r"|konuşma[yı]?\s+(temizle|sıfırla|sil|resetle)"
+            r"|hafıza[yı]?\s+(temizle|sıfırla|sil|resetle)",
+            t,
+        ):
+            self.memory.clear()
+            return True, "✓ Konuşma belleği temizlendi."
         return False, ""
 
     # ─────────────────────────────────────────────
