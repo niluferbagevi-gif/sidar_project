@@ -164,7 +164,20 @@ async def chat(request: Request):
         return JSONResponse({"error": "Mesaj boş olamaz."}, status_code=400)
 
     async def sse_generator():
-        """Asenkron SSE akışı: Ajan yanıtlarını dinler ve yayar."""
+        """Asenkron SSE akışı: Ajan yanıtlarını dinler ve yayar.
+
+        LLM büyük bir dosya okurken veya uzun yanıt üretirken istemciye
+        hiçbir veri gönderilmeyebilir — bu sessizlik tarayıcı SSE
+        bağlantısının düşmesine neden olur.  Her 10 saniyede bir SSE
+        yorum satırı (': keepalive') gönderilerek bağlantı canlı tutulur;
+        tarayıcı EventSource API'si bu satırları sessizce yok sayar.
+        """
+        _KEEPALIVE_INTERVAL = 10.0  # saniye
+
+        async def _next_or_timeout(aiter):
+            """__anext__ çağrısını timeout ile sarar; TimeoutError fırlatır."""
+            return await asyncio.wait_for(aiter.__anext__(), timeout=_KEEPALIVE_INTERVAL)
+
         try:
             agent = await get_agent()
 
@@ -173,9 +186,20 @@ async def chat(request: Request):
                 title = user_message[:30] + "..." if len(user_message) > 30 else user_message
                 agent.memory.update_title(title)
 
-            # Ajanın asenkron stream yanıtını bekle ve akıt
+            # Ajanın asenkron stream yanıtını keepalive korumasıyla akıt.
+            # _next_or_timeout: 10s içinde chunk gelmezse TimeoutError → keepalive gönderilir.
             _TOOL_SENTINEL = re.compile(r'^\x00TOOL:(.+)\x00$')
-            async for chunk in agent.respond(user_message):
+            _aiter = agent.respond(user_message).__aiter__()
+            while True:
+                try:
+                    chunk = await _next_or_timeout(_aiter)
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError:
+                    # LLM henüz yanıt üretmedi; bağlantıyı canlı tut
+                    yield ": keepalive\n\n"
+                    continue
+
                 if await request.is_disconnected():
                     logger.info("İstemci bağlantıyı kesti, stream durduruluyor.")
                     return
