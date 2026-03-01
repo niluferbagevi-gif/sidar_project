@@ -163,6 +163,9 @@ class SidarAgent:
         context = self._build_context()
         full_system = SIDAR_SYSTEM_PROMPT + "\n\n" + context
 
+        _last_tool: str = ""          # Son çağrılan araç adı
+        _last_tool_result: str = ""   # Son araç sonucu (tekrar tespitinde kullanılır)
+
         for step in range(self.cfg.MAX_REACT_STEPS):
             # 1. LLM Çağrısı (Async Stream)
             # ReAct döngüsü: düşünme/planlama/özetleme → TEXT_MODEL
@@ -238,12 +241,27 @@ class SidarAgent:
                     yield str(tool_arg)
                     return
 
+                # ── Tekrar tespiti: aynı araç art arda 2+ kez çağrılıyorsa
+                # modeli zorla final_answer ver.
+                if tool_name == _last_tool and _last_tool_result:
+                    loop_correction = (
+                        f"[Sistem Uyarısı] '{tool_name}' aracı art arda çağrıldı — döngü tespit edildi.\n"
+                        f"Bu araç zaten aşağıdaki sonucu döndürdü:\n===\n{_last_tool_result}\n===\n"
+                        f"Artık MUTLAKA final_answer aracını kullanarak bu sonucu kullanıcıya ilet.\n"
+                        f"Örnek: {{\"thought\": \"Sonuç mevcut.\", \"tool\": \"final_answer\", \"argument\": \"<özet>\"}}"
+                    )
+                    messages = messages + [
+                        {"role": "assistant", "content": llm_response_accumulated},
+                        {"role": "user", "content": loop_correction},
+                    ]
+                    continue
+
                 # Araç çağrısını UI'ya bildir (sentinel format: \x00TOOL:<name>\x00)
                 yield f"\x00TOOL:{tool_name}\x00"
 
                 # Aracı asenkron çalıştır
                 tool_result = await self._execute_tool(tool_name, tool_arg)
-                
+
                 if tool_result is None:
                     messages = messages + [
                          {"role": "assistant", "content": llm_response_accumulated},
@@ -253,6 +271,10 @@ class SidarAgent:
                          )},
                     ]
                     continue
+
+                # Son araç bilgisini güncelle (tekrar tespiti için)
+                _last_tool = tool_name
+                _last_tool_result = str(tool_result)[:2000]  # bellek tasarrufu
 
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
@@ -664,3 +686,4 @@ class SidarAgent:
             self.health.full_report(),
         ]
         return "\n".join(lines)
+        
