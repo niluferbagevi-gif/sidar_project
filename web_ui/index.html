@@ -1988,7 +1988,7 @@ async function openStatus() {
       row('GitHub',    data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
       row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
       row('RAG',       data.rag_status),
-      row('Paket Bilgi', '✓ PyPI + npm + GitHub', 'ok'),
+      row('Paket Bilgi', data.pkg_status),
       gpuRows,
     ].join('');
   } catch (err) {
