@@ -188,6 +188,18 @@ class SidarAgent:
                 if json_match is None:
                     raise ValueError("Yanıtın içerisinde süslü parantezlerle ( { ... } ) çevrili bir JSON objesi bulunamadı.")
 
+                # LLM bazen {"response": "..."} veya {"answer": "..."} formatı kullanıyor.
+                # Bunları gracefully final_answer ToolCall'a normalize et.
+                if "tool" not in json_match:
+                    for alias in ("response", "answer", "result", "output", "content"):
+                        if alias in json_match:
+                            json_match = {
+                                "thought": json_match.get("thought", "LLM doğrudan yanıt verdi."),
+                                "tool": "final_answer",
+                                "argument": str(json_match[alias]),
+                            }
+                            break
+
                 # Pydantic ile doğrulama (Eksik veya hatalı tip varsa ValidationError fırlatır)
                 action_data = ToolCall.model_validate(json_match)
                 
