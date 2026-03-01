@@ -126,14 +126,23 @@ class AutoHandle:
     # ─────────────────────────────────────────────
 
     def _try_list_directory(self, t: str, raw: str) -> Tuple[bool, str]:
-        if re.search(r"listele|dosyaları\s+göster|klasör.*içer|dizin.*listele|ls\b", t):
-            path = self._extract_path(raw) or "."
+        # "listele" tek başına çok geniş; yalnızca açıkça dizin/klasör bağlamı varsa tetikle.
+        # "commit listele", "test fonksiyonlarını listele" gibi ifadeler yanlışlıkla eşleşmesin.
+        if re.search(
+            r"dizin\s+listele|klasör.*listele|klasör.*içer|dosyaları\s+göster"
+            r"|kök\s+dizin.*listele|proje.*dizin.*listele|ls\b",
+            t,
+        ):
+            # Path extraction: bulunursa dizin, bulunmazsa "."
+            path = self._extract_dir_path(raw) or "."
             _, result = self.code.list_directory(path)
             return True, result
         return False, ""
 
     def _try_read_file(self, t: str, raw: str) -> Tuple[bool, str]:
-        if re.search(r"(dosyayı?\s+oku|incele|göster|içeriğ|cat\b)", t):
+        # "göster" ve "içeriğ" çok geniş — execute_code, health, docs_add gibi komutları
+        # yanlışlıkla yakalar. Yalnızca açık "oku/incele/cat" bağlamında tetikle.
+        if re.search(r"(dosyayı?\s+oku|dosya\s+içeriğini\s+göster|incele\b|cat\b)", t):
             path = self._extract_path(raw) or self.memory.get_last_file()
             if not path:
                 return True, "⚠ Hangi dosyayı okumamı istiyorsunuz? Lütfen dosya yolunu belirtin."
@@ -153,7 +162,14 @@ class AutoHandle:
         return False, ""
 
     def _try_health(self, t: str) -> Tuple[bool, str]:
-        if re.search(r"sistem.*sağlık|donanım|hardware|cpu|ram|memory.*report|sağlık.*rapor", t):
+        # "GPU durumunu göster" ve "CPU/RAM göster" ifadelerini de yakalamak için
+        # "göster" bağlamını buraya ekledik — ancak yalnızca donanım keyword'leri ile birlikte.
+        if re.search(
+            r"sistem.*sağlık|donanım\s+(durumu|rapor|göster)|hardware"
+            r"|sağlık.*rapor|cpu.*durumu|ram.*durumu|gpu.*durum"
+            r"|sistem.*rapor|memory.*report",
+            t,
+        ):
             if not self.health:
                 return True, "⚠ Sistem sağlık monitörü başlatılamadı."
             return True, self.health.full_report()
@@ -167,7 +183,9 @@ class AutoHandle:
         return False, ""
 
     def _try_validate_file(self, t: str, raw: str) -> Tuple[bool, str]:
-        if re.search(r"sözdizimi|syntax|doğrula|validate|kontrol\s+et", t):
+        # "kontrol et" çok geniş — "httpx sürümünü kontrol et", "GPU durumunu kontrol et" gibi
+        # ifadeleri hatalıca yakalar. Yalnızca açık sözdizimi/dosya doğrulama bağlamında tetikle.
+        if re.search(r"sözdizimi|syntax|python\s+doğrula|validate.*dosya|dosya.*doğrula", t):
             path = self._extract_path(raw) or self.memory.get_last_file()
             if not path:
                 return True, "⚠ Doğrulanacak dosya yolunu belirtin."
@@ -185,7 +203,13 @@ class AutoHandle:
         return False, ""
 
     def _try_github_commits(self, t: str) -> Tuple[bool, str]:
-        if re.search(r"(github|commit).*(listele|göster|son|last)", t) or re.search(r"son.*commit", t):
+        # "son.*commit" + "listele" genel "listele" regex'inden önce çalışmalı;
+        # "commit'i getir", "commit'leri göster", "commit geçmişi" gibi ifadeleri de yakala.
+        if re.search(
+            r"(github|commit).*(listele|göster|son|last|getir|geçmiş)"
+            r"|son.*commit|commit.*geçmiş|commit.*listele",
+            t,
+        ):
             if not self.github.is_available():
                 return True, "⚠ GitHub token ayarlanmamış."
             m = re.search(r"(\d+)\s*commit", t)
@@ -214,7 +238,14 @@ class AutoHandle:
         return False, ""
 
     def _try_security_status(self, t: str) -> Tuple[bool, str]:
-        if re.search(r"erişim|güvenlik|openclaw|access.*level|yetki", t):
+        # "güvenlik" ve "erişim" çok geniş — "güvenlik açısından incele" gibi analiz
+        # isteklerini de yakalayıp security.status_report() döndürüyor.
+        # Yalnızca açıkça erişim seviyesi veya OpenClaw durumu sorulduğunda tetikle.
+        if re.search(
+            r"openclaw|erişim\s+seviyesi|access\s+level|güvenlik\s+seviyesi"
+            r"|sandbox.*mod|yetki\s+seviyesi",
+            t,
+        ):
             return True, self.code.security.status_report()
         return False, ""
 
@@ -339,8 +370,22 @@ class AutoHandle:
         return False, ""
 
     async def _try_docs_add(self, t: str, raw: str) -> Tuple[bool, str]:
-        """URL'den belge deposuna ekle — 'belge ekle https://...' vb."""
-        m = re.search(r"(?:belge\s+ekle|dokümana\s+ekle|rag.*ekle)\s+(https?://\S+)", raw, re.IGNORECASE)
+        """URL'den belge deposuna ekle — 'belge ekle/deposuna ekle https://...' vb."""
+        m = re.search(
+            r"(?:belge\s+ekle|belge\s+depos[ıu]na\s+ekle|dokümana?\s+ekle|rag.*ekle"
+            r"|url.*belge.*ekle|ekle.*belge\s+depos)\s*(https?://\S+)",
+            raw,
+            re.IGNORECASE,
+        )
+        if not m:
+            # İkincil form: URL mevcut ve "belge/depo/rag" + "ekle" kelimesi varsa
+            url_m = re.search(r"(https?://\S+)", raw)
+            if url_m and re.search(r"belge|depo|rag", t) and re.search(r"ekle", t):
+                m_url = url_m.group(1).strip()
+                title_m = re.search(r'"([^"]+)"', raw)
+                title = title_m.group(1) if title_m else ""
+                _, result = await self.docs.add_document_from_url(m_url, title=title)
+                return True, result
         if m:
             url = m.group(1).strip()
             title_m = re.search(r'"([^"]+)"', raw)
@@ -354,7 +399,7 @@ class AutoHandle:
     # ─────────────────────────────────────────────
 
     def _extract_path(self, text: str) -> Optional[str]:
-        """Metinden dosya/dizin yolu çıkar."""
+        """Metinden dosya yolu çıkar (uzantılı dosyalar için)."""
         m = re.search(r'["\']([^"\']+\.[a-zA-Z]{1,6})["\']', text)
         if m:
             return m.group(1)
@@ -364,6 +409,24 @@ class AutoHandle:
         )
         if m:
             return m.group(1)
+        return None
+
+    def _extract_dir_path(self, text: str) -> Optional[str]:
+        """Metinden dizin yolu çıkar (dosya adı içermeyen yollar için).
+        Uzantılı dosya adlarını dizin olarak döndürmez; yalnızca açık dizin yolları alınır.
+        """
+        # Tırnak içindeki yol varsa ve uzantı içermiyorsa dizin say
+        m = re.search(r'["\']([^"\']+)["\']', text)
+        if m and "." not in m.group(1).split("/")[-1]:
+            return m.group(1)
+        # Açık dizin belirteçleri: "./", "../", "/home/..."
+        m = re.search(r'(\./[\w/\\.\-]+|\.\.?/[\w/\\.\-]*|/[\w/\\.\-]{3,})', text)
+        if m:
+            candidate = m.group(1)
+            # Uzantılı dosya yoluysa dizin değil, atla
+            if re.search(r'\.\w{1,6}$', candidate):
+                return None
+            return candidate
         return None
 
     def _extract_url(self, text: str) -> Optional[str]:
