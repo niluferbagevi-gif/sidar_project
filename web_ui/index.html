@@ -1145,17 +1145,13 @@
   <div class="main-wrapper">
 
     <div class="sidebar">
-      <!-- Meta bilgi alanı: model, auto-accept, repo, branch, etiket -->
+      <!-- Meta bilgi alanı: model, repo, branch -->
       <div class="sidebar-meta">
         <div class="meta-row">
-          <span class="model-chip">
+          <span class="model-chip" id="sidebar-model-chip">
             <svg width="9" height="9" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0L7.5 4.5H12L8.25 7.25L9.75 12L6 9.25L2.25 12L3.75 7.25L0 4.5H4.5Z"/></svg>
-            Sonnet 4.6
+            <span id="model-name-label">Yükleniyor…</span>
           </span>
-          <label class="auto-accept-wrap" title="Düzenlemeleri otomatik kabul et">
-            <input type="checkbox" id="auto-accept-sidebar" onchange="syncAutoAccept('sidebar')" />
-            <span>Auto accept edits</span>
-          </label>
         </div>
         <div class="meta-row">
           <div class="context-chip" onclick="openRepoModal()" title="Depo seç">
@@ -1164,9 +1160,6 @@
           <div class="context-chip" onclick="openBranchModal()" title="Dal seç">
             ⎇ <span id="sidebar-branch-label">main</span>
           </div>
-        </div>
-        <div class="meta-row">
-          <span class="tag-chip" id="session-tag">deneme</span>
         </div>
       </div>
 
@@ -1213,7 +1206,6 @@
                 <span class="chip-label" id="branch-label">main</span>
                 <span class="chip-caret">▾</span>
               </div>
-              <div class="multiplier-chip" title="Paralel görev sayısı">1x</div>
             </div>
 
             <button class="btn-start" onclick="startTask()">
@@ -1274,17 +1266,13 @@
               <button id="send-btn" onclick="sendMessage()">Gönder</button>
             </div>
 
-            <!-- Input footer: model chip + auto-accept + ipucu -->
+            <!-- Input footer: model chip + ipucu -->
             <div class="input-footer">
               <div class="input-meta-left">
-                <span class="model-chip-sm">
+                <span class="model-chip-sm" id="input-model-chip">
                   <svg width="8" height="8" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0L7.5 4.5H12L8.25 7.25L9.75 12L6 9.25L2.25 12L3.75 7.25L0 4.5H4.5Z"/></svg>
-                  Sonnet 4.6
+                  <span id="input-model-label">Yükleniyor…</span>
                 </span>
-                <label class="auto-accept-sm" title="Düzenlemeleri otomatik kabul et">
-                  <input type="checkbox" id="auto-accept-input" onchange="syncAutoAccept('input')" />
-                  <span>Auto accept edits</span>
-                </label>
               </div>
               <div class="chat-hint" style="margin:0">
                 <span>Enter → gönder</span>&nbsp;·&nbsp;
@@ -1356,7 +1344,7 @@
         <span class="shortcut-desc">Belleği temizle</span>
       </div>
       <div class="shortcut-row">
-        <div class="shortcut-key"><span class="kbd">Ctrl</span><span class="kbd">T</span></div>
+        <div class="shortcut-key"><span class="kbd">Alt</span><span class="kbd">T</span></div>
         <span class="shortcut-desc">Tema değiştir (koyu/açık)</span>
       </div>
     </div>
@@ -1411,22 +1399,22 @@ function applyStoredTheme() {
   if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀';
 }
 
-/* ─── Auto-accept senkronizasyonu ───────────────────────── */
-function syncAutoAccept(source) {
-  const sidebarCb = document.getElementById('auto-accept-sidebar');
-  const inputCb   = document.getElementById('auto-accept-input');
-  const val = source === 'sidebar' ? sidebarCb.checked : inputCb.checked;
-  if (sidebarCb) sidebarCb.checked = val;
-  if (inputCb)   inputCb.checked   = val;
-  localStorage.setItem('sidar-auto-accept', val ? '1' : '0');
-}
+/* ─── Model bilgisi yükleme ─────────────────────────────── */
+async function loadModelInfo() {
+  try {
+    const data = await (await fetch('/status')).json();
+    const provider = (data.provider || 'ollama').toLowerCase();
+    const model    = data.model || '—';
+    const display  = provider === 'gemini' ? `Gemini · ${model}` : model;
 
-function applyStoredAutoAccept() {
-  const val = localStorage.getItem('sidar-auto-accept') !== '0';
-  const sidebarCb = document.getElementById('auto-accept-sidebar');
-  const inputCb   = document.getElementById('auto-accept-input');
-  if (sidebarCb) sidebarCb.checked = val;
-  if (inputCb)   inputCb.checked   = val;
+    const sidebarLabel = document.getElementById('model-name-label');
+    if (sidebarLabel) sidebarLabel.textContent = display;
+
+    const inputLabel = document.getElementById('input-model-label');
+    if (inputLabel) inputLabel.textContent = display;
+  } catch {
+    // Sessizce geç
+  }
 }
 
 /* ─── Git bilgisi yükleme ───────────────────────────────── */
@@ -1436,18 +1424,25 @@ async function loadGitInfo() {
     const branch = data.branch || 'main';
     const repo   = data.repo   || '';
 
-    // Sidebar dal etiketi
+    // Global değişkenleri gerçek git bilgisiyle doldur
+    currentBranch = branch;
+    if (repo) currentRepo = repo;
+
+    // Sidebar etiketleri
     const sbl = document.getElementById('sidebar-branch-label');
     if (sbl) sbl.textContent = branch;
 
-    // Sidebar repo etiketi (sadece repo adı)
     const srl = document.getElementById('sidebar-repo-label');
-    if (srl) {
-      const short = repo.split('/').pop() || repo;
-      srl.textContent = short || 'sidar_project';
-    }
+    if (srl) srl.textContent = repo.split('/').pop() || repo || 'sidar_project';
 
-    // PR Çubuğu: sadece main dışı dallarda göster
+    // Görev paneli seçici etiketleri
+    const branchLabel = document.getElementById('branch-label');
+    if (branchLabel) branchLabel.textContent = branch;
+
+    const repoLabel = document.getElementById('repo-label');
+    if (repoLabel && repo) repoLabel.textContent = repo;
+
+    // PR Çubuğu: sadece main/master dışı dallarda göster
     const prBar = document.getElementById('pr-bar');
     if (prBar && branch && branch !== 'main' && branch !== 'master') {
       document.getElementById('pr-base').textContent = 'main';
@@ -1466,12 +1461,12 @@ async function loadGitInfo() {
 /* ─── Başlangıç ve Oturumlar (Sessions) ─────────────────── */
 window.addEventListener('DOMContentLoaded', async () => {
   applyStoredTheme();
-  applyStoredAutoAccept();
   await loadSessions();
   if (currentSessionId) {
     await loadSessionHistory(currentSessionId, false);
   }
   loadGitInfo();
+  loadModelInfo();
 });
 
 async function loadSessions() {
@@ -1752,6 +1747,7 @@ async function sendText(text) {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    let streamDone = false;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1763,10 +1759,11 @@ async function sendText(text) {
         if (!line.startsWith('data: ')) continue;
         try {
           const parsed = JSON.parse(line.slice(6).trim());
-          if (parsed.done) break;
+          if (parsed.done) { streamDone = true; break; }
           if (parsed.chunk) { accumulated += parsed.chunk; updateStreaming(msgId, accumulated); }
         } catch { /* skip */ }
       }
+      if (streamDone) break;
     }
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -1821,6 +1818,10 @@ function appendUser(text) {
 }
 
 function editMessage(btn, originalText) {
+  // Kullanıcı mesaj balonunu DOM'dan kaldır (tekrar gönderiş temiz olsun)
+  const msgEl = btn.closest('.message');
+  if (msgEl) msgEl.remove();
+
   const inputArea = document.getElementById('input-area');
   inputArea.value = originalText;
   inputArea.style.height = 'auto';
@@ -1920,18 +1921,52 @@ function filterRepos(q) {
   renderRepos(REPOS.filter(r => r.name.toLowerCase().includes(q.toLowerCase())));
 }
 
-function selectRepo(name) {
+async function selectRepo(name) {
   currentRepo = name;
   document.getElementById('repo-label').textContent = name;
   const srl = document.getElementById('sidebar-repo-label');
   if (srl) srl.textContent = name.split('/').pop() || name;
   closeModal('repo-modal');
+
+  // PR çubuğu bağlantısını güncelle
+  const viewBtn = document.getElementById('pr-view-btn');
+  if (viewBtn && currentBranch && currentBranch !== 'main' && currentBranch !== 'master') {
+    viewBtn.href = `https://github.com/${name}/compare/main...${currentBranch}`;
+  }
+
+  // Backend'e bildir (GitHub ajan bağlantısını güncelle)
+  try {
+    const res  = await fetch('/set-repo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: name }),
+    });
+    const data = await res.json();
+    if (!data.success) console.warn('Depo değiştirilemedi:', data.message);
+  } catch (e) {
+    console.warn('Depo API hatası:', e);
+  }
 }
 
-function openBranchModal() {
-  renderBranches(BRANCHES);
+let _cachedBranches = null;
+
+async function openBranchModal() {
   document.getElementById('branch-search').value = '';
   document.getElementById('branch-modal').classList.add('open');
+
+  // Gerçek dal listesini sunucudan çek (oturum boyunca önbelleğe al)
+  if (!_cachedBranches) {
+    document.getElementById('branch-list').innerHTML =
+      '<div style="padding:14px;color:var(--text-dim);font-size:12px">Dallar yükleniyor…</div>';
+    try {
+      const data      = await (await fetch('/git-branches')).json();
+      _cachedBranches = data.branches || ['main'];
+    } catch {
+      _cachedBranches = [currentBranch || 'main'];
+    }
+  }
+
+  renderBranches(_cachedBranches);
   setTimeout(() => document.getElementById('branch-search').focus(), 50);
 }
 
@@ -1951,14 +1986,34 @@ function renderBranches(list) {
 }
 
 function filterBranches(q) {
-  renderBranches(BRANCHES.filter(b => b.toLowerCase().includes(q.toLowerCase())));
+  renderBranches((_cachedBranches || [currentBranch]).filter(
+    b => b.toLowerCase().includes(q.toLowerCase())
+  ));
 }
 
 function selectBranch(name) {
   currentBranch = name;
+
+  // Tüm etiketleri güncelle
   document.getElementById('branch-label').textContent = name;
   const sbl = document.getElementById('sidebar-branch-label');
   if (sbl) sbl.textContent = name;
+
+  // PR çubuğunu güncelle
+  const prBar = document.getElementById('pr-bar');
+  if (prBar) {
+    if (name && name !== 'main' && name !== 'master') {
+      document.getElementById('pr-head').textContent = name;
+      const viewBtn = document.getElementById('pr-view-btn');
+      if (viewBtn && currentRepo) {
+        viewBtn.href = `https://github.com/${currentRepo}/compare/main...${name}`;
+      }
+      prBar.style.display = 'flex';
+    } else {
+      prBar.style.display = 'none';
+    }
+  }
+
   closeModal('branch-modal');
 }
 
@@ -1983,15 +2038,39 @@ async function openStatus() {
         <span class="stat-label">${label}</span>
         <span class="stat-val ${cls}">${value}</span>
       </div>`;
+
+    // GPU satırlarını oluştur
+    let gpuRows = '';
+    if (data.gpu_enabled) {
+      gpuRows += row('GPU', `✓ ${data.gpu_info || 'Aktif'}`, 'ok');
+      if (data.cuda_version && data.cuda_version !== 'N/A') {
+        gpuRows += row('CUDA', data.cuda_version);
+      }
+      if (data.gpu_count > 1) {
+        gpuRows += row('GPU Sayısı', `${data.gpu_count} cihaz`);
+      }
+      (data.gpu_devices || []).forEach(d => {
+        const temp  = d.temperature_c  != null ? `  ${d.temperature_c}°C` : '';
+        const util  = d.utilization_pct != null ? `  %${d.utilization_pct}` : '';
+        gpuRows += row(
+          `GPU ${d.id}`,
+          `${d.name} · ${d.allocated_gb}/${d.total_vram_gb} GB${temp}${util}`
+        );
+      });
+    } else {
+      gpuRows = row('GPU', '✗ CPU modu', 'warn');
+    }
+
     grid.innerHTML = [
       row('Sürüm',           `v${data.version}`),
       row('AI Sağlayıcı',   `${data.provider} / ${data.model}`),
       row('Erişim Seviyesi', data.access_level.toUpperCase()),
       row('Bellek',          `${data.memory_count} mesaj`),
-      row('GitHub',   data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
+      row('GitHub',    data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
       row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
       row('RAG',       data.rag_status),
       row('Paket Bilgi', '✓ PyPI + npm + GitHub', 'ok'),
+      gpuRows,
     ].join('');
   } catch (err) {
     grid.innerHTML = `<div class="stat-row"><span class="stat-label">Bağlantı hatası: ${escHtml(err.message)}</span></div>`;
@@ -2034,8 +2113,8 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     clearMemory();
   }
-  // Ctrl+T: Tema değiştir
-  if (e.ctrlKey && e.key === 't') {
+  // Alt+T: Tema değiştir (Ctrl+T tarayıcıda yeni sekme açar, Alt+T çakışmaz)
+  if (e.altKey && e.key === 't') {
     e.preventDefault();
     toggleTheme();
   }

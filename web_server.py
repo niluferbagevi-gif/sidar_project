@@ -143,8 +143,11 @@ async def chat(request: Request):
 
             # Ajanın asenkron stream yanıtını bekle ve akıt
             async for chunk in agent.respond(user_message):
+                if await request.is_disconnected():
+                    logger.info("İstemci bağlantıyı kesti, stream durduruluyor.")
+                    return
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-            
+
             # Akış başarıyla tamamlandı
             yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -252,6 +255,41 @@ async def git_info():
         repo = repo.split("github.com/")[-1].split("github.com:")[-1]
 
     return JSONResponse({"branch": branch, "repo": repo or "sidar_project"})
+
+
+@app.get("/git-branches")
+async def git_branches():
+    """Yerel git dallarını listeler."""
+    _root = Path(__file__).parent
+
+    def _run(cmd):
+        try:
+            return subprocess.check_output(
+                cmd, cwd=str(_root), stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            return ""
+
+    branches_raw = _run(["git", "branch", "--format=%(refname:short)"])
+    branches = [b.strip() for b in branches_raw.split("\n") if b.strip()]
+    current = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+
+    return JSONResponse({"branches": branches or ["main"], "current": current})
+
+
+@app.post("/set-repo")
+async def set_repo(request: Request):
+    """GitHub deposunu çalışma zamanında değiştirir."""
+    body = await request.json()
+    repo_name = body.get("repo", "").strip()
+    if not repo_name:
+        return JSONResponse({"success": False, "error": "Depo adı boş."}, status_code=400)
+
+    agent = await get_agent()
+    ok, msg = agent.github.set_repo(repo_name)
+    if ok:
+        cfg.GITHUB_REPO = repo_name
+    return JSONResponse({"success": ok, "message": msg})
 
 
 @app.post("/clear")
