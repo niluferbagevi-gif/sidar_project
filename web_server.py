@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import json
 import logging
+import re
 import subprocess
 import time
 from collections import defaultdict
@@ -148,11 +149,16 @@ async def chat(request: Request):
                 agent.memory.update_title(title)
 
             # Ajanın asenkron stream yanıtını bekle ve akıt
+            _TOOL_SENTINEL = re.compile(r'^\x00TOOL:(.+)\x00$')
             async for chunk in agent.respond(user_message):
                 if await request.is_disconnected():
                     logger.info("İstemci bağlantıyı kesti, stream durduruluyor.")
                     return
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                m = _TOOL_SENTINEL.match(chunk)
+                if m:
+                    yield f"data: {json.dumps({'tool_call': m.group(1)})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
 
             # Akış başarıyla tamamlandı
             yield f"data: {json.dumps({'done': True})}\n\n"

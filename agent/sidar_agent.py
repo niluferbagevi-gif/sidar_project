@@ -178,6 +178,9 @@ class SidarAgent:
                     yield str(tool_arg)
                     return
 
+                # Araç çağrısını UI'ya bildir (sentinel format: \x00TOOL:<name>\x00)
+                yield f"\x00TOOL:{tool_name}\x00"
+
                 # Aracı asenkron çalıştır
                 tool_result = await self._execute_tool(tool_name, tool_arg)
                 
