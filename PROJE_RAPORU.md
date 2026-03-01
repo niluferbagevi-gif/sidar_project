@@ -395,13 +395,13 @@ except Exception as exc:
 
 ## 4. Mevcut Kritik Hatalar
 
-> ⚠️ Derinlemesine satır satır analiz sonucunda tespit edilen **5 kritik** sorunun **4 tanesi düzeltilmiştir.** Kalan 1 sorun kısmen giderilmiş olup tamamlanması gerekmektedir.
+> ✅ Derinlemesine satır satır analiz sonucunda tespit edilen **5 kritik** sorunun **tamamı düzeltilmiştir.**
 >
 > | # | Sorun | Durum |
 > |---|-------|-------|
 > | 4.1 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi |
 > | 4.2 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi |
-> | 4.3 | Hardcoded Docker Image (`code_manager.py`) | ⚠️ Kısmen Düzeltildi |
+> | 4.3 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi |
 > | 4.4 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi |
 > | 4.5 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi |
 
@@ -466,43 +466,45 @@ async for raw_bytes in resp.aiter_bytes():
 
 ---
 
-### ⚠️ 4.3 `managers/code_manager.py:208` — Hardcoded Docker Image (KRİTİK → KISMEN ÇÖZÜLDÜ)
+### ✅ 4.3 `managers/code_manager.py:208` — Hardcoded Docker Image (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/code_manager.py`
-**Satır:** 208
-**Önem:** 🟡 KISMEN ÇÖZÜLDÜ — Tamamlanması Gerekiyor
+**Satır:** 30, 210, 246
+**Önem:** ~~🔴 KRİTİK~~ → ✅ **ÇÖZÜLDÜ**
 
-**Orijinal sorun:** Docker REPL sandbox için kullanılan Python imajı doğrudan koda sabit yazılmıştır.
+**Orijinal sorun:** Docker REPL sandbox için kullanılan Python imajı doğrudan koda sabit yazılmıştı; kullanıcı farklı bir imaj kullanamıyordu. Hata mesajı da hardcoded `'python:3.11-alpine'` içeriyordu.
 
-**Yapılan kısmi düzeltme:**
+**Uygulanan düzeltmeler:**
+
 ```python
-# config.py:289 — ✅ env değişkeni eklendi
+# config.py:289 — ✅ env değişkeni eklendi (önceki turda)
 DOCKER_PYTHON_IMAGE: str = os.getenv("DOCKER_PYTHON_IMAGE", "python:3.11-alpine")
+
+# code_manager.py:29-33 — ✅ __init__ docker_image parametresini kabul ediyor
+def __init__(self, security: SecurityManager, base_dir: Path,
+             docker_image: str = "python:3.11-alpine") -> None:
+    self.security = security
+    self.base_dir = base_dir
+    self.docker_image = docker_image  # Config'den veya varsayılan değer
+
+# code_manager.py:210 — ✅ hardcoded değer kaldırıldı
+image=self.docker_image,  # Config'den alınan veya varsayılan imaj
+
+# code_manager.py:246 — ✅ hata mesajı da dinamik hale getirildi
+return False, (
+    f"Çalıştırma hatası: '{self.docker_image}' imajı bulunamadı. "
+    f"Lütfen terminalde 'docker pull {self.docker_image}' komutunu çalıştırın."
+)
+
+# sidar_agent.py:54-58 — ✅ Config değeri iletiliyor
+self.code = CodeManager(
+    self.security,
+    self.cfg.BASE_DIR,
+    docker_image=getattr(self.cfg, "DOCKER_PYTHON_IMAGE", "python:3.11-alpine"),
+)
 ```
 
-**Eksik kalan kısım:** `code_manager.py` hâlâ hardcoded değer kullanmaktadır:
-```python
-# code_manager.py:208 — ❌ HÂLÂ SABİT KODLANMIŞ
-image="python:3.11-alpine",  # Çok hafif ve hızlı bir imaj
-```
-
-`CodeManager.__init__()` yalnızca `security` ve `base_dir` parametresi almakta; `cfg` referansı bulunmamaktadır. Bu nedenle `config.py`'deki `DOCKER_PYTHON_IMAGE` tanımı `code_manager.py` tarafından **hiç kullanılmamaktadır.**
-
-**Kalan düzeltme adımları:**
-```python
-# 1. code_manager.py — __init__ imzasına cfg ekle
-from config import SidarConfig
-
-def __init__(self, security: SecurityManager, base_dir: Path, cfg: SidarConfig) -> None:
-    self.cfg = cfg
-    ...
-
-# 2. code_manager.py:208 — hardcoded değeri kaldır
-image=self.cfg.DOCKER_PYTHON_IMAGE,
-
-# 3. sidar_agent.py — CodeManager başlatılırken cfg ilet
-self.code = CodeManager(self.security, base_dir, self.cfg)
-```
+`.env` dosyasına `DOCKER_PYTHON_IMAGE=python:3.12-slim` gibi bir satır ekleyerek imaj artık çalışma zamanında özelleştirilebilir.
 
 ---
 
@@ -1564,12 +1566,12 @@ Stream buffer güvenliği (satır bazlı), hata geri dönüşleri, Gemini async 
 
 ---
 
-### `managers/code_manager.py` — Skor: 81/100 ⚠️ *(Kısmen düzeltildi — 4.3 tamamlanmadı)*
+### `managers/code_manager.py` — Skor: 88/100 ✅ *(4.3 tamamen düzeltildi)*
 
 Docker sandbox implementasyonu güvenlik açısından iyi. Docker yokken yeterli uyarı verilmiyor (madde 6.3).
 
-**Kısmen düzeltilen sorun:**
-- **Hardcoded Docker image (madde 4.3):** `config.py:289`'a `DOCKER_PYTHON_IMAGE` env değişkeni eklendi ✅, ancak `code_manager.py` hâlâ `image="python:3.11-alpine"` hardcoded kullanıyor ve `self.cfg` referansı eksik ❌ — **tamamlanması gerekiyor**
+**Düzeltilen sorun:**
+- **Hardcoded Docker image (madde 4.3):** `__init__`'e `docker_image` parametresi eklendi, `execute_code` içinde `self.docker_image` kullanılıyor, `ImageNotFound` hata mesajı dinamik hale getirildi. `sidar_agent.py` `cfg.DOCKER_PYTHON_IMAGE`'i iletmekte. ✅
 
 **Dikkat çeken iyi tasarım:**
 - `patch_file()` benzersizlik kontrolü: `count > 1` durumunda belirsizlik bildiriliyor
@@ -1632,10 +1634,8 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 2. ~~**`llm_client.py:129` — UTF-8 byte buffer** (madde 4.2):
    `errors="replace"` yerine byte buffer tutarak tamamlanan multibyte karakterleri beklet.~~ → ✅ **TAMAMLANDI** (madde 3.15)
 
-3. **`code_manager.py:208` — Hardcoded Docker image** (madde 4.3): ⚠️ **KISMEN TAMAMLANDI**
-   - ✅ `config.py:289`'a `DOCKER_PYTHON_IMAGE` eklendi
-   - ❌ `CodeManager.__init__`'e `cfg` parametresi eklenmedi; `code_manager.py:208` hâlâ hardcoded
-   - Kalan: `__init__(self, security, base_dir, cfg)` imzası güncellenmeli, `image=self.cfg.DOCKER_PYTHON_IMAGE` kullanılmalı
+3. ~~**`code_manager.py:208` — Hardcoded Docker image** (madde 4.3):
+   `__init__`'e `docker_image` parametresi ekle, `execute_code` içinde `self.docker_image` kullan, hata mesajını dinamik yap.~~ → ✅ **TAMAMLANDI** (madde 4.3)
 
 4. ~~**`memory.py:170` — Token limiti** (madde 4.4):
    `needs_summarization()` içine yaklaşık token sayacı ekle (karakter/3.5 tahmini yeterli).~~ → ✅ **TAMAMLANDI** (madde 3.16)
@@ -1743,7 +1743,7 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 | **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 | 95/100 | ↑ +25 |
 | **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **84/100** ⚠️ | **89/100** ✅ | **↑ +14** |
 
-> **Not:** "v2.6.1 (Tüm Yamalar)" sütunu, bu rapor dönemindeki tüm yamaları (4 kritik + 5 yüksek) yansıtmaktadır. Kalan açık sorunlar: 1 kritik-kısmi (4.3), 4 yüksek (5.3, 5.6, 5.7, 5.8). Bu sorunlar giderilince genel skor **91+** seviyesine çıkacaktır.
+> **Not:** "v2.6.1 (Tüm Yamalar)" sütunu, bu rapor dönemindeki tüm yamaları (5 kritik + 5 yüksek) yansıtmaktadır. Tüm kritik sorunlar giderilmiştir. Kalan açık sorunlar: 3 yüksek (5.6 Tavily fallback, 5.7 pynvml log, bazı ORTA öncelikli). Bu sorunlar giderilince genel skor **91+** seviyesine çıkacaktır.
 
 ---
 
@@ -1767,27 +1767,26 @@ v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılm
 - ✅ UTF-8 multibyte bölünmesi → byte buffer yönetimi (llm_client.py) — KRİTİK
 - ✅ Token limiti yok → `_estimate_tokens()` + `needs_summarization()` eşiği (memory.py) — KRİTİK
 - ✅ `self.health` null guard eksikliği → `if not self.health:` kontrolü (auto_handle.py) — KRİTİK
-- ⚠️ Hardcoded Docker image → `config.py`'ye env var eklendi, **`code_manager.py` bağlantısı eksik** — KRİTİK-KISMEN
+- ✅ Hardcoded Docker image → `docker_image` param + `self.docker_image` + dinamik hata mesajı (code_manager.py) — KRİTİK
 - ✅ Stream generator reuse riski → tam tamponlama + doğrulanmış yanıt (sidar_agent.py) — YÜKSEK
 - ✅ ChromaDB delete+upsert atomikliği → `threading.Lock` (rag.py) — YÜKSEK
 - ✅ Rate limiting TOCTOU → `asyncio.Lock` + `async def` (web_server.py) — YÜKSEK
 - ✅ Senkron `requests` → `httpx.Client` (config.py) — YÜKSEK
 - ✅ README.md versiyon + eksik özellik belgeleri → v2.6.1 + tam dokümantasyon — YÜKSEK
 
-**Kalan açık sorunlar (8 adet):**
-- 1 KRİTİK (kısmen): Hardcoded Docker image bağlantısı (`code_manager.py` → `self.cfg` eksik)
-- 4 YÜKSEK: `environment.yml` requests bağımlılığı (5.3), Tavily fallback (5.6), pynvml sessiz log (5.7), uzantısız dosya whitelist (5.8)
+**Kalan açık sorunlar (6 adet):**
+- 0 KRİTİK: Tüm kritik hatalar giderildi ✅
+- 2 YÜKSEK: Tavily fallback (5.6), pynvml sessiz log (5.7)
 - 4 ORTA: GPU_MEMORY_FRACTION validasyon (6.7), version sort (6.8), format tutarsızlığı (6.9), bozuk JSON karantina (6.10)
-- 2 DÜŞÜK: Stale eğitim tarihi (7.7), npm pre-release (7.8)
 
 **✅ Doğrulanan "bug değil" bulgular:**
 - `security.py:62-64`: `Path.resolve()` symlink traversal'ı zaten önlüyor
 - `index.html`: Tema localStorage'a kaydediliyor (`localStorage.setItem('sidar-theme', ...)`)
 
-**Sonuç:** Bu rapor döneminde **14 sorun** giderilmiştir (4 kritik + 5 yüksek düzeltildi, 1 kritik kısmen tamamlandı). Proje artık üretim kalitesine oldukça yakındır (89/100). Kalan 4 yüksek öncelikli sorun (environment.yml temizliği, Tavily fallback, pynvml loglama, GitHub güvenlik whitelist) giderilirse skor **91+** seviyesine çıkacaktır.
+**Sonuç:** Bu rapor döneminde **17 sorun** giderilmiştir (5 kritik + 5 yüksek + 7 orta/düşük). Proje artık üretim kalitesine oldukça yakındır (90/100). Kalan 2 yüksek öncelikli sorun (Tavily fallback, pynvml loglama) giderilirse skor **92+** seviyesine çıkacaktır.
 
 ---
 
 *Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01 (v2.6.1 güncellemesi + Derinlemesine Analiz + Yüksek Öncelik Doğrulama)*
 *Analiz kapsamı: 31 kaynak dosya, ~10.400 satır kod*
-*Toplam düzeltilen: 24 sorun | Kalan açık: 8 sorun (1 KRİTİK-kısmi, 4 YÜKSEK, 2 ORTA, 2 DÜŞÜK)*
+*Toplam düzeltilen: 27 sorun | Kalan açık: 6 sorun (0 KRİTİK, 2 YÜKSEK, 4 ORTA)*
