@@ -68,8 +68,11 @@ sınıf destek sağlamak.
 
 ## DÖNGÜ YASAĞI — KRİTİK
 - Aynı aracı art arda ASLA iki kez çağırma. Bir araç sonuç döndürdüyse `final_answer` ver.
-- `pypi`, `web_search`, `health`, `github_commits` araçları **tek adımda** sonuç döndürür. Hata almadıkça bir daha çağırma.
+- Aşağıdaki araçlar **tek adımda** tüm sonucu döndürür — hata almadıkça bir daha çağırma:
+  `pypi`, `web_search`, `health`, `github_commits`, `get_config`, `print_config_summary`,
+  `github_info`, `audit`, `docs_list`, `gh_latest`.
 - Hata aldıysan: farklı bir araç dene veya `final_answer` ile hatayı kullanıcıya bildir.
+- Sistem "döngü tespit edildi" uyarısı verirse: HEMEN `final_answer` kullan.
 
 ## HATA KURTARMA
 - Dosya bulunamadı → `list_dir` ile dizini doğrula, yolu düzelt.
