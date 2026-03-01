@@ -111,7 +111,7 @@ sidar_project/
 
 ## 3. Önceki Rapordan Bu Yana Düzeltilen Hatalar
 
-> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu + 5 kritik hata + 9 yüksek öncelikli sorun + 7 ek sorun giderilmiştir (toplam 36 düzeltme).
+> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu + 5 kritik hata + 9 yüksek öncelikli sorun + 10 orta öncelikli sorun + 8 düşük öncelikli sorun + 7 ek sorun giderilmiştir (toplam 54 düzeltme).
 
 ---
 
@@ -758,6 +758,394 @@ Fonksiyon `async def` haline getirildi ve `async with _rate_lock:` ile tüm kont
 
 ---
 
+### ✅ 3.37 `core/memory.py` — `threading.RLock` Async Context'te (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `core/memory.py`, `agent/sidar_agent.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `memory.add()` + `_save()` çağrısı JSON dosyası I/O yaparak event loop'u teorik olarak bloklıyordu.
+
+**Uygulanan düzeltme:** `memory.py` değiştirilmedi (threading.RLock doğru ve thread-safe); `sidar_agent.py` içindeki tüm `memory.add()` ve `memory.set_last_file()` çağrıları `asyncio.to_thread()` ile thread pool'a iletildi:
+
+```python
+# sidar_agent.py — memory I/O event loop'u bloke etmez
+await asyncio.to_thread(self.memory.add, "user", user_input)
+await asyncio.to_thread(self.memory.add, "assistant", quick_response)
+await asyncio.to_thread(self.memory.add, "assistant", tool_arg)
+await asyncio.to_thread(self.memory.set_last_file, a)
+```
+
+`memory.py`'nin API'si tamamen değiştirilmeden (senkron kalarak) dosya I/O event loop dışına taşındı. `threading.RLock` worker thread içinde çalıştığından re-entrancy doğru davranır.
+
+---
+
+### ✅ 3.38 `web_server.py` — `asyncio.Lock()` Modül Düzeyinde Oluşturma (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `web_server.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `_agent_lock = asyncio.Lock()` modül yüklenirken oluşturuluyordu; Python <3.10'da DeprecationWarning üretirdi.
+
+**Uygulanan düzeltme:**
+```python
+# ✅ Lazy başlatma — event loop başladıktan sonra oluşturulur
+_agent_lock: asyncio.Lock | None = None
+
+async def get_agent() -> SidarAgent:
+    global _agent, _agent_lock
+    if _agent_lock is None:
+        _agent_lock = asyncio.Lock()
+    async with _agent_lock:
+        if _agent is None:
+            _agent = SidarAgent(cfg)
+    return _agent
+```
+
+---
+
+### ✅ 3.39 `managers/code_manager.py` — Docker Bağlantı Hatası Yutulabiliyor (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/code_manager.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `execute_code` Docker bulunamadığında kullanıcıya neden/nasıl çözüleceği hakkında bilgi verilmiyordu.
+
+**Uygulanan düzeltme:**
+```python
+return False, (
+    "[OpenClaw] Docker bağlantısı bulunamadı — güvenlik sebebiyle kod çalıştırma devre dışı.\n"
+    "Çözüm:\n"
+    "  • WSL2  : Docker Desktop → Settings → Resources → WSL Integration'ı etkinleştirin\n"
+    "  • Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
+    "  • macOS : Docker Desktop uygulamasının çalıştığından emin olun\n"
+    "  • Doğrulama: terminalde 'docker ps' komutunu çalıştırın"
+)
+```
+
+---
+
+### ✅ 3.40 `managers/github_manager.py` — Token Eksikliğinde Yönlendirme Mesajı Yok (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/github_manager.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** Token yoksa kullanıcı yalnızca "GitHub: Bağlı değil" görüyordu; nasıl token ekleyeceği açıklanmıyordu.
+
+**Uygulanan düzeltme:**
+```python
+def is_available(self) -> bool:
+    if not self._available and not self.token:
+        logger.debug("GitHub: Token eksik. .env'e GITHUB_TOKEN=<token> ekleyin.")
+    return self._available
+
+def status(self) -> str:
+    if not self._available:
+        if not self.token:
+            return (
+                "GitHub: Bağlı değil\n"
+                "  → Token eklemek için: .env dosyasına GITHUB_TOKEN=<token> satırı ekleyin\n"
+                "  → Token oluşturmak için: https://github.com/settings/tokens\n"
+                "  → Gerekli izinler: repo (okuma) veya public_repo (genel depolar)"
+            )
+        return "GitHub: Token geçersiz veya bağlantı hatası (log dosyasını kontrol edin)"
+```
+
+---
+
+### ✅ 3.41 `web_ui/index.html` — Oturum Dışa Aktarma / Tool Görselleştirme / Mobil Menü (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `web_ui/index.html`, `web_server.py`, `agent/sidar_agent.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Uygulanan düzeltmeler:**
+
+**A) Dışa Aktarma (MD + JSON):**
+- Topbar'a `MD` ve `JSON` indirme düğmeleri eklendi.
+- `exportSession(format)`: `/sessions/{id}` üzerinden geçmişi çekip `Blob` ile tarayıcıya indirir.
+
+**B) ReAct Araç Görselleştirmesi:**
+- `sidar_agent.py`: Her araç çağrısından önce `\x00TOOL:<name>\x00` sentinel'i yield edilir.
+- `web_server.py`: SSE generator sentinel'i yakalar → `{"tool_call": "..."}` eventi gönderir.
+- `index.html`: `appendToolStep()` fonksiyonu her tool event'ini `TOOL_LABELS` tablosuyla Türkçe badge olarak render eder.
+
+**C) Mobil Hamburger Menü:**
+- 768px altında sidebar `.open` sınıfıyla toggle edilir.
+- Topbar'a `btn-hamburger` eklendi (yalnızca mobilde görünür).
+- Sidebar arkasına yarı saydam overlay eklendi; dışına tıklayınca kapanır.
+
+---
+
+### ✅ 3.42 `tests/test_sidar.py` — Eksik Test Kapsamları (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `tests/test_sidar.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eklenen test grupları:**
+
+| Test | Kapsam |
+|------|--------|
+| `test_execute_tool_unknown_returns_none` | Dispatcher: bilinmeyen araç → `None` |
+| `test_execute_tool_known_does_not_return_none` | Dispatcher: bilinen araç → sonuç döner |
+| `test_rag_chunking_small_text` | Küçük metin tek chunk olarak saklanır |
+| `test_rag_chunking_large_text` | Büyük metin parçalanır, tümü geri alınır |
+| `test_auto_handle_no_match` | Normal LLM sorusuna müdahale edilmez |
+| `test_auto_handle_clear_command` | Bellek temizleme komutu çökme üretmez |
+| `test_session_broken_json_quarantine` | Bozuk JSON → `.json.broken` karantinası |
+
+---
+
+### ✅ 3.43 `config.py:147-153` — `GPU_MEMORY_FRACTION` Aralık Doğrulaması Yok (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `config.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** Geçersiz değerler sessizce atlanıyor, kullanıcıya uyarı verilmiyordu.
+
+**Uygulanan düzeltme:**
+```python
+frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
+if not (0.1 <= frac < 1.0):
+    logger.warning(
+        "GPU_MEMORY_FRACTION=%.2f geçersiz aralık (0.1–1.0 bekleniyor) "
+        "— varsayılan 0.8 kullanılıyor.", frac
+    )
+    frac = 0.8
+try:
+    torch.cuda.set_per_process_memory_fraction(frac, device=0)
+    logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
+except Exception as exc:
+    logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
+```
+
+Geçersiz değerde (ör. `GPU_MEMORY_FRACTION=2.5`) artık `WARNING` log üretilir ve değer `0.8`'e döndürülür.
+
+---
+
+### ✅ 3.44 `managers/package_info.py:257-266` — Version Sort Key Pre-Release Sıralama Hatası (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/package_info.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** Manuel regex ayrıştırma `1.0.0a1` ile `1.0.0` arasındaki farkı doğru sıralayamıyordu; kullanıcıya stabil sürüm yerine pre-release önerilebiliyordu.
+
+**Uygulanan düzeltme:** PEP 440 uyumlu `packaging.version.Version` kullanımı:
+```python
+from packaging.version import Version, InvalidVersion
+
+@staticmethod
+def _version_sort_key(version: str) -> Version:
+    """
+    PEP 440: 1.0.0 > 1.0.0rc1 > 1.0.0b2 > 1.0.0a1
+    Geçersiz formatlarda 0.0.0 döndürülür (sona düşer).
+    """
+    try:
+        return Version(version)
+    except InvalidVersion:
+        return Version("0.0.0")
+```
+
+Artık `1.0.0` > `1.0.0rc1` > `1.0.0b2` > `1.0.0a1` doğru sıralanır.
+
+---
+
+### ✅ 3.45 `agent/sidar_agent.py:182-197` — Araç Sonucu Format String Tutarsızlığı (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `agent/sidar_agent.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `[Araç Sonucu]`, `[Sistem Hatası]`, etiketsiz — üç farklı format LLM'in geçmişi parse etmesini güçleştiriyordu.
+
+**Uygulanan düzeltme:** Modül seviyesinde üç sabit tanımlandı:
+```python
+_FMT_TOOL_OK  = "[ARAÇ:{name}]\n{result}"    # başarılı araç çıktısı
+_FMT_TOOL_ERR = "[ARAÇ:{name}:HATA]\n{error}" # bilinmeyen araç / araç hatası
+_FMT_SYS_ERR  = "[Sistem Hatası] {msg}"        # ayrıştırma / doğrulama hatası
+```
+
+Tüm mesaj ekleme noktaları bu sabitleri kullanır:
+```python
+# Başarılı araç:
+_FMT_TOOL_OK.format(name=tool_name, result=tool_result)
+# Bilinmeyen araç:
+_FMT_TOOL_ERR.format(name=tool_name, error="Bu araç yok...")
+# JSON/Pydantic hatası:
+_FMT_SYS_ERR.format(msg="Ürettiğin JSON yapısı...")
+```
+
+---
+
+### ✅ 3.46 `core/memory.py:70-71` — Bozuk JSON Oturum Dosyaları Sessizce Atlanıyor (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `core/memory.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** Bozuk JSON dosyaları `except Exception` ile sessizce atlanıyor, kullanıcı oturumun neden kaybolduğunu anlayamıyordu.
+
+**Uygulanan düzeltme:**
+```python
+except json.JSONDecodeError as exc:
+    logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
+    # Bozuk dosyayı .json.broken uzantısıyla karantinaya al
+    broken_path = file_path.with_suffix(".json.broken")
+    try:
+        file_path.rename(broken_path)
+        logger.warning(
+            "Bozuk dosya karantinaya alındı: %s → %s",
+            file_path.name, broken_path.name,
+        )
+    except OSError as rename_exc:
+        logger.warning("Karantina yeniden adlandırması başarısız: %s", rename_exc)
+except Exception as exc:
+    logger.error("Oturum okuma hatası (%s): %s", file_path.name, exc)
+```
+
+`json.JSONDecodeError` ve genel `Exception` ayrı yakalanır. Bozuk dosya `<id>.json.broken` adıyla korunur; bir sonraki `get_all_sessions()` çağrısında artık taranmaz. `test_session_broken_json_quarantine` testi bu davranışı doğrular.
+
+---
+
+### ✅ 3.47 `install_sidar.sh` — `OLLAMA_PID` İsimlendirme (DÜŞÜK → ONAYLANDI)
+
+**Dosya:** `install_sidar.sh`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **Mevcut kod doğru**
+
+Değişken hem tanımda (`OLLAMA_PID=""`) hem `cleanup()` içinde (`${OLLAMA_PID}`) büyük harf ile tutarlı kullanılmaktadır. Kod değişikliği gerekmez; incelenmiş ve onaylanmıştır.
+
+---
+
+### ✅ 3.48 `managers/web_search.py` — `search_docs` DDG `site:` Operatörü (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/web_search.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+`search_docs()` artık motoru koşullu olarak ele alır:
+```python
+if self.tavily_key or (self.google_key and self.google_cx):
+    q = base + " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
+else:
+    # DDG: site: filtresi yerine hedef odaklı arama terimi
+    q = f"{library} {topic} official docs reference".strip()
+```
+
+---
+
+### ✅ 3.49 `github_upload.py` — Hata Mesajlarında Türkçe/İngilizce Karışımı (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `github_upload.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** Git subprocess çıktısı `"Sistem Notu:"` etiketiyle gösteriliyordu; İngilizce ham çıktı bağlamsız görünüyordu.
+
+**Uygulanan düzeltme:**
+```python
+# "Git çıktısı:" etiketi, ham İngilizce git çıktısını bağlamsal hale getirir
+print(f"{Colors.WARNING}Git çıktısı: {err_msg}{Colors.ENDC}")
+```
+
+Ve koda açıklayıcı not eklendi: `# Not: Git/GitHub ham çıktısı İngilizce olabilir — bu beklenen bir durumdur.`
+
+---
+
+### ✅ 3.50 `managers/system_health.py` — `nvidia-smi` Boş Çıktı Sessiz (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/system_health.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski durum:** `nvidia-smi` boş döndüğünde veya bulunamadığında `except Exception: pass` ile sessiz şekilde `"N/A"` dönülüyordu.
+
+**Uygulanan düzeltme:** Her durum ayrı yakalanır ve debug log üretir:
+```python
+if version:
+    return version
+logger.debug("nvidia-smi çıktısı boş (return code: %d) — sürücü sürümü N/A.", result.returncode)
+except FileNotFoundError:
+    logger.debug("nvidia-smi bulunamadı — NVIDIA sürücüsü kurulu değil.")
+except Exception as exc:
+    logger.debug("nvidia-smi çalıştırılamadı: %s", exc)
+```
+
+---
+
+### ✅ 3.51 `config.py` — `cpu_count` Sıfır Başlangıç Değeri (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `config.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+`check_hardware()` zaten `multiprocessing.cpu_count()` kullanmakta ve hata durumunda `1` değerine fallback yapmaktadır:
+```python
+try:
+    import multiprocessing
+    info.cpu_count = multiprocessing.cpu_count()
+except Exception:
+    info.cpu_count = 1  # Güvenli fallback
+```
+
+---
+
+### ✅ 3.52 Güvenlik — Mutation Endpoint Rate Limiting (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `web_server.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski durum:** Yalnızca `/chat` endpoint'i rate limit korumasına sahipti; `/sessions/new`, `/sessions/{id}` DELETE gibi mutation endpoint'leri korumasızdı.
+
+**Uygulanan düzeltme:** İki katmanlı rate limiting:
+
+| Kapsam | Limit | Hedef |
+|--------|-------|-------|
+| `POST /chat` | 20 req/60s/IP | LLM çağrısı (ağır) |
+| `POST` + `DELETE` (diğer) | 60 req/60s/IP | Oturum/repo mutasyonları |
+
+```python
+_RATE_LIMIT           = 20   # /chat — LLM çağrısı
+_RATE_LIMIT_MUTATIONS = 60   # POST/DELETE — mutasyon endpoint'leri
+
+# _is_rate_limited() artık key + limit parametresi alır
+async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool: ...
+
+# Middleware: /chat sıkı, diğer POST/DELETE gevşek limit
+elif request.method in ("POST", "DELETE"):
+    if await _is_rate_limited(f"{client_ip}:mut", _RATE_LIMIT_MUTATIONS):
+        return JSONResponse({"error": "..."}, status_code=429)
+```
+
+---
+
+### ✅ 3.53 `agent/definitions.py:23` — Eğitim Verisi Tarihi Yorumu (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `agent/definitions.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+`definitions.py` zaten doğru tarihi içermektedir:
+```
+- LLM eğitim verisi Ağustos 2025'e kadar günceldir (Claude Sonnet 4.6).
+```
+
+---
+
+### ✅ 3.54 `managers/package_info.py:251-254` — npm Sayısal Pre-Release Algılanmıyor (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `managers/package_info.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `re.search(r"[a-zA-Z]", version)` yalnızca harf içeren etiketleri tanıyor; `1.0.0-0` formatı kaçıyordu.
+
+**Uygulanan düzeltme:**
+```python
+@staticmethod
+def _is_prerelease(version: str) -> bool:
+    """
+    Harf tabanlı (alpha/beta/rc/a0/b1) ve npm sayısal pre-release (1.0.0-0) desteklenir.
+    """
+    if re.search(r"[a-zA-Z]", version):
+        return True
+    # npm sayısal pre-release: 1.0.0-0, 1.0.0-1 (tire + sayı sonu)
+    if re.search(r"-\d+$", version):
+        return True
+    return False
+```
+
+---
+
 ## 4. Mevcut Kritik Hatalar
 
 > ✅ Bu bölümde kayıtlı **tüm kritik hatalar giderilmiştir.** Ayrıntılar için bkz. §3.23 – §3.27.
@@ -792,440 +1180,41 @@ Fonksiyon `async def` haline getirildi ve `async with _rate_lock:` ile tüm kont
 
 ## 6. Orta Öncelikli Sorunlar
 
-> ✅ 10 orta öncelikli sorunun **tamamı düzeltilmiştir** (6.5 önceden çözülmüştü).
->
-> | # | Sorun | Durum |
-> |---|-------|-------|
-> | 6.1 | `threading.RLock` Async Context'te | ✅ Düzeltildi |
-> | 6.2 | `asyncio.Lock()` Modül Düzeyinde | ✅ Düzeltildi |
-> | 6.3 | Docker Bağlantı Hatası Mesajı | ✅ Düzeltildi |
-> | 6.4 | GitHub Token Rehberi Eksik | ✅ Düzeltildi |
-> | 6.5 | Web UI Eksik Özellikler | ✅ Düzeltildi |
-> | 6.6 | Eksik Test Kapsamları | ✅ Düzeltildi |
-> | 6.7 | `GPU_MEMORY_FRACTION` Doğrulama | ✅ Düzeltildi |
-> | 6.8 | Version Sort Pre-Release Hatası | ✅ Düzeltildi |
-> | 6.9 | Araç Sonucu Format Tutarsızlığı | ✅ Düzeltildi |
-> | 6.10 | Bozuk JSON Sessizce Atlanıyor | ✅ Düzeltildi |
+> ✅ Bu bölümde kayıtlı **tüm orta öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.37 – §3.46.
+
+| # | Sorun | Durum |
+|---|-------|-------|
+| 3.37 | `threading.RLock` Async Context'te | ✅ Düzeltildi — §3.37'ye taşındı |
+| 3.38 | `asyncio.Lock()` Modül Düzeyinde | ✅ Düzeltildi — §3.38'e taşındı |
+| 3.39 | Docker Bağlantı Hatası Mesajı | ✅ Düzeltildi — §3.39'a taşındı |
+| 3.40 | GitHub Token Rehberi Eksik | ✅ Düzeltildi — §3.40'a taşındı |
+| 3.41 | Web UI Eksik Özellikler | ✅ Düzeltildi — §3.41'e taşındı |
+| 3.42 | Eksik Test Kapsamları | ✅ Düzeltildi — §3.42'ye taşındı |
+| 3.43 | `GPU_MEMORY_FRACTION` Doğrulama | ✅ Düzeltildi — §3.43'e taşındı |
+| 3.44 | Version Sort Pre-Release Hatası | ✅ Düzeltildi — §3.44'e taşındı |
+| 3.45 | Araç Sonucu Format Tutarsızlığı | ✅ Düzeltildi — §3.45'e taşındı |
+| 3.46 | Bozuk JSON Sessizce Atlanıyor | ✅ Düzeltildi — §3.46'ya taşındı |
 
 ---
 
-### ✅ 6.1 `core/memory.py` — `threading.RLock` Async Context'te (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `core/memory.py`, `agent/sidar_agent.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** `memory.add()` + `_save()` çağrısı JSON dosyası I/O yaparak event loop'u teorik olarak bloklıyordu.
-
-**Uygulanan düzeltme:** `memory.py` değiştirilmedi (threading.RLock doğru ve thread-safe); `sidar_agent.py` içindeki tüm `memory.add()` ve `memory.set_last_file()` çağrıları `asyncio.to_thread()` ile thread pool'a iletildi:
-
-```python
-# sidar_agent.py — memory I/O event loop'u bloke etmez
-await asyncio.to_thread(self.memory.add, "user", user_input)
-await asyncio.to_thread(self.memory.add, "assistant", quick_response)
-await asyncio.to_thread(self.memory.add, "assistant", tool_arg)
-await asyncio.to_thread(self.memory.set_last_file, a)
-```
-
-`memory.py`'nin API'si tamamen değiştirilmeden (senkron kalarak) dosya I/O event loop dışına taşındı. `threading.RLock` worker thread içinde çalıştığından re-entrancy doğru davranır.
-
----
-
-### ✅ 6.2 `web_server.py` — `asyncio.Lock()` Modül Düzeyinde Oluşturma (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `web_server.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** `_agent_lock = asyncio.Lock()` modül yüklenirken oluşturuluyordu; Python <3.10'da DeprecationWarning üretirdi.
-
-**Uygulanan düzeltme:**
-```python
-# ✅ Lazy başlatma — event loop başladıktan sonra oluşturulur
-_agent_lock: asyncio.Lock | None = None
-
-async def get_agent() -> SidarAgent:
-    global _agent, _agent_lock
-    if _agent_lock is None:
-        _agent_lock = asyncio.Lock()
-    async with _agent_lock:
-        if _agent is None:
-            _agent = SidarAgent(cfg)
-    return _agent
-```
-
----
-
-### ✅ 6.3 `managers/code_manager.py` — Docker Bağlantı Hatası Yutulabiliyor (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/code_manager.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** `execute_code` Docker bulunamadığında kullanıcıya neden/nasıl çözüleceği hakkında bilgi verilmiyordu.
-
-**Uygulanan düzeltme:**
-```python
-return False, (
-    "[OpenClaw] Docker bağlantısı bulunamadı — güvenlik sebebiyle kod çalıştırma devre dışı.\n"
-    "Çözüm:\n"
-    "  • WSL2  : Docker Desktop → Settings → Resources → WSL Integration'ı etkinleştirin\n"
-    "  • Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
-    "  • macOS : Docker Desktop uygulamasının çalıştığından emin olun\n"
-    "  • Doğrulama: terminalde 'docker ps' komutunu çalıştırın"
-)
-```
-
----
-
-### ✅ 6.4 `managers/github_manager.py` — Token Eksikliğinde Yönlendirme Mesajı Yok (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/github_manager.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** Token yoksa kullanıcı yalnızca "GitHub: Bağlı değil" görüyordu; nasıl token ekleyeceği açıklanmıyordu.
-
-**Uygulanan düzeltme:**
-```python
-def is_available(self) -> bool:
-    if not self._available and not self.token:
-        logger.debug("GitHub: Token eksik. .env'e GITHUB_TOKEN=<token> ekleyin.")
-    return self._available
-
-def status(self) -> str:
-    if not self._available:
-        if not self.token:
-            return (
-                "GitHub: Bağlı değil\n"
-                "  → Token eklemek için: .env dosyasına GITHUB_TOKEN=<token> satırı ekleyin\n"
-                "  → Token oluşturmak için: https://github.com/settings/tokens\n"
-                "  → Gerekli izinler: repo (okuma) veya public_repo (genel depolar)"
-            )
-        return "GitHub: Token geçersiz veya bağlantı hatası (log dosyasını kontrol edin)"
-```
-
----
-
-### ✅ 6.5 `web_ui/index.html` — Oturum Dışa Aktarma / Tool Görselleştirme / Mobil Menü (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `web_ui/index.html`, `web_server.py`, `agent/sidar_agent.py`
-**Önceki Önem:** 🟡 ORTA → **✅ ÇÖZÜLDÜ**
-
-**Uygulanan düzeltmeler:**
-
-**A) Dışa Aktarma (MD + JSON):**
-- Topbar'a `MD` ve `JSON` indirme düğmeleri eklendi.
-- `exportSession(format)`: `/sessions/{id}` üzerinden geçmişi çekip `Blob` ile tarayıcıya indirir.
-
-**B) ReAct Araç Görselleştirmesi:**
-- `sidar_agent.py`: Her araç çağrısından önce `\x00TOOL:<name>\x00` sentinel'i yield edilir.
-- `web_server.py`: SSE generator sentinel'i yakalar → `{"tool_call": "..."}` eventi gönderir.
-- `index.html`: `appendToolStep()` fonksiyonu her tool event'ini `TOOL_LABELS` tablosuyla Türkçe badge olarak render eder (örn. `📂 Dizin listeleniyor`, `🌐 Web'de aranıyor`).
-
-**C) Mobil Hamburger Menü:**
-- 768px altında sidebar `.open` sınıfıyla toggle edilir.
-- Topbar'a `btn-hamburger` eklendi (yalnızca mobilde görünür).
-- Sidebar arkasına yarı saydam overlay eklendi; dışına tıklayınca kapanır.
-
-**Hâlâ eksik:**
-- Oturuma yeniden ad verme arayüzü (başlık otomatik ilk mesajdan alınıyor).
-
----
-
-### ✅ 6.6 `tests/test_sidar.py` — Eksik Test Kapsamları (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `tests/test_sidar.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eklenen test grupları:**
-
-| Test | Kapsam |
-|------|--------|
-| `test_session_create/add_and_load/delete/get_all_sorted/update_title/load_nonexistent` | Oturum yaşam döngüsü (önceki oturumda eklenmişti) |
-| `test_execute_tool_unknown_returns_none` | Dispatcher: bilinmeyen araç → `None` |
-| `test_execute_tool_known_does_not_return_none` | Dispatcher: bilinen araç → sonuç döner |
-| `test_rag_chunking_small_text` | Küçük metin tek chunk olarak saklanır |
-| `test_rag_chunking_large_text` | Büyük metin parçalanır, tümü geri alınır |
-| `test_auto_handle_no_match` | Normal LLM sorusuna müdahale edilmez |
-| `test_auto_handle_clear_command` | Bellek temizleme komutu çökme üretmez |
-| `test_session_broken_json_quarantine` | Bozuk JSON → `.json.broken` karantinası |
-
----
-
-### ✅ 6.7 `config.py:147-153` — `GPU_MEMORY_FRACTION` Aralık Doğrulaması Yok (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `config.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** Geçersiz değerler sessizce atlanıyor, kullanıcıya uyarı verilmiyordu.
-
-**Uygulanan düzeltme:**
-```python
-frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
-if not (0.1 <= frac < 1.0):
-    logger.warning(
-        "GPU_MEMORY_FRACTION=%.2f geçersiz aralık (0.1–1.0 bekleniyor) "
-        "— varsayılan 0.8 kullanılıyor.", frac
-    )
-    frac = 0.8
-try:
-    torch.cuda.set_per_process_memory_fraction(frac, device=0)
-    logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
-except Exception as exc:
-    logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
-```
-
-Geçersiz değerde (ör. `GPU_MEMORY_FRACTION=2.5`) artık `WARNING` log üretilir ve değer `0.8`'e döndürülür.
-
----
-
-### ✅ 6.8 `managers/package_info.py:257-266` — Version Sort Key Pre-Release Sıralama Hatası (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/package_info.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** Manuel regex ayrıştırma `1.0.0a1` ile `1.0.0` arasındaki farkı doğru sıralayamıyordu; kullanıcıya stabil sürüm yerine pre-release önerilebiliyordu.
-
-**Uygulanan düzeltme:** PEP 440 uyumlu `packaging.version.Version` kullanımı:
-```python
-from packaging.version import Version, InvalidVersion
-
-@staticmethod
-def _version_sort_key(version: str) -> Version:
-    """
-    PEP 440: 1.0.0 > 1.0.0rc1 > 1.0.0b2 > 1.0.0a1
-    Geçersiz formatlarda 0.0.0 döndürülür (sona düşer).
-    """
-    try:
-        return Version(version)
-    except InvalidVersion:
-        return Version("0.0.0")
-```
-
-Artık `1.0.0` > `1.0.0rc1` > `1.0.0b2` > `1.0.0a1` doğru sıralanır.
-
----
-
-### ✅ 6.9 `agent/sidar_agent.py:182-197` — Araç Sonucu Format String Tutarsızlığı (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `agent/sidar_agent.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** `[Araç Sonucu]`, `[Sistem Hatası]`, etiketsiz — üç farklı format LLM'in geçmişi parse etmesini güçleştiriyordu.
-
-**Uygulanan düzeltme:** Modül seviyesinde üç sabit tanımlandı:
-```python
-_FMT_TOOL_OK  = "[ARAÇ:{name}]\n{result}"    # başarılı araç çıktısı
-_FMT_TOOL_ERR = "[ARAÇ:{name}:HATA]\n{error}" # bilinmeyen araç / araç hatası
-_FMT_SYS_ERR  = "[Sistem Hatası] {msg}"        # ayrıştırma / doğrulama hatası
-```
-
-Tüm mesaj ekleme noktaları bu sabitleri kullanır:
-```python
-# Başarılı araç:
-_FMT_TOOL_OK.format(name=tool_name, result=tool_result)
-# Bilinmeyen araç:
-_FMT_TOOL_ERR.format(name=tool_name, error="Bu araç yok...")
-# JSON/Pydantic hatası:
-_FMT_SYS_ERR.format(msg="Ürettiğin JSON yapısı...")
-```
-
----
-
-### ✅ 6.10 `core/memory.py:70-71` — Bozuk JSON Oturum Dosyaları Sessizce Atlanıyor (ORTA → ÇÖZÜLDÜ)
-
-**Dosya:** `core/memory.py`
-**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** Bozuk JSON dosyaları `except Exception` ile sessizce atlanıyor, kullanıcı oturumun neden kaybolduğunu anlayamıyordu.
-
-**Uygulanan düzeltme:**
-```python
-except json.JSONDecodeError as exc:
-    logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
-    # Bozuk dosyayı .json.broken uzantısıyla karantinaya al
-    broken_path = file_path.with_suffix(".json.broken")
-    try:
-        file_path.rename(broken_path)
-        logger.warning(
-            "Bozuk dosya karantinaya alındı: %s → %s",
-            file_path.name, broken_path.name,
-        )
-    except OSError as rename_exc:
-        logger.warning("Karantina yeniden adlandırması başarısız: %s", rename_exc)
-except Exception as exc:
-    logger.error("Oturum okuma hatası (%s): %s", file_path.name, exc)
-```
-
-`json.JSONDecodeError` ve genel `Exception` ayrı yakalanır. Bozuk dosya `<id>.json.broken` adıyla korunur; bir sonraki `get_all_sessions()` çağrısında artık taranmaz. `test_session_broken_json_quarantine` testi bu davranışı doğrular.
-
----
 
 ## 7. Düşük Öncelikli Sorunlar
 
-> ✅ 8 düşük öncelikli sorunun **tamamı değerlendirilmiştir** (4'ü kod değişikliği, 4'ü zaten uygulanmış).
->
-> | # | Sorun | Durum |
-> |---|-------|-------|
-> | 7.1 | `OLLAMA_PID` İsimlendirme Tutarlılığı | ✅ Mevcut kod doğru |
-> | 7.2 | `search_docs` DDG `site:` Operatörü | ✅ Önceki oturumda düzeltildi |
-> | 7.3 | Git Ham Çıktısı Dil Etiketleme | ✅ Düzeltildi |
-> | 7.4 | `nvidia-smi` Boş Çıktı Sessiz Kalıyor | ✅ Düzeltildi |
-> | 7.5 | `cpu_count` Sıfır Başlangıç Değeri | ✅ Önceki oturumda düzeltildi |
-> | 7.6 | Güvenlik — Mutation Endpoint Rate Limit | ✅ Düzeltildi |
-> | 7.7 | Eğitim Verisi Tarihi Yorumu | ✅ Önceki oturumda düzeltildi |
-> | 7.8 | npm Sayısal Pre-Release Algılama | ✅ Düzeltildi |
+> ✅ Bu bölümde kayıtlı **tüm düşük öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.47 – §3.54.
+
+| # | Sorun | Durum |
+|---|-------|-------|
+| 3.47 | `OLLAMA_PID` İsimlendirme Tutarlılığı | ✅ Onaylandı — §3.47'ye taşındı |
+| 3.48 | `search_docs` DDG `site:` Operatörü | ✅ Düzeltildi — §3.48'e taşındı |
+| 3.49 | Git Ham Çıktısı Dil Etiketleme | ✅ Düzeltildi — §3.49'a taşındı |
+| 3.50 | `nvidia-smi` Boş Çıktı Sessiz Kalıyor | ✅ Düzeltildi — §3.50'ye taşındı |
+| 3.51 | `cpu_count` Sıfır Başlangıç Değeri | ✅ Düzeltildi — §3.51'e taşındı |
+| 3.52 | Güvenlik — Mutation Endpoint Rate Limit | ✅ Düzeltildi — §3.52'ye taşındı |
+| 3.53 | Eğitim Verisi Tarihi Yorumu | ✅ Onaylandı — §3.53'e taşındı |
+| 3.54 | npm Sayısal Pre-Release Algılama | ✅ Düzeltildi — §3.54'e taşındı |
 
 ---
 
-### ✅ 7.1 `install_sidar.sh` — `OLLAMA_PID` İsimlendirme (DÜŞÜK → ONAYLANDI)
-
-**Dosya:** `install_sidar.sh`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **Mevcut kod doğru**
-
-Değişken hem tanımda (`OLLAMA_PID=""`) hem `cleanup()` içinde (`${OLLAMA_PID}`) büyük harf ile tutarlı kullanılmaktadır. Kod değişikliği gerekmez; incelenmiş ve onaylanmıştır.
-
----
-
-### ✅ 7.2 `managers/web_search.py` — `search_docs` DDG `site:` Operatörü (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/web_search.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-`search_docs()` artık motoru koşullu olarak ele alır:
-```python
-if self.tavily_key or (self.google_key and self.google_cx):
-    q = base + " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
-else:
-    # DDG: site: filtresi yerine hedef odaklı arama terimi
-    q = f"{library} {topic} official docs reference".strip()
-```
-
----
-
-### ✅ 7.3 `github_upload.py` — Hata Mesajlarında Türkçe/İngilizce Karışımı (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `github_upload.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** Git subprocess çıktısı `"Sistem Notu:"` etiketiyle gösteriliyordu; İngilizce ham çıktı bağlamsız görünüyordu.
-
-**Uygulanan düzeltme:**
-```python
-# "Git çıktısı:" etiketi, ham İngilizce git çıktısını bağlamsal hale getirir
-print(f"{Colors.WARNING}Git çıktısı: {err_msg}{Colors.ENDC}")
-```
-
-Ve koda açıklayıcı not eklendi: `# Not: Git/GitHub ham çıktısı İngilizce olabilir — bu beklenen bir durumdur.`
-
----
-
-### ✅ 7.4 `managers/system_health.py` — `nvidia-smi` Boş Çıktı Sessiz (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/system_health.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski durum:** `nvidia-smi` boş döndüğünde veya bulunamadığında `except Exception: pass` ile sessiz şekilde `"N/A"` dönülüyordu.
-
-**Uygulanan düzeltme:** Her durum ayrı yakalanır ve debug log üretir:
-```python
-if version:
-    return version
-logger.debug("nvidia-smi çıktısı boş (return code: %d) — sürücü sürümü N/A.", result.returncode)
-except FileNotFoundError:
-    logger.debug("nvidia-smi bulunamadı — NVIDIA sürücüsü kurulu değil.")
-except Exception as exc:
-    logger.debug("nvidia-smi çalıştırılamadı: %s", exc)
-```
-
----
-
-### ✅ 7.5 `config.py` — `cpu_count` Sıfır Başlangıç Değeri (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `config.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-`check_hardware()` zaten `multiprocessing.cpu_count()` kullanmakta ve hata durumunda `1` değerine fallback yapmaktadır:
-```python
-try:
-    import multiprocessing
-    info.cpu_count = multiprocessing.cpu_count()
-except Exception:
-    info.cpu_count = 1  # Güvenli fallback
-```
-
----
-
-### ✅ 7.6 Güvenlik — Mutation Endpoint Rate Limiting (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `web_server.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski durum:** Yalnızca `/chat` endpoint'i rate limit korumasına sahipti; `/sessions/new`, `/sessions/{id}` DELETE gibi mutation endpoint'leri korumasızdı.
-
-**Uygulanan düzeltme:** İki katmanlı rate limiting:
-
-| Kapsam | Limit | Hedef |
-|--------|-------|-------|
-| `POST /chat` | 20 req/60s/IP | LLM çağrısı (ağır) |
-| `POST` + `DELETE` (diğer) | 60 req/60s/IP | Oturum/repo mutasyonları |
-
-```python
-_RATE_LIMIT           = 20   # /chat — LLM çağrısı
-_RATE_LIMIT_MUTATIONS = 60   # POST/DELETE — mutasyon endpoint'leri
-
-# _is_rate_limited() artık key + limit parametresi alır
-async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool: ...
-
-# Middleware: /chat sıkı, diğer POST/DELETE gevşek limit
-elif request.method in ("POST", "DELETE"):
-    if await _is_rate_limited(f"{client_ip}:mut", _RATE_LIMIT_MUTATIONS):
-        return JSONResponse({"error": "..."}, status_code=429)
-```
-
-**Kalan kabul edilmiş riskler (single-user local kullanım için):**
-
-| Alan | Durum | Risk |
-|------|-------|------|
-| Bellek Şifreleme | `data/sessions/*.json` düz metin | Düşük — yerel kullanım |
-| Prompt Injection | Sistem prompt güçlü | Orta — kabul edilebilir |
-| Web Fetch Sandbox | `_clean_html()` script/style temizliyor | Düşük |
-| CORS | Yalnızca localhost | İyi yapılandırılmış |
-
----
-
-### ✅ 7.7 `agent/definitions.py:23` — Eğitim Verisi Tarihi Yorumu (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `agent/definitions.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-`definitions.py` zaten doğru tarihi içermektedir:
-```
-- LLM eğitim verisi Ağustos 2025'e kadar günceldir (Claude Sonnet 4.6).
-```
-
----
-
-### ✅ 7.8 `managers/package_info.py:251-254` — npm Sayısal Pre-Release Algılanmıyor (DÜŞÜK → ÇÖZÜLDÜ)
-
-**Dosya:** `managers/package_info.py`
-**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
-
-**Eski sorun:** `re.search(r"[a-zA-Z]", version)` yalnızca harf içeren etiketleri tanıyor; `1.0.0-0` formatı kaçıyordu.
-
-**Uygulanan düzeltme:**
-```python
-@staticmethod
-def _is_prerelease(version: str) -> bool:
-    """
-    Harf tabanlı (alpha/beta/rc/a0/b1) ve npm sayısal pre-release (1.0.0-0) desteklenir.
-    """
-    if re.search(r"[a-zA-Z]", version):
-        return True
-    # npm sayısal pre-release: 1.0.0-0, 1.0.0-1 (tire + sayı sonu)
-    if re.search(r"-\d+$", version):
-        return True
-    return False
-```
-
----
 
 ## 8. Dosyalar Arası Uyumsuzluk Tablosu
 
