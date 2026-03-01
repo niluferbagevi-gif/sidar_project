@@ -167,8 +167,9 @@ class SystemHealthManager:
                         dev["temperature_c"]    = temp
                         dev["utilization_pct"]  = util.gpu
                         dev["mem_utilization_pct"] = util.memory
-                    except Exception:
-                        pass  # pynvml hatası kritik değil
+                    except Exception as exc:
+                        # pynvml hatası kritik değil; WSL2/sürücü sınırlaması olabilir
+                        logger.debug("pynvml GPU sorgu hatası (beklenen — WSL2/sürücü): %s", exc)
 
                 devices.append(dev)
 
@@ -188,8 +189,8 @@ class SystemHealthManager:
             try:
                 import pynvml
                 return pynvml.nvmlSystemGetDriverVersion()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("pynvml sürücü sürümü alınamadı: %s", exc)
         # WSL2 fallback: nvidia-smi subprocess ile sürücü sürümünü al
         try:
             result = subprocess.run(

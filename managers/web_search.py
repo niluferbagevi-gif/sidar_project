@@ -76,12 +76,16 @@ class WebSearchManager:
         n = max_results or self.MAX_RESULTS
 
         if self.engine == "tavily" and self.tavily_key:
-            return await self._search_tavily(query, n)
+            ok, res = await self._search_tavily(query, n)
+            if ok:
+                return ok, res
+            # 401/403 veya başka bir hata → aşağıdaki auto-fallback'e düş
+            logger.info("Tavily başarısız; otomatik fallback başlatılıyor.")
         elif self.engine == "google" and self.google_key and self.google_cx:
             return await self._search_google(query, n)
         elif self.engine == "duckduckgo" and self._ddg_available:
             return await self._search_duckduckgo(query, n)
-        
+
         # AUTO MODU VEYA FALLBACK: Tavily -> Google -> DuckDuckGo
         if self.tavily_key:
             ok, res = await self._search_tavily(query, n)
@@ -131,6 +135,17 @@ class WebSearchManager:
                 lines.append(f"   → {href}\n")
 
             return True, "\n".join(lines)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (401, 403):
+                logger.error(
+                    "Tavily kimlik doğrulama hatası (%d) — API anahtarı geçersiz veya süresi dolmuş; "
+                    "Tavily bu oturum için devre dışı bırakıldı.",
+                    exc.response.status_code,
+                )
+                self.tavily_key = ""  # 401/403 sonrası gereksiz istekleri önle
+            else:
+                logger.warning("Tavily HTTP hatası: %s", exc)
+            return False, f"[HATA] Tavily: {exc}"
         except Exception as exc:
             logger.warning("Tavily API hatası: %s", exc)
             return False, f"[HATA] Tavily: {exc}"
