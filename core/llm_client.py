@@ -5,7 +5,7 @@ Ollama ve Google Gemini API entegrasyonu (Asenkron).
 
 import json
 import logging
-from typing import List, Dict, Optional, AsyncIterator, Union
+from typing import AsyncGenerator, AsyncIterator, Dict, List, Optional, Union
 
 import httpx
 
@@ -22,6 +22,11 @@ class LLMClient:
         """
         self.provider = provider.lower()
         self.config = config
+
+    @property
+    def _ollama_base_url(self) -> str:
+        """Ollama API kök URL'sini normalize eder (sondaki '/api' varsa kaldırır)."""
+        return self.config.OLLAMA_URL.removesuffix("/api")
 
     # ─────────────────────────────────────────────
     #  ANA ÇAĞRI NOKTASI
@@ -66,7 +71,7 @@ class LLMClient:
         stream: bool,
         json_mode: bool = True,
     ) -> Union[str, AsyncIterator[str]]:
-        url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/chat"
+        url = f"{self._ollama_base_url}/api/chat"
 
         # Ollama options: GPU katman sayısını ilet (USE_GPU=true ise)
         options: dict = {"temperature": temperature}
@@ -120,7 +125,7 @@ class LLMClient:
             msg = json.dumps({"tool": "final_answer", "argument": f"[HATA] Ollama: {exc}", "thought": "Hata oluştu."})
             return self._fallback_stream(msg) if stream else msg
 
-    async def _stream_ollama_response(self, url: str, payload: dict, timeout: int = 120) -> AsyncIterator[str]:
+    async def _stream_ollama_response(self, url: str, payload: dict, timeout: int = 120) -> AsyncGenerator[str, None]:
         """
         Ollama stream yanıtını manuel buffer ile güvenli şekilde ayrıştırır.
 
@@ -247,7 +252,7 @@ class LLMClient:
             msg = json.dumps({"tool": "final_answer", "argument": f"[HATA] Gemini: {exc}", "thought": "Hata"})
             return self._fallback_stream(msg) if stream else msg
 
-    async def _stream_gemini_generator(self, response_stream) -> AsyncIterator[str]:
+    async def _stream_gemini_generator(self, response_stream) -> AsyncGenerator[str, None]:
         """Gemini stream yanıtını asenkron dönüştürür."""
         try:
             async for chunk in response_stream:
@@ -256,8 +261,8 @@ class LLMClient:
         except Exception as exc:
             yield json.dumps({"tool": "final_answer", "argument": f"\n[HATA] Gemini akış hatası: {exc}", "thought": "Hata"})
 
-    async def _fallback_stream(self, msg: str) -> AsyncIterator[str]:
-        """Senkron hata durumlarında asenkron itere edilebilir bir nesne döndürmek için yardımcı."""
+    async def _fallback_stream(self, msg: str) -> AsyncGenerator[str, None]:
+        """Hata durumlarında tek elemanlı asenkron akış döndürür."""
         yield msg
 
     # ─────────────────────────────────────────────
@@ -265,7 +270,7 @@ class LLMClient:
     # ─────────────────────────────────────────────
 
     async def list_ollama_models(self) -> List[str]:
-        url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/tags"
+        url = f"{self._ollama_base_url}/api/tags"
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(url)
@@ -276,7 +281,7 @@ class LLMClient:
             return []
 
     async def is_ollama_available(self) -> bool:
-        url = f"{self.config.OLLAMA_URL.removesuffix('/api')}/api/tags"
+        url = f"{self._ollama_base_url}/api/tags"
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 await client.get(url)

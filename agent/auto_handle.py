@@ -381,14 +381,22 @@ class AutoHandle:
     # ─────────────────────────────────────────────
 
     def _try_docs_search(self, t: str, raw: str) -> Tuple[bool, str]:
-        """Belge deposunda arama — 'depoda ara', 'bilgi bankası' vb."""
+        """Belge deposunda arama — 'depoda ara', 'bilgi bankası', 'rag ara vektör:' vb."""
         m = re.search(
             r"(?:depoda\s+ara|bilgi\s+bankası|rag\s+ara|belgeler.*ara)\s*[:\-]?\s*(.+)",
             t,
         )
         if m:
-            query = m.group(1).strip()
-            _, result = self.docs.search(query)
+            query_raw = m.group(1).strip()
+            # Opsiyonel motor seçimi: "sorgu mode:vector" veya "vector: sorgu"
+            mode_m = re.search(r"\bmode:(auto|vector|bm25|keyword)\b", query_raw, re.IGNORECASE)
+            if mode_m:
+                mode = mode_m.group(1).lower()
+                query = query_raw[:mode_m.start()].strip() or query_raw[mode_m.end():].strip()
+            else:
+                mode = "auto"
+                query = query_raw
+            _, result = self.docs.search(query, mode=mode)
             return True, result
         return False, ""
 

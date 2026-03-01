@@ -1,7 +1,7 @@
 """
 Sidar Project - Belge Deposu ve Arama (RAG)
 ChromaDB tabanlı Vektör Arama + BM25 Hibrit Sistemi.
-Sürüm: 2.6.0 (GPU Hızlandırmalı Embedding)
+Sürüm: 2.6.1 (GPU Hızlandırmalı Embedding + Motor Bağımsız Sorgu)
 
 Özellikler:
 1. Vektör Arama (ChromaDB): Anlamsal yakınlık (Semantic Search) - Chunking destekli
@@ -432,10 +432,16 @@ class DocumentStore:
         return self._keyword_search(query, top_k)
 
     def _chroma_search(self, query: str, top_k: int) -> Tuple[bool, str]:
-        # Chunking nedeniyle top_k'yı biraz artıralım, aynı dokümanın farklı parçaları gelebilir
+        # Chunking nedeniyle top_k'yı biraz artır; aynı dokümanın farklı parçaları gelebilir.
+        # n_results koleksiyondaki toplam chunk sayısını aşamaz (ChromaDB InvalidArgumentError).
+        try:
+            collection_size = self.collection.count()
+        except Exception:
+            collection_size = top_k * 2
+        n_results = min(top_k * 2, max(collection_size, 1))
         results = self.collection.query(
             query_texts=[query],
-            n_results=top_k * 2 
+            n_results=n_results,
         )
         
         if not results["ids"] or not results["ids"][0]:
@@ -555,7 +561,7 @@ class DocumentStore:
             if res['source']:
                 lines.append(f"  Kaynak: {res['source']}")
             
-            # Snippet temizliği (çok uzun boşlukları al)
+            # Snippet uzunluğunu sınırla ve satır sonlarını temizle
             snippet = res['snippet'].replace("\n", " ").strip()
             if len(snippet) > 400:
                 snippet = snippet[:400] + "..."

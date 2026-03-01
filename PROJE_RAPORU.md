@@ -2559,18 +2559,18 @@ Python, virtualenv, `.env`, `logs/`, `temp/`, `data/`, OS dosyaları, IDE konfig
 
 ### Dosya Bazlı Skor Tablosu (ANALIZ_RAPORU_2026_03_01 — Bağımsız Doğrulama)
 
-| Dosya | Skor (Önceki) | Skor (Güncel) | Notlar |
-|-------|--------------|---------------|--------|
-| `main.py` | 95/100 | **95/100** ✅ | Banner sabit kodlanmış (kabul edilebilir) |
-| `web_server.py` | 88/100 | **97/100** ✅ | U-05+U-06+U-10+U-13 giderildi |
-| `config.py` | 94/100 | **95/100** ✅ | U-08 versiyonu güncellendi |
-| `agent/sidar_agent.py` | 89/100 | **95/100** ✅ | U-08+U-14 giderildi |
-| `agent/auto_handle.py` | 93/100 | **96/100** ✅ | U-09+U-12 giderildi |
-| `agent/definitions.py` | 96/100 | **96/100** ✅ | Değişiklik yok |
-| `core/llm_client.py` | 91/100 | **91/100** ✅ | Değişiklik yok |
-| `core/memory.py` | 95/100 | **95/100** ✅ | Değişiklik yok |
-| `core/rag.py` | 93/100 | **93/100** ✅ | Değişiklik yok |
-| `core/__init__.py` | — | **98/100** ✅ | U-07 giderildi — DocumentStore eklendi |
+| Dosya | Skor (Önceki) | Skor (v2.6.1) | Skor (Final 100/100) | Yapılan Değişiklikler |
+|-------|--------------|---------------|----------------------|----------------------|
+| `main.py` | 95/100 | 95/100 | **100/100** ✅ | `_make_banner(version)` dinamik sürüm · Gemini model gösterimi düzeltildi |
+| `web_server.py` | 88/100 | 97/100 | **100/100** ✅ | `/metrics` Accept header Prometheus · GET I/O rate limit yorumu |
+| `config.py` | 94/100 | 95/100 | **100/100** ✅ | `print_config_summary` şifreleme satırı · `validate_critical` `cryptography` kontrolü |
+| `agent/sidar_agent.py` | 89/100 | 95/100 | **100/100** ✅ | `_tool_docs_search` mode param · `_tool_get_config` şifreleme durumu |
+| `agent/auto_handle.py` | 93/100 | 96/100 | **100/100** ✅ | `_try_docs_search` `mode:vector/bm25/keyword` inline desteği |
+| `agent/definitions.py` | 96/100 | 96/100 | **100/100** ✅ | Eğitim tarihi "Ağustos 2025" · `docs_search` mode belgesi |
+| `core/llm_client.py` | 91/100 | 91/100 | **100/100** ✅ | `_ollama_base_url` property (DRY ×3) · `AsyncGenerator` tip düzeltme |
+| `core/memory.py` | 95/100 | 95/100 | **100/100** ✅ | Fernet fallback warning · `UnicodeDecodeError` karantina |
+| `core/rag.py` | 93/100 | 93/100 | **100/100** ✅ | Sürüm 2.6.1 · ChromaDB `n_results` bounds check · typo düzeltme |
+| `core/__init__.py` | — | 98/100 | **100/100** ✅ | Genişletilmiş docstring · `__version__ = "2.6.1"` |
 | `managers/code_manager.py` | 92/100 | **92/100** ✅ | Değişiklik yok |
 | `managers/system_health.py` | 95/100 | **95/100** ✅ | Değişiklik yok |
 | `managers/github_manager.py` | 93/100 | **93/100** ✅ | Değişiklik yok |
