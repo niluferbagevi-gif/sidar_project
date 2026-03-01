@@ -156,9 +156,12 @@ class SidarAgent:
 
         for step in range(self.cfg.MAX_REACT_STEPS):
             # 1. LLM Çağrısı (Async Stream)
+            # ReAct döngüsü: düşünme/planlama/özetleme → TEXT_MODEL
+            # Kod odaklı araçlara (execute_code, write_file, patch_file) CODING_MODEL
+            # atanabilir; ancak döngü genelinde tutarlılık için TEXT_MODEL tercih edilir.
             response_generator = await self.llm.chat(
                 messages=messages,
-                model=self.cfg.CODING_MODEL,
+                model=getattr(self.cfg, "TEXT_MODEL", self.cfg.CODING_MODEL),
                 system_prompt=full_system,
                 temperature=0.3,
                 stream=True
@@ -485,7 +488,7 @@ class SidarAgent:
         try:
             summary = await self.llm.chat(
                 messages=[{"role": "user", "content": summarize_prompt}],
-                model=self.cfg.CODING_MODEL,
+                model=getattr(self.cfg, "TEXT_MODEL", self.cfg.CODING_MODEL),
                 temperature=0.1,
                 stream=False,
                 json_mode=False,
