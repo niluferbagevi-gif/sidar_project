@@ -111,7 +111,7 @@ sidar_project/
 
 ## 3. Önceki Rapordan Bu Yana Düzeltilen Hatalar
 
-> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu giderilmiştir (toplam 15 düzeltme).
+> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu + v2.7.x'teki 5 kritik hata + v2.7.x'teki 7 ek sorun giderilmiştir (toplam 27 düzeltme).
 
 ---
 
@@ -393,21 +393,7 @@ except Exception as exc:
 
 ---
 
-## 4. Mevcut Kritik Hatalar
-
-> ✅ Derinlemesine satır satır analiz sonucunda tespit edilen **5 kritik** sorunun **tamamı düzeltilmiştir.**
->
-> | # | Sorun | Durum |
-> |---|-------|-------|
-> | 4.1 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi |
-> | 4.2 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi |
-> | 4.3 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi |
-> | 4.4 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi |
-> | 4.5 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi |
-
----
-
-### ✅ 4.1 `agent/sidar_agent.py:163` — Açgözlü (Greedy) Regex ile JSON Ayrıştırma (KRİTİK → ÇÖZÜLDÜ)
+### ✅ 3.23 `agent/sidar_agent.py:163` — Açgözlü (Greedy) Regex ile JSON Ayrıştırma (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `agent/sidar_agent.py`
 **Önem:** ~~🔴 KRİTİK~~ → ✅ **ÇÖZÜLDÜ**
@@ -432,7 +418,7 @@ while _idx != -1:
 
 ---
 
-### ✅ 4.2 `core/llm_client.py:129` — UTF-8 Çok Baytlı Karakter Bölünmesi (KRİTİK → ÇÖZÜLDÜ)
+### ✅ 3.24 `core/llm_client.py:129` — UTF-8 Çok Baytlı Karakter Bölünmesi (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `core/llm_client.py`
 **Önem:** ~~🔴 KRİTİK~~ → ✅ **ÇÖZÜLDÜ**
@@ -466,7 +452,7 @@ async for raw_bytes in resp.aiter_bytes():
 
 ---
 
-### ✅ 4.3 `managers/code_manager.py:208` — Hardcoded Docker Image (KRİTİK → ÇÖZÜLDÜ)
+### ✅ 3.25 `managers/code_manager.py:208` — Hardcoded Docker Image (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/code_manager.py`
 **Satır:** 30, 210, 246
@@ -508,7 +494,7 @@ self.code = CodeManager(
 
 ---
 
-### ✅ 4.4 `core/memory.py:170-171` — Token Sayısı Limiti Yok (KRİTİK → ÇÖZÜLDÜ)
+### ✅ 3.26 `core/memory.py:170-171` — Token Sayısı Limiti Yok (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `core/memory.py`
 **Önem:** ~~🔴 KRİTİK~~ → ✅ **ÇÖZÜLDÜ**
@@ -533,7 +519,7 @@ Hem mesaj sayısı hem de tahmini token miktarı artık birlikte kontrol edilmek
 
 ---
 
-### ✅ 4.5 `agent/auto_handle.py:156-157` — `self.health` Null Kontrolü Yok (KRİTİK → ÇÖZÜLDÜ)
+### ✅ 3.27 `agent/auto_handle.py:156-157` — `self.health` Null Kontrolü Yok (KRİTİK → ÇÖZÜLDÜ)
 
 **Dosya:** `agent/auto_handle.py`
 **Önem:** ~~🔴 KRİTİK~~ → ✅ **ÇÖZÜLDÜ**
@@ -558,6 +544,20 @@ def _try_gpu_optimize(self, t: str) -> Tuple[bool, str]:
 ```
 
 Her iki metoda da `if not self.health:` kontrolü eklenmiş; `None` durumunda kullanıcıya açıklayıcı mesaj dönülmektedir.
+
+---
+
+## 4. Mevcut Kritik Hatalar
+
+> ✅ Bu bölümde kayıtlı **tüm kritik hatalar giderilmiştir.** Ayrıntılar için bkz. §3.23 – §3.27.
+
+| # | Sorun | Durum |
+|---|-------|-------|
+| 3.23 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi — §3.23'e taşındı |
+| 3.24 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi — §3.24'e taşındı |
+| 3.25 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi — §3.25'e taşındı |
+| 3.26 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi — §3.26'ya taşındı |
+| 3.27 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi — §3.27'ye taşındı |
 
 ---
 
