@@ -115,9 +115,37 @@ async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool:
         return False
 
 
+def _get_client_ip(request: Request) -> str:
+    """
+    İstemci IP adresini güvenle çeker.
+
+    Proxy/reverse-proxy ortamlarında X-Forwarded-For ve X-Real-IP başlıklarına
+    bakar; yoksa doğrudan bağlantı IP'sini kullanır.
+
+    Güvenlik notu: X-Forwarded-For başlığındaki yalnızca ilk (en soldan) IP
+    kullanılır — bu, istemcinin orijinal IP'sidir. Saldırganın başlığı
+    manipüle etme riskine karşı proxy zincirinin yalnızca güvenilen ağdan
+    geldiğinden emin olunmalıdır.
+    """
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        # "client, proxy1, proxy2" formatından yalnızca client IP'sini al
+        first_ip = xff.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+    xri = request.headers.get("X-Real-IP", "")
+    if xri:
+        return xri.strip()
+    return request.client.host if request.client else "unknown"
+
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    client_ip = request.client.host if request.client else "unknown"
+    """
+    IP tabanlı rate limiting middleware.
+    X-Forwarded-For / X-Real-IP başlıklarını proxy farkındalıklı okur.
+    """
+    client_ip = _get_client_ip(request)
 
     if request.url.path == "/chat":
         # /chat: LLM çağrısı — sıkı limit (20 req/60s)
@@ -206,7 +234,11 @@ async def chat(request: Request):
             # Ajanın asenkron stream yanıtını bekle ve akıt
             _TOOL_SENTINEL = re.compile(r'^\x00TOOL:(.+)\x00$')
             async for chunk in agent.respond(user_message):
-                if await request.is_disconnected():
+                try:
+                    disconnected = await request.is_disconnected()
+                except Exception:
+                    disconnected = True  # Bağlantı durumu alınamazsa güvenli tarafta kal
+                if disconnected:
                     logger.info("İstemci bağlantıyı kesti, stream durduruluyor.")
                     return
                 m = _TOOL_SENTINEL.match(chunk)

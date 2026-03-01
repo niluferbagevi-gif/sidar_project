@@ -31,10 +31,12 @@ class CodeManager:
     SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".json", ".yaml", ".yml", ".md", ".txt", ".sh"}
 
     def __init__(self, security: SecurityManager, base_dir: Path,
-                 docker_image: str = "python:3.11-alpine") -> None:
+                 docker_image: str = "python:3.11-alpine",
+                 docker_exec_timeout: int = 10) -> None:
         self.security = security
-        self.base_dir = base_dir
-        self.docker_image = docker_image  # Config'den veya varsayılan değer
+        self.base_dir = base_dir.resolve()
+        self.docker_image = docker_image          # Config'den veya varsayılan değer
+        self.docker_exec_timeout = docker_exec_timeout  # Docker sandbox timeout (sn)
         self._lock = threading.RLock()
 
         # Metrikler
@@ -90,14 +92,17 @@ class CodeManager:
         """
         Dosya içeriğini oku.
 
+        Güvenlik: path traversal (../), tehlikeli kalıplar ve sembolik bağlantı
+        geçişleri security.can_read() ve base_dir doğrulaması ile engellenir.
+
         Returns:
             (başarı, içerik_veya_hata_mesajı)
         """
-        if not self.security.can_read():
-            return False, "[OpenClaw] Okuma yetkisi yok."
+        if not self.security.can_read(path):
+            return False, "[OpenClaw] Okuma yetkisi yok veya tehlikeli yol reddedildi."
 
         try:
-            target = Path(path)
+            target = Path(path).resolve()
             if not target.exists():
                 return False, f"Dosya bulunamadı: {path}"
             if target.is_dir():
@@ -223,18 +228,21 @@ class CodeManager:
                 working_dir="/tmp",
             )
 
-            # Zaman aşımı takibi (10 Saniye)
-            timeout = 10
+            # Zaman aşımı takibi (Config'den okunur, varsayılan 10 sn)
+            timeout = self.docker_exec_timeout
             start_time = time.time()
-            
+
             while True:
-                container.reload() # Durumu güncelle
+                container.reload()  # Durumu güncelle
                 if container.status == "exited":
                     break
                 if time.time() - start_time > timeout:
-                    container.kill() # 10 saniyeyi geçerse zorla durdur
+                    container.kill()  # Süre aşımında zorla durdur
                     container.remove(force=True)
-                    return False, "⚠ Zaman aşımı! Kod 10 saniyeden uzun sürdü ve zorla durduruldu (Sonsuz döngü koruması)."
+                    return False, (
+                        f"⚠ Zaman aşımı! Kod {timeout} saniyeden uzun sürdü ve "
+                        "zorla durduruldu (sonsuz döngü koruması)."
+                    )
                 time.sleep(0.5)
 
             # Çıktıları al

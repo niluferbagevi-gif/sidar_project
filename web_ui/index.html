@@ -2164,17 +2164,21 @@ async function openStatus() {
       gpuRows = row('GPU', '✗ CPU modu', 'warn');
     }
 
+    // Güvenlik seviyesi için renk
+    const lvlClass = data.access_level === 'restricted' ? 'warn'
+                   : data.access_level === 'full'       ? 'ok'
+                   : '';
     grid.innerHTML = [
       row('Sürüm',           `v${data.version}`),
       row('AI Sağlayıcı',   `${data.provider} / ${data.model}`),
-      row('Erişim Seviyesi', data.access_level.toUpperCase()),
+      row('Erişim Seviyesi', data.access_level.toUpperCase(), lvlClass),
       row('Bellek',          `${data.memory_count} mesaj`),
       row('GitHub',    data.github     ? '✓ Bağlı'         : '✗ Bağlı değil', data.github     ? 'ok' : 'warn'),
       row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
       row('RAG',       data.rag_status),
       row('Paket Bilgi', data.pkg_status),
       data.enc_status ? row('Bellek Şifreleme', data.enc_status,
-        data.enc_status.startsWith('Etkin') ? 'ok' : '') : '',
+        data.enc_status.startsWith('Etkin') ? 'ok' : 'warn') : '',
       gpuRows,
     ].join('');
   } catch (err) {

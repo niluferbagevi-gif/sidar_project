@@ -212,24 +212,39 @@ class SystemHealthManager:
         return "N/A"
 
     def optimize_gpu_memory(self) -> str:
-        """GPU VRAM'ını boşalt ve Python GC'yi çalıştır."""
-        freed_mb = 0.0
-        if self._gpu_available:
-            try:
-                import torch
-                before   = torch.cuda.memory_reserved() / 1e6
-                torch.cuda.empty_cache()
-                after    = torch.cuda.memory_reserved() / 1e6
-                freed_mb = max(before - after, 0.0)
-                logger.info("GPU bellek temizlendi: %.1f MB boşaltıldı.", freed_mb)
-            except Exception as exc:
-                logger.warning("GPU bellek temizleme hatası: %s", exc)
+        """
+        GPU VRAM'ını boşalt ve Python GC'yi çalıştır.
 
-        gc.collect()
-        return (
-            f"GPU VRAM temizlendi: {freed_mb:.1f} MB boşaltıldı\n"
-            f"Python GC çalıştırıldı. ✓"
-        )
+        try-finally garantisi: torch.cuda.empty_cache() hata verse bile
+        gc.collect() her koşulda çalıştırılır (bellek sızıntısı önlenir).
+
+        Returns:
+            İnsan okunabilir boşaltma raporu.
+        """
+        freed_mb = 0.0
+        gpu_error: Optional[str] = None
+
+        try:
+            if self._gpu_available:
+                try:
+                    import torch
+                    before   = torch.cuda.memory_reserved() / 1e6
+                    torch.cuda.empty_cache()
+                    after    = torch.cuda.memory_reserved() / 1e6
+                    freed_mb = max(before - after, 0.0)
+                    logger.info("GPU bellek temizlendi: %.1f MB boşaltıldı.", freed_mb)
+                except Exception as exc:
+                    gpu_error = str(exc)
+                    logger.warning("GPU bellek temizleme hatası (GC yine de çalışacak): %s", exc)
+        finally:
+            # Hata olsa da olmasa da Python GC garantili çalışır
+            gc.collect()
+
+        lines = [f"GPU VRAM temizlendi: {freed_mb:.1f} MB boşaltıldı"]
+        if gpu_error:
+            lines.append(f"  ⚠ GPU cache hatası: {gpu_error}")
+        lines.append("Python GC çalıştırıldı. ✓")
+        return "\n".join(lines)
 
     # ─────────────────────────────────────────────
     #  TAM RAPOR
