@@ -25,6 +25,7 @@
 13. [Dosya Bazlı Detaylı İnceleme](#13-dosya-bazlı-detaylı-i̇nceleme)
 14. [Geliştirme Önerileri](#14-geliştirme-önerileri-öncelik-sırasıyla)
 15. [Genel Değerlendirme](#15-genel-değerlendirme)
+16. [Son Satır Satır İnceleme — Yeni Bulgular](#16-son-satır-satır-i̇nceleme--yeni-bulgular)
 
 ---
 
@@ -1980,12 +1981,223 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 ---
 
-### `environment.yml` — Skor: 88/100 ⚠️
+### `environment.yml` — Skor: 97/100 ✅ *(88 → 97, `requests` kaldırıldı — ANALIZ_RAPORU doğrulaması)*
 
-`pytest-asyncio` eklendi. `--extra-index-url` doğru kullanılmış. `pydantic` eklendi.
+`pytest-asyncio`, `pytest-cov`, `packaging` eklendi. `--extra-index-url` doğru kullanılmış (`--index-url` değil; PyPI korunuyor). `requests` paketi tamamen kaldırılmış (satır 34 yorum ile teyit: `# requests kaldırıldı`).
 
 **Kalan sorun:**
-- `requests` bağımlılığı (madde 5.3) — `config.py` httpx'e geçince kaldırılabilir.
+- U-04: `--extra-index-url https://download.pytorch.org/whl/cu121` (CUDA 12.1) — Docker GPU build cu124 kullanıyor (bkz. §8.2).
+- `duckduckgo-search>=6.1.0` lower bound belirtilmiş ancak kod DDGS v8 API'sini kullanıyor; eski versiyonlarda `AsyncDDGS` değil `DDGS` senkron sınıfı gerekiyor; bu bağımlılık zaten sağlanıyor.
+
+---
+
+### `agent/definitions.py` — Skor: 96/100 ✅
+
+22 araç tanımı, SIDAR karakter profili, `SIDAR_KEYS` ve `SIDAR_WAKE_WORDS` listeleri.
+
+**Güçlü yönler:**
+- Eğitim kesme tarihi doğru: `"Ağustos 2025"` (Claude Sonnet 4.6 için geçerli)
+- `SIDAR_SYSTEM_PROMPT` araç listesi, `sidar_agent.py` dispatcher tablosundaki 24 araçla tam örtüşüyor
+- Türkçe yanıt kısıtlaması sistem promptunda açıkça belirtilmiş (`RESPONSE_LANGUAGE=tr` config ile tutarlı)
+
+**Kalan iyileştirme:**
+- Araç sayısı sistemde 24 olmasına karşın prompt `22` olarak listelerken gerçekte daha fazlası mevcut olabilir; araç eklendikçe prompt güncelleme disiplini korunmalı.
+
+---
+
+### `managers/security.py` — Skor: 90/100 ⚠️
+
+OpenClaw 3 seviyeli erişim kontrolü: `RESTRICTED(0)`, `SANDBOX(1)`, `FULL(2)`.
+
+**Güçlü yönler:**
+- `can_execute()` doğru: `return self.level >= SANDBOX` — SANDBOX da çalıştırma yapabilir
+- `can_write()` doğru: `return self.level >= SANDBOX` — RESTRICTED'da yazma yok
+- `can_read()` doğru: her seviyede okuma izinli
+- `Path.resolve()` symlink traversal koruması (bkz. §11) doğru
+
+**Kalan sorun:**
+- U-02: `status_report()` satır 93 — `'✓' if self.level == FULL else '✗'` Terminal için yalnızca FULL'ü onaylıyor, SANDBOX kullanıcısına gerçekte çalıştırma izni olduğu halde `✗` gösteriyor. Doğru koşul: `'✓' if self.level >= SANDBOX else '✗'`
+
+---
+
+### `managers/system_health.py` — Skor: 95/100 ✅
+
+CPU/RAM/GPU izleme, WSL2 farkındalığı, pynvml + nvidia-smi subprocess fallback.
+
+**Güçlü yönler:**
+- WSL2 tespiti: `/proc/sys/kernel/osrelease`'de `"microsoft"` kontrolü
+- pynvml başlatma başarısız olduğunda `logger.debug()` ile sessizce devam ediyor (WSL2'de beklenen)
+- `get_gpu_info()` public API doğru tasarlanmış: `{"available": bool, ...}`
+- `_get_driver_version()` pynvml → nvidia-smi subprocess çift fallback
+
+**Kalan sorun:**
+- U-15 kaynağı: `_gpu_available` private attribute `sidar_agent.py:418`'den doğrudan erişiliyor; `is_gpu_available()` gibi bir public metot veya `get_gpu_info()["available"]` yeterli olurdu.
+
+---
+
+### `managers/github_manager.py` — Skor: 93/100 ✅
+
+GitHub API entegrasyonu, binary dosya koruması, token doğrulama.
+
+**Güçlü yönler:**
+- `SAFE_TEXT_EXTENSIONS` 22 uzantı kapsıyor (`.py`, `.md`, `.json`, `.yaml`, `.sh`, vb.)
+- `SAFE_EXTENSIONLESS` whitelist: Makefile, Dockerfile, Procfile, License vb. 15+ dosya
+- `read_remote_file()` dizin tespiti doğru: `isinstance(content_file, list)` kontrolü
+- Token eksikliğinde `status()` kurulum rehberi içeriyor — UX açısından değerli
+
+**Dikkat çeken iyi uygulama:**
+- Uzantısız dosyalar için ayrı kontrol dalı (`if not extension:`) — bypass'ı önlüyor
+
+---
+
+### `managers/web_search.py` — Skor: 91/100 ✅
+
+Tavily / Google Custom Search / DuckDuckGo üçlü fallback zinciri.
+
+**Güçlü yönler:**
+- DuckDuckGo v8 uyumu: `DDGS` senkron sınıfı `asyncio.to_thread(_sync_search)` ile doğru sarılmış
+- Tavily 401/403 hatasında `self.tavily_key = ""` — tekrar eden başarısız istekleri önlüyor
+- `search_docs()`: Tavily/Google varsa `site:` filtresi; DDG'de plain query — doğru adaptasyon
+
+**Kalan sorun:**
+- `search_docs()` satır 263-268: `site:` filtresi olan sorgu 130+ karakter; bazı arama motorlarında URL limit sorununa yol açabilir (düşük öncelik).
+
+---
+
+### `managers/package_info.py` — Skor: 96/100 ✅
+
+PyPI, npm Registry ve GitHub Releases için async API entegrasyonu.
+
+**Güçlü yönler:**
+- `_version_sort_key()`: `packaging.version.Version` kullanımı — PEP 440 tam uyumlu
+- `_is_prerelease()`: harf tabanlı (`1.0.0a1`, `1.0.0rc1`) VE npm sayısal (`1.0.0-0`) formatları doğru
+- `InvalidVersion` → `Version("0.0.0")` fallback: bozuk sürüm dizileri sıralama hatası üretmiyor
+- `pypi_compare()` kurulu/güncel sürüm karşılaştırması çıktısı net
+
+**Kalan küçük sorun:**
+- `pypi_info()` satır 71: `info.get('project_url') or 'https://pypi.org/project/' + package` — `project_url` genellikle `None` döner; `project_urls` sözlüğünden `"Homepage"` veya `"Source"` çekilebilir.
+
+---
+
+### `tests/test_sidar.py` — Skor: 91/100 ✅ *(93 → 91, U-01 etkisi yeniden değerlendirildi)*
+
+46 test fonksiyonu, 20 test grubu — kapsamlı coverage.
+
+**Güçlü yönler:**
+- `@pytest.mark.asyncio` doğru kullanılmış; async testler tam kapsıyor
+- `tmp_path` fixture ile izole test ortamı
+- UTF-8 multibyte buffer testleri (§15) byte paket bölünme senaryolarını gerçek veriyle doğruluyor
+- JSON parse testleri (§14) JSONDecoder edge case'lerini kapsıyor
+- Rate limiter TOCTOU testleri (§17) `asyncio.gather` ile gerçekten eş zamanlı senaryo üretiyor
+
+**U-01 etkisi — 2 test FAIL edecek:**
+```python
+# test_rag_chunking_small_text:374
+ok, retrieved = docs.get_document(doc_id)
+assert retrieved == small  # ❌ FAIL: retrieved "[doc_id] Küçük\nKaynak: test\n\nKüçük bir metin." içeriyor
+
+# test_rag_chunking_large_text:386
+assert len(retrieved) == len(large)  # ❌ FAIL: retrieved header prefix içeriyor → len fazla
+```
+Not: `test_rag_document_chunking:138`'deki `assert "func_49()" in retrieved` (substring check) U-01'den etkilenmez — içerik hâlâ retrieved içinde mevcut.
+
+**Kalan sorunlar:**
+- `test_system_health_manager_cpu_only:192`: `assert health._gpu_available is False` — private attribute'a doğrudan erişim, U-15 ile tutarsız. Public API: `assert health.get_gpu_info()["available"] is False`
+- `test_auto_handle_clear_command:405-409`: hem `True` hem `False` kabul ediliyor (`isinstance(handled, bool)` yeterli sayılıyor) — U-09'u örtüyor; `handled is True` assertion ile gerçek test anlamlı olur.
+- Gemini provider ve Docker REPL entegrasyon testleri yok (mock gerektirir).
+
+---
+
+### `.env.example` — Skor: 84/100 ⚠️
+
+Kapsamlı ve iyi belgelenmiş ortam değişkeni şablonu; RTX 3070 Ti / WSL2 için optimize edilmiş.
+
+**Güçlü yönler:**
+- Her bölüm `# ─── Başlık ───` ile ayırt edilmiş
+- WSL2 özelinde açıklamalar (`OLLAMA_TIMEOUT=60`, `REACT_TIMEOUT=120`)
+- `ACCESS_LEVEL=sandbox` güvenli varsayılan
+- `HF_HUB_OFFLINE=0` ile ilk kurulumda model indirmeye izin verilmiş
+
+**Kalan sorunlar:**
+- U-03: `HF_HUB_OFFLINE` satır 58'de `=0`, satır 113'te `=1` — **ikinci tanım birincisini override eder**, dolayısıyla varsayılan sonuç `HF_HUB_OFFLINE=1`. Satır 113 açıklama satırı olmayan ek bir atama; biri silinmeli.
+- `WEB_PORT=7860` mevcut ama CORS listesi `web_server.py`'de buna rağmen sabit — U-05 ile doğrudan ilişkili.
+
+---
+
+### `Dockerfile` — Skor: 85/100 ⚠️
+
+CPU/GPU çift mod build desteği, non-root kullanıcı, `HEALTHCHECK` mevcut.
+
+**Güçlü yönler:**
+- `ARG BASE_IMAGE`/`ARG GPU_ENABLED` ile CPU ve GPU build tek `Dockerfile`'dan yönetiliyor
+- `useradd -m sidar && chown -R sidar:sidar /app` — güvenlik açısından doğru non-root yapısı
+- `requirements.txt` üretimi YAML parsing ile yapılıyor; `--extra-index-url` satırı pip'in `requirements.txt` sözdiziminde geçerli bir seçenek olduğundan `pip install -r requirements.txt` doğru çalışıyor
+- `PIP_NO_CACHE_DIR=1` image boyutunu küçültüyor
+
+**Kalan sorunlar:**
+- U-11: `HEALTHCHECK CMD ps aux | grep "[p]ython" || exit 1` — Python sürecinin var olduğunu kontrol ediyor, HTTP servis sağlığını değil. Web modu için `curl -f http://localhost:7860/health || exit 1` daha anlamlı olurdu.
+- U-04: GPU build satır 9'da `nvidia/cuda:12.4.1-runtime-ubuntu22.04` (cu124); `environment.yml` cu121 wheel kullanıyor — farklı CUDA sürümü.
+- `ENTRYPOINT ["python", "main.py"]` — CLI için doğru; web modu için `docker run ... python web_server.py` gerekiyor (satır 86-87'de comment olarak belirtilmiş).
+
+---
+
+### `docker-compose.yml` — Skor: 88/100 ⚠️
+
+4 servis: CPU/GPU × CLI/Web — kapsamlı çoklu deployment desteği.
+
+**Güçlü yönler:**
+- `sidar-web` ve `sidar-web-gpu` ayrı port mapingleri (7860/7861) ile aynı makinede eş zamanlı çalışabilir
+- `extra_hosts: host.docker.internal:host-gateway` Ollama'nın host üzerinde çalışması için gerekli — doğru
+- `restart: unless-stopped` üretim ortamı için doğru politika
+- `deploy.resources.limits` CPU/bellek kısıtlamaları güvenlik için değerli
+
+**Kalan sorunlar:**
+- U-04: `sidar-gpu` ve `sidar-web-gpu` servisleri `TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124` kullanıyor; `environment.yml` cu121 — tutarsızlık.
+- N-03: `GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-false}` → varsayılan `false`; ancak `.env.example` RTX 3070 Ti (Ampere, Compute 8.6) için `GPU_MIXED_PRECISION=true` öneriyor. Docker Compose defaultu ve .env.example önerisi çelişiyor.
+- `WEB_PORT=7860` konteyner içinde sabit; CORS port da sabit (U-05) — port değiştirmek için hem compose hem web_server.py hem de CORS güncellenmeli.
+
+---
+
+### `install_sidar.sh` — Skor: 80/100 ⚠️
+
+Ubuntu/WSL2 sıfırdan kurulum betiği. `set -euo pipefail` ile doğru hata yönetimi.
+
+**Güçlü yönler:**
+- `cleanup()` trap ile Ollama process temizleme
+- Conda ortamı mevcut ise `env update --prune` ile güncelleme — idempotent
+
+**Kalan sorunlar:**
+- Google Chrome kurulumu (`install_google_chrome` fonksiyonu) — server-side AI tool için alışılmadık bağımlılık; Chrome ~600 MB ve genellikle terminalde kullanılmaz.
+- `REPO_URL` satır 9'da hardcoded: `https://github.com/niluferbagevi-gif/sidar_project` — fork kullanan kullanıcılar için URL değiştirmek gerekiyor; parametre olarak alınabilir.
+- `sleep 5` (satır 98) — `ollama serve` başladıktan sonra sabit 5 saniye bekleme; yavaş sistemlerde yetersiz. `curl` ile `/api/tags` endpoint polling loop daha güvenilir olurdu.
+- `ollama pull` komutlarında (satır 101-105) hata yönetimi yok — ağ kesintisinde betik durur.
+
+---
+
+### `__init__.py` Dosyaları
+
+| Dosya | İhracat | Sorun | Durum |
+|-------|---------|-------|-------|
+| `agent/__init__.py` | `SidarAgent`, `SIDAR_SYSTEM_PROMPT`, `SIDAR_KEYS`, `SIDAR_WAKE_WORDS` | Yok | ✅ Tam |
+| `core/__init__.py` | `ConversationMemory`, `LLMClient` | `DocumentStore` eksik (U-07) | ❌ Eksik |
+| `managers/__init__.py` | 6 manager sınıfı | Yok | ✅ Tam |
+
+`core/__init__.py`'de `DocumentStore` ihraç edilmemesi, `from core import DocumentStore` kullanımını engeller ve test dosyasında `from core.rag import DocumentStore` doğrudan modül referansı kullanılıyor.
+
+---
+
+### `.gitignore` — Skor: 90/100 ✅
+
+Python, virtualenv, `.env`, `logs/`, `temp/`, `data/`, OS dosyaları, IDE konfigürasyonları kapsıyor.
+
+**Güçlü yönler:**
+- `data/` gitignored — RAG veri deposu (`data/rag/`, `data/sessions/`) versiyona alınmıyor; doğru yaklaşım
+- `.env` gitignored — API anahtarları güvenli
+- Test coverage artefaktları (`.coverage`, `htmlcov/`, `.pytest_cache/`) temizce yönetilmiş
+
+**Eksik pattern'lar (düşük önem):**
+- `*.pkl`, `*.bin`, `*.safetensors` — HuggingFace model cache genellikle `~/.cache/huggingface/` altında olduğundan pratikte sorun yaratmaz
+- `*.ipynb_checkpoints/` — notebook kullanılmıyor, gereksiz
 
 ---
 
@@ -2205,7 +2417,99 @@ v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılm
 
 ---
 
+---
+
+## 16. Son Satır Satır İnceleme — Yeni Bulgular
+
+> **Kapsam:** Bu bölüm, Session 4 (2026-03-01) tüm dosyaların eksiksiz satır satır okunduğu son analiz oturumunda tespit edilen **yeni bulgular**ı içermektedir. Önceki oturumlarda zaten kayıt altına alınmış sorunlar burada tekrarlanmamıştır.
+
+### Yeni Bulgular Tablosu
+
+| # | Bulgu | Dosya:Satır | Önem | İlişkili |
+|---|-------|-------------|------|----------|
+| N-01 | `test_rag_chunking_small_text:374` ve `test_rag_chunking_large_text:386` testleri U-01 nedeniyle FAIL edecek (header prefix string karşılaştırmasını kırıyor) | `tests/test_sidar.py:374,386` | 🔴 YÜKSEK | U-01 |
+| N-02 | `test_system_health_manager_cpu_only:192` private `_gpu_available` attribute'a erişiyor — U-15 önerisiyle tutarsız; test de `get_gpu_info()["available"]` kullanmalı | `tests/test_sidar.py:192` | 🟢 DÜŞÜK | U-15 |
+| N-03 | `GPU_MIXED_PRECISION` docker-compose'da `false` default; `.env.example` RTX 3070 Ti (Ampere) için `true` öneriyor — deployment config çelişkisi | `docker-compose.yml:69` — `.env.example:51` | 🟢 DÜŞÜK | — |
+| N-04 | `install_sidar.sh:98` sabit `sleep 5` bekleme; Ollama servisi yavaş başlıyorsa race condition; `/api/tags` polling loop daha güvenilir | `install_sidar.sh:96-98` | 🟢 DÜŞÜK | — |
+| N-05 | `web_ui/index.html:9-11` highlight.js ve marked.js CDN bağımlılıkları — çevrimdışı/intranet kullanımında arayüz düzgün çalışmaz | `web_ui/index.html:9-11` | 🟢 DÜŞÜK | — |
+| N-06 | `environment.yml` satır 34 yorumu `requests` kaldırıldığını teyit etmekte; §13 environment.yml girişindeki "kalan sorun: requests" notu güncellendi (hata düzeltildi) | `environment.yml:34` — `PROJE_RAPORU.md §13` | — | §3.30 |
+
+### N-01 Detay: Test Assertion Başarısızlığı (U-01 Uzantısı)
+
+```python
+# tests/test_sidar.py — test_rag_chunking_small_text (satır 366-374)
+def test_rag_chunking_small_text(test_config):
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
+    small = "Küçük bir metin."
+    doc_id = docs.add_document(title="Küçük", content=small, source="test")
+    ok, retrieved = docs.get_document(doc_id)
+    assert ok is True
+    assert retrieved == small   # ❌ FAIL: retrieved şu formattadır:
+                                 # "[<uuid>] Küçük\nKaynak: test\n\nKüçük bir metin."
+
+# tests/test_sidar.py — test_rag_chunking_large_text (satır 377-386)
+    large = "A" * 2000 + "\n\n" + "B" * 2000
+    ...
+    ok, retrieved = docs.get_document(doc_id)
+    assert len(retrieved) == len(large)  # ❌ FAIL: retrieved header prefix nedeniyle daha uzun
+```
+
+**Kök neden:** `core/rag.py:383` `get_document()`:
+```python
+return True, f"[{doc_id}] {meta['title']}\nKaynak: {meta.get('source', '-')}\n\n{content}"
+```
+
+**Etkilenmeyen test:** `test_rag_document_chunking:138` — `assert "func_49()" in retrieved` substring check kullandığından U-01'den etkilenmiyor.
+
+**Düzeltme seçenekleri:**
+1. `get_document()` raw `content` dönsün, header ayrı bir `get_document_with_header()` metodu olsun
+2. Test assertionları substring check'e dönüştürülsün: `assert small in retrieved`
+
+### Önceki §13 Bulgu Uyarı Notları
+
+Aşağıdaki §13 girişlerinde **ANALIZ_RAPORU (§15 tablosu)** skorları ile **eski §13 skorları** arasında tutarsızlık mevcuttu; §13 girişleri bu analizde güncellenmiştir:
+
+| Dosya | §13 Eski Skor | ANALIZ_RAPORU Skoru | Düzeltildi? |
+|-------|--------------|---------------------|-------------|
+| `environment.yml` | 88/100 | 97/100 | ✅ Bu oturumda |
+| `core/memory.py` | 82/100 | 95/100 | — §13'te eski gelişim haritası |
+| `config.py` | 84/100 | 94/100 | — §13'te GPU validasyon sorunu vurgulanmış |
+| `web_ui/index.html` | 95/100 | 90/100 | — CDN bağımlılığı (N-05) ile değerlendirme güncellendi |
+
+Not: §13 skor geçmişleri (`78 → 84 → 89` gibi) proje evrimini belgeler; ANALIZ_RAPORU bağımsız tek nokta değerlendirmesidir. İkisi birlikte okunmalıdır.
+
+### Tüm Dosyalar İçin Güncel Skor Tablosu
+
+| Dosya | §13 Skor | ANALIZ_RAPORU | Açık Sorun |
+|-------|----------|---------------|------------|
+| `main.py` | 95/100 | 95/100 | — |
+| `config.py` | 84/100 | 94/100 | GPU validasyon |
+| `web_server.py` | 88/100 | 88/100 | U-05, U-06, U-13 |
+| `agent/sidar_agent.py` | 89/100 | 89/100 | U-14, U-15, U-08 |
+| `agent/auto_handle.py` | 90/100 | 93/100 | U-09, U-12 |
+| `agent/definitions.py` | 96/100 | 96/100 | — |
+| `core/llm_client.py` | 90/100 | 91/100 | — |
+| `core/memory.py` | 82/100 | 95/100 | — |
+| `core/rag.py` | 90/100 | 93/100 | U-01 kaynağı |
+| `managers/code_manager.py` | 88/100 | 92/100 | — |
+| `managers/system_health.py` | 95/100 | 95/100 | U-15 kaynağı |
+| `managers/github_manager.py` | 93/100 | 93/100 | — |
+| `managers/security.py` | 90/100 | 90/100 | U-02 |
+| `managers/web_search.py` | 91/100 | 91/100 | — |
+| `managers/package_info.py` | 96/100 | 96/100 | — |
+| `web_ui/index.html` | 93/100 | 90/100 | N-05 (CDN) |
+| `tests/test_sidar.py` | 91/100 | 93/100 | N-01, N-02, U-01 etkisi |
+| `environment.yml` | 97/100 | 97/100 | U-04 |
+| `Dockerfile` | 85/100 | — | U-11, U-04 |
+| `docker-compose.yml` | 88/100 | — | U-04, N-03 |
+| `.env.example` | 84/100 | — | U-03 |
+| `install_sidar.sh` | 80/100 | — | N-04 |
+| `__init__.py` (core) | — | — | U-07 |
+| `.gitignore` | 90/100 | — | — |
+
+---
+
 *Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01*
-*Son güncelleme: ANALIZ_RAPORU_2026_03_01 entegrasyonu + 15 yeni uyumsuzluk kaydı*
-*Analiz kapsamı: ~35 kaynak dosya, ~10.400 satır kod*
-*Toplam doğrulanan düzeltme: 54 | Yeni tespit edilen açık sorun: 15 (2 KRİTİK, 4 YÜKSEK, 5 ORTA, 4 DÜŞÜK)*
+*Son güncelleme: Tüm ~35 kaynak dosyanın satır satır final incelemesi (Session 4)*
+*Analiz kapsamı: ~35 kaynak dosya, ~10.400+ satır kod*
+*Toplam doğrulanan düzeltme: 54 | Açık sorunlar: 15 (U-01–U-15) + 5 yeni bulgu (N-01–N-05)*
