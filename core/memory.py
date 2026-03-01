@@ -200,13 +200,20 @@ class ConversationMemory:
     #  ÖZETLEME DESTEĞİ
     # ─────────────────────────────────────────────
 
+    def _estimate_tokens(self) -> int:
+        """Kabaca token tahmini: UTF-8 Türkçe için ~3.5 karakter/token."""
+        total_chars = sum(len(t.get("content", "")) for t in self._turns)
+        return int(total_chars / 3.5)
+
     def needs_summarization(self) -> bool:
         """
-        Bellek penceresinin %80'i dolduğunda özetleme sinyali ver.
+        Bellek penceresinin %80'i dolduğunda veya tahmini token sayısı
+        6000'i aştığında özetleme sinyali ver.
         """
         with self._lock:
             threshold = int(self.max_turns * 2 * 0.8)
-            return len(self._turns) >= threshold
+            token_est = self._estimate_tokens()
+            return len(self._turns) >= threshold or token_est > 6000
 
     def apply_summary(self, summary_text: str) -> None:
         """

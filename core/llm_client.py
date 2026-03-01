@@ -125,8 +125,27 @@ class LLMClient:
                 async with client.stream("POST", url, json=payload) as resp:
                     resp.raise_for_status()
                     buffer = ""
+                    _byte_buf = b""  # Tamamlanmamış UTF-8 çok baytlı karakterler için
                     async for raw_bytes in resp.aiter_bytes():
-                        buffer += raw_bytes.decode("utf-8", errors="replace")
+                        _byte_buf += raw_bytes
+                        # Tamamlanmamış çok baytlı karakterleri sonraki pakete bırak
+                        try:
+                            decoded = _byte_buf.decode("utf-8")
+                            _byte_buf = b""
+                        except UnicodeDecodeError:
+                            # Son 1-3 bayt tamamlanmamış UTF-8 sekansı olabilir
+                            decoded = None
+                            for trim in (1, 2, 3):
+                                try:
+                                    decoded = _byte_buf[:-trim].decode("utf-8")
+                                    _byte_buf = _byte_buf[-trim:]
+                                    break
+                                except UnicodeDecodeError:
+                                    continue
+                            if decoded is None:
+                                decoded = _byte_buf.decode("utf-8", errors="replace")
+                                _byte_buf = b""
+                        buffer += decoded
                         # Tamamlanmış satırları işle; son (henüz bitmemiş) satır buffer'da kalır
                         while "\n" in buffer:
                             line, buffer = buffer.split("\n", 1)

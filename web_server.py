@@ -78,25 +78,28 @@ app.add_middleware(
 _rate_data: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT  = 20   # maksimum istek sayısı
 _RATE_WINDOW = 60   # saniye cinsinden pencere
+_rate_lock   = asyncio.Lock()  # TOCTOU koruması: kontrol+yaz atomik
 
 
-def _is_rate_limited(ip: str) -> bool:
-    now = time.monotonic()
-    window_start = now - _RATE_WINDOW
-    calls = _rate_data[ip]
-    # Pencere dışındakileri temizle
-    _rate_data[ip] = [t for t in calls if t > window_start]
-    if len(_rate_data[ip]) >= _RATE_LIMIT:
-        return True
-    _rate_data[ip].append(now)
-    return False
+async def _is_rate_limited(ip: str) -> bool:
+    """Atomik kontrol+yaz: asyncio.Lock ile TOCTOU yarış koşulunu önler."""
+    async with _rate_lock:
+        now = time.monotonic()
+        window_start = now - _RATE_WINDOW
+        calls = _rate_data[ip]
+        # Pencere dışındakileri temizle
+        _rate_data[ip] = [t for t in calls if t > window_start]
+        if len(_rate_data[ip]) >= _RATE_LIMIT:
+            return True
+        _rate_data[ip].append(now)
+        return False
 
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     if request.url.path == "/chat":
         client_ip = request.client.host if request.client else "unknown"
-        if _is_rate_limited(client_ip):
+        if await _is_rate_limited(client_ip):
             return JSONResponse(
                 {"error": "Çok fazla istek. Lütfen bir dakika bekleyin."},
                 status_code=429,

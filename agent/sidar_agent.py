@@ -51,7 +51,11 @@ class SidarAgent:
 
         # Alt sistemler — temel (Senkron/Yerel)
         self.security = SecurityManager(self.cfg.ACCESS_LEVEL, self.cfg.BASE_DIR)
-        self.code = CodeManager(self.security, self.cfg.BASE_DIR)
+        self.code = CodeManager(
+            self.security,
+            self.cfg.BASE_DIR,
+            docker_image=getattr(self.cfg, "DOCKER_PYTHON_IMAGE", "python:3.11-alpine"),
+        )
         self.health = SystemHealthManager(self.cfg.USE_GPU)
         self.github = GitHubManager(self.cfg.GITHUB_TOKEN, self.cfg.GITHUB_REPO)
         
@@ -158,17 +162,24 @@ class SidarAgent:
             # 2. JSON Ayrıştırma ve Yapısal Doğrulama (Pydantic)
             try:
                 raw_text = llm_response_accumulated.strip()
-                
-                # Modelin fazladan ürettiği Markdown veya metinleri atlayıp sadece JSON kısmını al
-                json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-                
-                if not json_match:
+
+                # JSONDecoder ile ilk geçerli JSON nesnesini bul (greedy regex yerine)
+                # Bu yaklaşım: birden fazla JSON bloğu veya gömülü kod olsa bile doğru olanı seçer
+                _decoder = json.JSONDecoder()
+                json_match = None
+                _idx = raw_text.find('{')
+                while _idx != -1:
+                    try:
+                        json_match, _ = _decoder.raw_decode(raw_text, _idx)
+                        break
+                    except json.JSONDecodeError:
+                        _idx = raw_text.find('{', _idx + 1)
+
+                if json_match is None:
                     raise ValueError("Yanıtın içerisinde süslü parantezlerle ( { ... } ) çevrili bir JSON objesi bulunamadı.")
-                    
-                clean_json = json_match.group(0)
 
                 # Pydantic ile doğrulama (Eksik veya hatalı tip varsa ValidationError fırlatır)
-                action_data = ToolCall.model_validate_json(clean_json)
+                action_data = ToolCall.model_validate(json_match)
                 
                 tool_name = action_data.tool
                 tool_arg = action_data.argument
