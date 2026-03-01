@@ -1797,7 +1797,7 @@ async function sendText(text) {
           const parsed = JSON.parse(line.slice(6).trim());
           if (parsed.done) { streamDone = true; break; }
           if (parsed.tool_call) { appendToolStep(msgId, parsed.tool_call); }
-          if (parsed.chunk) { accumulated += parsed.chunk; updateStreaming(msgId, accumulated); }
+          if (parsed.chunk !== undefined) { accumulated += parsed.chunk; updateStreaming(msgId, accumulated); }
         } catch { /* skip */ }
       }
       if (streamDone) break;
