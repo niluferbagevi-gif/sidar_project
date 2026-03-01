@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Sidar AI — Otomatik Kurulum Betiği
+# Sürüm: 2.6.1
 
 # Hata durumunda betiği durdur
 set -euo pipefail
@@ -33,7 +35,12 @@ install_system_packages() {
 }
 
 install_google_chrome() {
-  echo -e "\n🌐 1.5. Google Chrome ve bağımlılıkları kuruluyor..."
+  echo -e "\n🌐 1.5. Google Chrome kontrol ediliyor..."
+  if command -v google-chrome-stable >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; then
+    echo "✅ Google Chrome zaten kurulu."
+    return 0
+  fi
+  echo "   Chrome bulunamadı. İndiriliyor ve kuruluyor..."
   wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb
   sudo apt install -y /tmp/chrome.deb
   rm -f /tmp/chrome.deb
@@ -126,25 +133,46 @@ print_footer() {
   echo "Sonrasında SİDAR'ı çalıştırmak için sırasıyla şunları yazın:"
   echo "  1. cd ~/$PROJECT_NAME"
   echo "  2. conda activate $ENV_NAME"
-  echo "  3. cp .env.example .env  (Ayarlarınızı yapmak için)"
-  echo "  4. python web_server.py  (Arayüzü başlatmak için)"
-  echo "     veya terminal için: python main.py"
+  echo "  3. nano .env            ← AI sağlayıcısı, token'lar ve ayarları yapılandırın"
+  echo "  4. python web_server.py ← Web arayüzünü başlatmak için (http://localhost:7860)"
+  echo "     VEYA: python main.py ← Komut satırı (CLI) modu için"
+  echo ""
+  echo "Hızlı sağlık kontrolü:"
+  echo "  curl http://localhost:7860/status"
   echo "============================================================"
 }
 
+setup_env_file() {
+  echo -e "\n⚙️  8. Çevre değişkenleri dosyası (.env) ayarlanıyor..."
+  if [[ -f "$PROJECT_DIR/.env" ]]; then
+    echo "✅ .env dosyası zaten mevcut. Üzerine yazılmıyor."
+  else
+    cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+    echo "✅ .env.example → .env olarak kopyalandı."
+    echo "   📝 Önemli: $PROJECT_DIR/.env dosyasını açarak"
+    echo "      AI sağlayıcınızı (AI_PROVIDER) ve diğer ayarları yapılandırın."
+  fi
+}
+
 download_vendor_libs() {
-  echo -e "\n📚 7. Web arayüzü bağımlılıkları yerel olarak indiriliyor (çevrimdışı destek)..."
+  echo -e "\n📚 9. Web arayüzü bağımlılıkları yerel olarak indiriliyor (çevrimdışı destek)..."
   local vendor_dir="$PROJECT_DIR/web_ui/vendor"
   mkdir -p "$vendor_dir"
 
-  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" \
-    -o "$vendor_dir/highlight.min.css"
-  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" \
-    -o "$vendor_dir/highlight.min.js"
-  curl -fsSL "https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" \
-    -o "$vendor_dir/marked.min.js"
+  local failed=0
 
-  echo "✅ Vendor kütüphaneleri web_ui/vendor/ dizinine indirildi."
+  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" \
+    -o "$vendor_dir/highlight.min.css" || { echo "⚠️ highlight.min.css indirilemedi (CDN yedek kullanılacak)."; failed=1; }
+  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" \
+    -o "$vendor_dir/highlight.min.js" || { echo "⚠️ highlight.min.js indirilemedi (CDN yedek kullanılacak)."; failed=1; }
+  curl -fsSL "https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" \
+    -o "$vendor_dir/marked.min.js" || { echo "⚠️ marked.min.js indirilemedi (CDN yedek kullanılacak)."; failed=1; }
+
+  if [[ $failed -eq 0 ]]; then
+    echo "✅ Vendor kütüphaneleri web_ui/vendor/ dizinine indirildi."
+  else
+    echo "⚠️ Bazı vendor dosyaları indirilemedi. Web arayüzü CDN üzerinden çalışmaya devam eder."
+  fi
 }
 
 print_header
@@ -155,5 +183,6 @@ install_ollama
 clone_or_update_repo
 setup_conda_env
 pull_models
+setup_env_file
 download_vendor_libs
 print_footer

@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
 # Sidar AI — Dockerfile
-# Sürüm: 2.6.0  (GPU & CPU destekli çift mod)
+# Sürüm: 2.6.1  (GPU & CPU destekli çift mod)
 #
 #  CPU modu (varsayılan):
 #    docker build -t sidar-ai .
@@ -22,16 +22,19 @@ FROM ${BASE_IMAGE}
 
 # Meta veriler
 LABEL maintainer="Sidar AI Project"
-LABEL version="2.6.0"
+LABEL version="2.6.1"
 LABEL description="Yazılım Mühendisi AI Asistanı - Docker İzolasyonu"
 
 # Çevresel değişkenler
 # GPU_ENABLED build-arg çalışma zamanında USE_GPU env değişkenine dönüşür
+# MEMORY_ENCRYPTION_KEY: docker run -e MEMORY_ENCRYPTION_KEY=<fernet_key> ile iletilebilir
+ARG MEMORY_ENCRYPTION_KEY=""
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     ACCESS_LEVEL=sandbox \
-    USE_GPU=${GPU_ENABLED}
+    USE_GPU=${GPU_ENABLED} \
+    MEMORY_ENCRYPTION_KEY=${MEMORY_ENCRYPTION_KEY}
 
 # Çalışma dizini
 WORKDIR /app

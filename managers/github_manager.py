@@ -1,6 +1,7 @@
 """
 Sidar Project - GitHub Yöneticisi
 Depo analizi, commit geçmişi ve uzak dosya okuma (Binary Korumalı).
+Sürüm: 2.6.1
 """
 
 import logging
@@ -191,7 +192,7 @@ class GitHubManager:
         except Exception as exc:
             return False, f"Branch listesi alınamadı: {exc}"
 
-    def list_files(self, path: str = "", branch: str = None) -> Tuple[bool, str]:
+    def list_files(self, path: str = "", branch: Optional[str] = None) -> Tuple[bool, str]:
         """Depodaki bir dizinin içeriğini listele."""
         if not self._repo:
             return False, "Aktif depo yok."
@@ -215,7 +216,7 @@ class GitHubManager:
         file_path: str,
         content: str,
         message: str,
-        branch: str = None,
+        branch: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """GitHub deposuna dosya oluştur veya güncelle."""
         if not self._repo:
@@ -247,7 +248,7 @@ class GitHubManager:
         except Exception as exc:
             return False, f"GitHub dosya yazma hatası: {exc}"
 
-    def create_branch(self, branch_name: str, from_branch: str = None) -> Tuple[bool, str]:
+    def create_branch(self, branch_name: str, from_branch: Optional[str] = None) -> Tuple[bool, str]:
         """Yeni git dalı oluştur."""
         if not self._repo:
             return False, "Aktif depo yok."
@@ -267,7 +268,7 @@ class GitHubManager:
         title: str,
         body: str,
         head: str,
-        base: str = None,
+        base: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Pull request oluştur."""
         if not self._repo:

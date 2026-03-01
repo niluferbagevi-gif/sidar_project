@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SİDAR — Yazılım Mimarı &amp; Baş Mühendis AI Asistanı. Kod yazma, analiz, RAG belge arama ve web araması." />
+  <meta name="author" content="Sidar AI Project" />
   <title>SİDAR — Yazılım Mühendisi AI</title>
 
   <!-- Yerel vendor önce (install_sidar.sh tarafından indirilir); CDN yedek olarak devreye girer -->
@@ -2171,6 +2173,8 @@ async function openStatus() {
       row('Web Arama', data.web_search ? '✓ Aktif'         : '✗ Kurulu değil', data.web_search ? 'ok' : 'warn'),
       row('RAG',       data.rag_status),
       row('Paket Bilgi', data.pkg_status),
+      data.enc_status ? row('Bellek Şifreleme', data.enc_status,
+        data.enc_status.startsWith('Etkin') ? 'ok' : '') : '',
       gpuRows,
     ].join('');
   } catch (err) {

@@ -8,7 +8,7 @@ dependencies:
   - git
   - setuptools
   - wheel
-  - packaging
+  - packaging>=23.0
   # ─── PyTorch ───────────────────────────────────────────────────────────────
   # WSL2 / Ubuntu / Conda ortamı için NOT:
   #   Conda'nın pytorch-cuda paketi, WSL2'nin Windows sürücüsünden gelen
