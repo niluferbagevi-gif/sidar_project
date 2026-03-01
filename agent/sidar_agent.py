@@ -463,15 +463,28 @@ class SidarAgent:
 
     async def _tool_get_config(self, _: str) -> str:
         """Çalışma anındaki Config değerlerini döndürür (.env'den yüklenmiş gerçek değerler)."""
-        _SAFE_KEYS = [
-            "AI_PROVIDER", "CODING_MODEL", "TEXT_MODEL", "USE_GPU", "ACCESS_LEVEL",
-            "MAX_REACT_STEPS", "MAX_MEMORY_TURNS", "MEMORY_FILE", "OLLAMA_URL",
-            "GITHUB_REPO", "BASE_DIR", "DEBUG",
-        ]
-        lines = []
-        for key in _SAFE_KEYS:
-            val = getattr(self.cfg, key, "—")
-            lines.append(f"{key}: {val}")
+        info = {
+            "PROJECT_NAME":    self.cfg.PROJECT_NAME,
+            "VERSION":         self.cfg.VERSION,
+            "AI_PROVIDER":     self.cfg.AI_PROVIDER,
+            "CODING_MODEL":    self.cfg.CODING_MODEL,
+            "TEXT_MODEL":      self.cfg.TEXT_MODEL,
+            "OLLAMA_URL":      self.cfg.OLLAMA_URL,
+            "ACCESS_LEVEL":    self.cfg.ACCESS_LEVEL,
+            "USE_GPU":         self.cfg.USE_GPU,
+            "GPU_INFO":        self.cfg.GPU_INFO,
+            "GPU_COUNT":       self.cfg.GPU_COUNT,
+            "CUDA_VERSION":    self.cfg.CUDA_VERSION,
+            "CPU_COUNT":       self.cfg.CPU_COUNT,
+            "MAX_REACT_STEPS": self.cfg.MAX_REACT_STEPS,
+            "MAX_MEMORY_TURNS":self.cfg.MAX_MEMORY_TURNS,
+            "BASE_DIR":        str(self.cfg.BASE_DIR),
+            "GITHUB_REPO":     self.cfg.GITHUB_REPO or "(ayarlanmamış)",
+            "DEBUG_MODE":      self.cfg.DEBUG_MODE,
+        }
+        lines = ["[Gerçek Config Değerleri — .env + Ortam Değişkenleri]"]
+        for k, v in info.items():
+            lines.append(f"  {k}: {v}")
         return "\n".join(lines)
 
     async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
@@ -517,21 +530,43 @@ class SidarAgent:
     # ─────────────────────────────────────────────
 
     def _build_context(self) -> str:
-        """Tüm alt sistem durumlarını özetleyen bağlam dizesi."""
-        lines = ["[Araç Durumu]"]
-        lines.append(f"  Proje Dizini: {self.cfg.BASE_DIR}")
-        lines.append(f"  Güvenlik    : {self.security.level_name.upper()}")
-        lines.append(f"  GitHub      : {'Bağlı — ' + self.cfg.GITHUB_REPO if self.github.is_available() else 'Bağlı değil'}")
-        lines.append(f"  GPU         : {'Mevcut' if self.health._gpu_available else 'Yok'}")
-        lines.append(f"  WebSearch   : {'Aktif' if self.web.is_available() else 'Kurulu değil'}")
-        lines.append(f"  RAG         : {self.docs.status()}")
+        """
+        Tüm alt sistem durumlarını özetleyen bağlam dizesi.
+        Her LLM turunda system_prompt'a eklenir; model bu değerleri
+        ASLA tahmin etmemelidir — gerçek runtime değerler burada verilir.
+        """
+        lines = []
+
+        # ── Proje Ayarları (gerçek değerler — hallucination önleme) ──
+        lines.append("[Proje Ayarları — GERÇEK RUNTIME DEĞERLERİ]")
+        lines.append(f"  Proje        : {self.cfg.PROJECT_NAME} v{self.cfg.VERSION}")
+        lines.append(f"  Dizin        : {self.cfg.BASE_DIR}")
+        lines.append(f"  AI Sağlayıcı : {self.cfg.AI_PROVIDER.upper()}")
+        if self.cfg.AI_PROVIDER == "ollama":
+            lines.append(f"  Coding Modeli: {self.cfg.CODING_MODEL}")
+            lines.append(f"  Text Modeli  : {self.cfg.TEXT_MODEL}")
+            lines.append(f"  Ollama URL   : {self.cfg.OLLAMA_URL}")
+        else:
+            lines.append(f"  Gemini Modeli: {self.cfg.GEMINI_MODEL}")
+        lines.append(f"  Erişim Seviye: {self.cfg.ACCESS_LEVEL.upper()}")
+        gpu_str = f"{self.cfg.GPU_INFO} (CUDA {self.cfg.CUDA_VERSION})" if self.cfg.USE_GPU else f"Yok ({self.cfg.GPU_INFO})"
+        lines.append(f"  GPU          : {gpu_str}")
+
+        # ── Araç Durumu ───────────────────────────────────────────────
+        lines.append("")
+        lines.append("[Araç Durumu]")
+        lines.append(f"  Güvenlik   : {self.security.level_name.upper()}")
+        gh_status = f"Bağlı — {self.cfg.GITHUB_REPO}" if self.github.is_available() else "Bağlı değil"
+        lines.append(f"  GitHub     : {gh_status}")
+        lines.append(f"  WebSearch  : {'Aktif' if self.web.is_available() else 'Kurulu değil'}")
+        lines.append(f"  RAG        : {self.docs.status()}")
 
         m = self.code.get_metrics()
-        lines.append(f"  Okunan      : {m['files_read']} dosya | Yazılan: {m['files_written']}")
+        lines.append(f"  Okunan     : {m['files_read']} dosya | Yazılan: {m['files_written']}")
 
         last_file = self.memory.get_last_file()
         if last_file:
-            lines.append(f"  Son dosya   : {last_file}")
+            lines.append(f"  Son dosya  : {last_file}")
 
         return "\n".join(lines)
 
