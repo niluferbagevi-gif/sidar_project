@@ -294,6 +294,12 @@ class Config:
     # ─── Docker REPL Sandbox ─────────────────────────────────
     DOCKER_PYTHON_IMAGE: str = os.getenv("DOCKER_PYTHON_IMAGE", "python:3.11-alpine")
 
+    # ─── Bellek Şifrelemesi ───────────────────────────────────────
+    # Boş bırakılırsa şifreleme devre dışı (varsayılan).
+    # Fernet anahtarı üretmek için:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    MEMORY_ENCRYPTION_KEY: str = os.getenv("MEMORY_ENCRYPTION_KEY", "")
+
     # ─── Web Arayüzü ─────────────────────────────────────────
     WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
     WEB_PORT: int = get_int_env("WEB_PORT", 7860)
