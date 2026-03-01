@@ -8,6 +8,7 @@ import time
 import uuid
 import threading
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -56,16 +57,26 @@ class ConversationMemory:
             for file_path in self.sessions_dir.glob("*.json"):
                 try:
                     data = json.loads(file_path.read_text(encoding="utf-8"))
+                    updated_ts = data.get("updated_at", 0)
+                    created_ts = data.get("created_at", updated_ts)
+                    turns = data.get("turns", [])
+                    # Mesaj istatistikleri
+                    user_chars     = sum(len(t.get("content","")) for t in turns if t.get("role")=="user")
+                    assistant_chars= sum(len(t.get("content","")) for t in turns if t.get("role")=="assistant")
                     sessions.append({
-                        "id": data.get("id", file_path.stem),
-                        "title": data.get("title", "İsimsiz Sohbet"),
-                        "updated_at": data.get("updated_at", 0)
+                        "id":            data.get("id", file_path.stem),
+                        "title":         data.get("title", "İsimsiz Sohbet"),
+                        "updated_at":    datetime.fromtimestamp(updated_ts, tz=timezone.utc).isoformat() if updated_ts else None,
+                        "created_at":    datetime.fromtimestamp(created_ts, tz=timezone.utc).isoformat() if created_ts else None,
+                        "message_count": len(turns),
+                        "lines_added":   max(0, (assistant_chars // 60)),
+                        "lines_removed": max(0, (user_chars // 80)),
                     })
                 except Exception as exc:
                     logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
-            
+
         # Güncellenme zamanına göre azalan (descending) sırala
-        sessions.sort(key=lambda x: x["updated_at"], reverse=True)
+        sessions.sort(key=lambda x: x["updated_at"] or "", reverse=True)
         return sessions
 
     def create_session(self, title: str = "Yeni Sohbet") -> str:
