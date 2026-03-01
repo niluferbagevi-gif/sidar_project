@@ -56,14 +56,20 @@ class ConversationMemory:
             for file_path in self.sessions_dir.glob("*.json"):
                 try:
                     data = json.loads(file_path.read_text(encoding="utf-8"))
+                    turns = data.get("turns", [])
+                    user_count = sum(1 for t in turns if t.get("role") == "user")
+                    asst_count = sum(1 for t in turns if t.get("role") == "assistant")
                     sessions.append({
                         "id": data.get("id", file_path.stem),
                         "title": data.get("title", "İsimsiz Sohbet"),
-                        "updated_at": data.get("updated_at", 0)
+                        "updated_at": data.get("updated_at", 0),
+                        "msg_count": len(turns),
+                        "user_count": user_count,
+                        "asst_count": asst_count,
                     })
                 except Exception as exc:
                     logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
-            
+
         # Güncellenme zamanına göre azalan (descending) sırala
         sessions.sort(key=lambda x: x["updated_at"], reverse=True)
         return sessions
