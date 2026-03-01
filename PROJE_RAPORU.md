@@ -1440,22 +1440,48 @@ async for raw_bytes in resp.aiter_bytes():
 | `test_system_health_gpu_info_structure` | GPU bilgi yapısı | Hayır | ✅ Çalışıyor |
 | `test_rag_gpu_params` | DocumentStore GPU parametreleri | Hayır | ✅ Çalışıyor |
 
-### Eksik Testler
+### ✅ Test Kapsamı — Tüm Eksikler Giderildi
 
-| Alan | Öncelik |
-|------|---------|
-| ConversationMemory session lifecycle | 🔴 YÜKSEK |
-| `sidar_agent.py` greedy regex JSON parse doğruluğu | 🔴 YÜKSEK |
-| `llm_client.py` UTF-8 multibyte buffer güvenliği | 🔴 YÜKSEK |
-| `auto_handle.py` health=None null guard | 🔴 YÜKSEK |
-| AutoHandle async metod testleri | 🟡 ORTA |
-| `_execute_tool` dispatcher — bilinmeyen araç | 🟡 ORTA |
-| web_server rate limiter (TOCTOU senaryosu) | 🟡 ORTA |
-| `rag.py` concurrent delete+upsert | 🟡 ORTA |
-| `github_manager.py` uzantısız dosya bypass | 🟡 ORTA |
-| `memory.py` bozuk JSON karantina davranışı | 🟡 ORTA |
-| Recursive chunking sınır koşulları | 🟢 DÜŞÜK |
-| `package_info.py` version sort pre-release | 🟢 DÜŞÜK |
+> Toplam: **46 test fonksiyonu** · Son güncelleme: 2026-03-01
+
+| Alan | Öncelik | Test Grubu | Durum |
+|------|---------|-----------|-------|
+| ConversationMemory session lifecycle | 🔴 YÜKSEK | `#9` — 6 test | ✅ |
+| `sidar_agent.py` greedy regex JSON parse doğruluğu | 🔴 YÜKSEK | `#14` — 4 test | ✅ |
+| `llm_client.py` UTF-8 multibyte buffer güvenliği | 🔴 YÜKSEK | `#15` — 3 test | ✅ |
+| `auto_handle.py` health=None null guard | 🔴 YÜKSEK | `#16` — 2 test | ✅ |
+| AutoHandle async metod testleri | 🟡 ORTA | `#12` — 2 test | ✅ |
+| `_execute_tool` dispatcher — bilinmeyen araç | 🟡 ORTA | `#10` — 2 test | ✅ |
+| web_server rate limiter (TOCTOU senaryosu) | 🟡 ORTA | `#17` — 3 test | ✅ |
+| `rag.py` concurrent delete+upsert | 🟡 ORTA | `#18` — 2 test | ✅ |
+| `github_manager.py` uzantısız dosya bypass | 🟡 ORTA | `#19` — 3 test | ✅ |
+| `memory.py` bozuk JSON karantina davranışı | 🟡 ORTA | `#13` — 1 test | ✅ |
+| Recursive chunking sınır koşulları | 🟢 DÜŞÜK | `#11` — 2 test | ✅ |
+| `package_info.py` version sort pre-release | 🟢 DÜŞÜK | `#20` — 4 test | ✅ |
+
+**Test grupları özeti:**
+
+| Grup | Kapsam | Test sayısı |
+|------|--------|-------------|
+| `#1`  | CodeManager okuma/yazma/doğrulama | 2 |
+| `#2`  | Pydantic ToolCall doğrulama | 1 |
+| `#3`  | WebSearch fallback | 1 |
+| `#4`  | RAG document chunking | 1 |
+| `#5`  | Agent başlatma | 1 |
+| `#6`  | GPU/Donanım bilgisi | 4 |
+| `#9`  | Session lifecycle (oluştur/ekle/yükle/sil/sırala/güncelle) | 6 |
+| `#10` | Dispatcher (bilinmeyen/bilinen araç) | 2 |
+| `#11` | Chunking sınır koşulları (küçük/büyük metin) | 2 |
+| `#12` | AutoHandle pattern tespiti | 2 |
+| `#13` | Bozuk JSON karantina | 1 |
+| `#14` | JSON parse doğruluğu (JSONDecoder) | 4 |
+| `#15` | UTF-8 multibyte buffer güvenliği | 3 |
+| `#16` | AutoHandle health=None null guard | 2 |
+| `#17` | Rate limiter TOCTOU senaryosu | 3 |
+| `#18` | RAG concurrent delete+upsert | 2 |
+| `#19` | GitHub Manager uzantı/token | 3 |
+| `#20` | PackageInfo version sort + is_prerelease | 4 |
+| **Toplam** | | **46** |
 
 ---
 

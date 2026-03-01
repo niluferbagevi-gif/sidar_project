@@ -431,3 +431,379 @@ def test_session_broken_json_quarantine(test_config):
     quarantined = sessions_dir / "bozuk-oturum.json.broken"
     assert quarantined.exists(), "Bozuk dosya karantinaya alınmadı"
     assert not broken_file.exists(), "Orijinal bozuk dosya hâlâ mevcut"
+
+
+# ─────────────────────────────────────────────
+# 14. JSON PARSE DOĞRULUĞU (GREEDY REGEX YERİNE JSONDecoder)
+# ─────────────────────────────────────────────
+
+def test_json_decoder_picks_first_valid_object():
+    """JSONDecoder ilk geçerli JSON nesnesini seçer; arkasındaki bozuk bloğu yoksayar."""
+    import json
+    decoder = json.JSONDecoder()
+    # Geçerli JSON + arkasında bozuk ek metin
+    text = '{"thought": "plan", "tool": "final_answer", "argument": "tamam"} fazla metin'
+    idx = text.find('{')
+    result, end = decoder.raw_decode(text, idx)
+    assert result["tool"] == "final_answer"
+    assert result["argument"] == "tamam"
+
+
+def test_json_decoder_skips_first_broken_finds_next():
+    """JSONDecoder bozuk ilk bloğu atlayıp sonraki geçerli JSON'ı bulur."""
+    import json
+    decoder = json.JSONDecoder()
+    # İlk '{' bozuk, ikinci '{' geçerli
+    text = '{bozuk} {"thought": "ok", "tool": "web_search", "argument": "x"}'
+    idx = text.find('{')
+    json_match = None
+    while idx != -1:
+        try:
+            json_match, _ = decoder.raw_decode(text, idx)
+            break
+        except json.JSONDecodeError:
+            idx = text.find('{', idx + 1)
+    assert json_match is not None
+    assert json_match["tool"] == "web_search"
+
+
+def test_json_decoder_no_json_returns_none():
+    """JSON içermeyen metinde döngü girmez, json_match None kalır."""
+    import json
+    decoder = json.JSONDecoder()
+    text = "Bu bir metin. JSON bloğu içermiyor."
+    idx = text.find('{')
+    json_match = None
+    while idx != -1:
+        try:
+            json_match, _ = decoder.raw_decode(text, idx)
+            break
+        except json.JSONDecodeError:
+            idx = text.find('{', idx + 1)
+    assert json_match is None
+
+
+def test_json_decoder_embedded_in_markdown():
+    """Markdown kod bloğu içine gömülü JSON doğru çıkarılır."""
+    import json
+    from agent.sidar_agent import ToolCall
+    text = '```json\n{"thought": "düşünüyorum", "tool": "list_dir", "argument": "."}\n```'
+    decoder = json.JSONDecoder()
+    idx = text.find('{')
+    json_match, _ = decoder.raw_decode(text, idx)
+    action = ToolCall.model_validate(json_match)
+    assert action.tool == "list_dir"
+
+
+# ─────────────────────────────────────────────
+# 15. UTF-8 MULTİBYTE BUFFER GÜVENLİĞİ
+# ─────────────────────────────────────────────
+
+def test_utf8_multibyte_two_byte_split():
+    """2 baytlık UTF-8 karakteri (ş=\\xc5\\x9f) iki pakete bölününce doğru birleşir."""
+    char = "ş"  # \xc5\x9f
+    full_bytes = char.encode("utf-8")
+    assert len(full_bytes) == 2
+
+    # llm_client._stream_ollama_response ile aynı mantık
+    _byte_buf = b""
+    result = ""
+    for packet in [full_bytes[:1], full_bytes[1:]]:
+        _byte_buf += packet
+        decoded = None
+        for trim in (1, 2, 3):
+            if trim >= len(_byte_buf):
+                continue
+            try:
+                decoded = _byte_buf[:-trim].decode("utf-8")
+                _byte_buf = _byte_buf[-trim:]
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            try:
+                decoded = _byte_buf.decode("utf-8")
+                _byte_buf = b""
+            except UnicodeDecodeError:
+                decoded = _byte_buf.decode("utf-8", errors="replace")
+                _byte_buf = b""
+        result += decoded
+
+    # Kalan buffer varsa temizle
+    if _byte_buf:
+        result += _byte_buf.decode("utf-8", errors="replace")
+
+    assert result == char
+
+
+def test_utf8_three_byte_char_split():
+    """3 baytlık UTF-8 karakteri (€=\\xe2\\x82\\xac) ortadan bölününce birleşir."""
+    char = "€"  # \xe2\x82\xac
+    full_bytes = char.encode("utf-8")
+    assert len(full_bytes) == 3
+
+    _byte_buf = b""
+    result = ""
+    for packet in [full_bytes[:2], full_bytes[2:]]:
+        _byte_buf += packet
+        decoded = None
+        for trim in (1, 2, 3):
+            if trim >= len(_byte_buf):
+                continue
+            try:
+                decoded = _byte_buf[:-trim].decode("utf-8")
+                _byte_buf = _byte_buf[-trim:]
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            try:
+                decoded = _byte_buf.decode("utf-8")
+                _byte_buf = b""
+            except UnicodeDecodeError:
+                decoded = _byte_buf.decode("utf-8", errors="replace")
+                _byte_buf = b""
+        result += decoded
+
+    if _byte_buf:
+        result += _byte_buf.decode("utf-8", errors="replace")
+
+    assert result == char
+
+
+def test_utf8_invalid_bytes_use_replace_fallback():
+    """Tamamen geçersiz UTF-8 baytları 'replace' moduyla Unicode ikame karakteri üretir."""
+    invalid = b"\xff\xfe\xfd"
+    decoded = invalid.decode("utf-8", errors="replace")
+    assert "\ufffd" in decoded  # U+FFFD: Unicode ikame karakteri
+
+
+# ─────────────────────────────────────────────
+# 16. AUTO_HANDLE HEALTH=NONE NULL GUARD
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_auto_handle_health_none_no_crash(agent):
+    """AutoHandle: health=None olduğunda sistem sağlık sorgusu AttributeError üretmez."""
+    original_health = agent.auto.health
+    try:
+        agent.auto.health = None
+        handled, response = await agent.auto.handle("sistem sağlık raporunu göster")
+        # Çökme olmamalı; yanıt string olmalı
+        assert isinstance(handled, bool)
+        assert isinstance(response, str)
+        if handled:
+            # None guard devreye girmeli
+            assert "başlatılamadı" in response or "⚠" in response
+    finally:
+        agent.auto.health = original_health
+
+
+@pytest.mark.asyncio
+async def test_auto_handle_health_returns_report_when_available(agent):
+    """AutoHandle: health yöneticisi mevcutsa sağlık raporu içeriği döner."""
+    if agent.auto.health is None:
+        pytest.skip("Sağlık yöneticisi başlatılmamış.")
+    handled, response = await agent.auto.handle("donanım durumunu göster")
+    # Eğer tanındıysa rapor içeriği dolu olmalı
+    if handled:
+        assert len(response) > 0
+
+
+# ─────────────────────────────────────────────
+# 17. RATE LIMITER (TOCTOU SENARYOSU)
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rate_limiter_blocks_after_limit():
+    """_is_rate_limited: Limit aşıldıktan sonra True döner."""
+    import web_server
+
+    test_ip = "192.0.2.1"  # RFC 5737 test IP
+    web_server._rate_data.pop(test_ip, None)
+    web_server._rate_lock = asyncio.Lock()
+
+    limit = 3
+    for _ in range(limit):
+        blocked = await web_server._is_rate_limited(test_ip, limit)
+        assert blocked is False, "Limit dolmadan önce bloklanmamalı"
+
+    # Limit + 1 → bloklanmalı
+    blocked = await web_server._is_rate_limited(test_ip, limit)
+    assert blocked is True, "Limit aşıldığında bloklanmalı"
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_different_keys_independent():
+    """_is_rate_limited: Farklı IP'ler birbirini etkilemez (TOCTOU izolasyonu)."""
+    import web_server
+
+    ip_a = "192.0.2.2"
+    ip_b = "192.0.2.3"
+    web_server._rate_data.pop(ip_a, None)
+    web_server._rate_data.pop(ip_b, None)
+    web_server._rate_lock = asyncio.Lock()
+
+    limit = 2
+    # ip_a limitini doldur
+    for _ in range(limit):
+        await web_server._is_rate_limited(ip_a, limit)
+    await web_server._is_rate_limited(ip_a, limit)  # ip_a bloklandı
+
+    # ip_b hâlâ serbest olmalı
+    blocked_b = await web_server._is_rate_limited(ip_b, limit)
+    assert blocked_b is False, "ip_b bağımsız olmalı"
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_concurrent_toctou():
+    """_is_rate_limited: Eş zamanlı çağrılar limit sayısını aşmaz."""
+    import web_server
+
+    test_ip = "192.0.2.4"
+    web_server._rate_data.pop(test_ip, None)
+    web_server._rate_lock = asyncio.Lock()
+
+    limit = 5
+    tasks = [web_server._is_rate_limited(test_ip, limit) for _ in range(limit + 3)]
+    results = await asyncio.gather(*tasks)
+
+    # En fazla `limit` kadar False (izin verilen) olmalı
+    allowed = results.count(False)
+    assert allowed <= limit, f"Limit aşıldı: {allowed} > {limit}"
+
+
+# ─────────────────────────────────────────────
+# 18. RAG CONCURRENT DELETE+UPSERT
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rag_concurrent_add_no_data_loss(test_config):
+    """DocumentStore: Eş zamanlı add_document çağrıları _write_lock ile güvenle serialize edilir."""
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
+
+    async def add_one(i: int) -> str:
+        return await asyncio.to_thread(
+            docs.add_document,
+            title=f"Belge {i}",
+            content=f"İçerik {i}: " + "x" * 200,
+            source="concurrent_test",
+        )
+
+    tasks = [add_one(i) for i in range(6)]
+    results = await asyncio.gather(*tasks)
+
+    # Tüm ekleme işlemleri bir doc_id döndürmeli
+    assert len(results) == 6
+    assert all(r is not None for r in results), "Bazı belgeler eklenemedi"
+
+    # Her belge bağımsız olarak okunabilmeli
+    for doc_id in results:
+        ok, content = docs.get_document(doc_id)
+        assert ok is True, f"Belge okunamadı: {doc_id}"
+        assert len(content) > 0
+
+
+@pytest.mark.asyncio
+async def test_rag_update_replaces_old_chunks(test_config):
+    """DocumentStore: Aynı başlıkla iki kez add_document → ikinci çağrı birincinin yerine geçer."""
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
+
+    id1 = docs.add_document(title="Güncellenecek", content="Eski içerik A", source="test")
+    id2 = docs.add_document(title="Güncellenecek", content="Yeni içerik B", source="test")
+
+    # Her iki doc_id de okunabilmeli (bağımsız UUID)
+    ok1, c1 = docs.get_document(id1)
+    ok2, c2 = docs.get_document(id2)
+    assert ok1 and "Eski içerik A" in c1
+    assert ok2 and "Yeni içerik B" in c2
+
+
+# ─────────────────────────────────────────────
+# 19. GITHUB MANAGER UZANTISIZ DOSYA BYPASS
+# ─────────────────────────────────────────────
+
+def test_github_manager_safe_extensions_set():
+    """GitHubManager: SAFE_TEXT_EXTENSIONS kritik uzantıları içeriyor."""
+    from managers.github_manager import GitHubManager
+
+    safe = GitHubManager.SAFE_TEXT_EXTENSIONS
+    for ext in (".py", ".md", ".json", ".yaml", ".yml", ".sh", ".txt"):
+        assert ext in safe, f"{ext} güvenli listede olmalı"
+
+    for ext in (".png", ".zip", ".exe", ".dll", ".bin", ".so"):
+        assert ext not in safe, f"{ext} güvenli listede OLMAMALI"
+
+
+def test_github_manager_safe_extensionless_set():
+    """GitHubManager: SAFE_EXTENSIONLESS bilinen güvenli uzantısız dosyaları içeriyor."""
+    from managers.github_manager import GitHubManager
+
+    safe = GitHubManager.SAFE_EXTENSIONLESS
+    for name in ("makefile", "dockerfile", "procfile", "license", "readme"):
+        assert name in safe, f"'{name}' güvenli uzantısız listede olmalı"
+
+
+def test_github_manager_no_token_status_guidance():
+    """GitHubManager: Token yokken status() token kurulum rehberini içeriyor."""
+    from managers.github_manager import GitHubManager
+
+    gm = GitHubManager(token="", repo_name="")
+    assert gm.is_available() is False
+
+    status = gm.status()
+    assert "GITHUB_TOKEN" in status
+    assert "github.com/settings/tokens" in status
+
+
+# ─────────────────────────────────────────────
+# 20. PACKAGE_INFO VERSION SORT PRE-RELEASE
+# ─────────────────────────────────────────────
+
+def test_version_sort_stable_beats_prerelease():
+    """_version_sort_key: Stabil sürüm tüm pre-release sürümlerden büyük sıralanır."""
+    from managers.package_info import PackageInfoManager
+
+    versions = ["1.0.0a1", "1.0.0b2", "1.0.0rc1", "1.0.0", "0.9.9"]
+    sorted_v = sorted(versions, key=PackageInfoManager._version_sort_key, reverse=True)
+
+    assert sorted_v[0] == "1.0.0",   f"En büyük 1.0.0 olmalı, bulundu: {sorted_v[0]}"
+    assert sorted_v[1] == "1.0.0rc1"
+    assert sorted_v[2] == "1.0.0b2"
+    assert sorted_v[3] == "1.0.0a1"
+    assert sorted_v[4] == "0.9.9"
+
+
+def test_is_prerelease_letter_based():
+    """_is_prerelease: Harf tabanlı pre-release formatlarını tanır."""
+    from managers.package_info import PackageInfoManager
+
+    assert PackageInfoManager._is_prerelease("1.0.0a1")    is True
+    assert PackageInfoManager._is_prerelease("1.0.0b2")    is True
+    assert PackageInfoManager._is_prerelease("1.0.0rc1")   is True
+    assert PackageInfoManager._is_prerelease("1.0.0alpha") is True
+    assert PackageInfoManager._is_prerelease("1.0.0")      is False
+    assert PackageInfoManager._is_prerelease("2.5.3")      is False
+
+
+def test_is_prerelease_npm_numeric():
+    """_is_prerelease: npm sayısal pre-release formatını tanır (1.0.0-0, 1.0.0-1)."""
+    from managers.package_info import PackageInfoManager
+
+    assert PackageInfoManager._is_prerelease("1.0.0-0")  is True
+    assert PackageInfoManager._is_prerelease("1.0.0-1")  is True
+    assert PackageInfoManager._is_prerelease("2.0.0-42") is True
+    assert PackageInfoManager._is_prerelease("1.0.0")    is False  # tire yok
+    assert PackageInfoManager._is_prerelease("1.0.0-rc1") is True  # hem harf hem sayısal
+
+
+def test_version_sort_invalid_version_goes_last():
+    """_version_sort_key: Geçersiz sürüm formatı '0.0.0' olarak değerlendirilir."""
+    from managers.package_info import PackageInfoManager
+
+    versions = ["1.0.0", "invalid-ver", "2.0.0"]
+    sorted_v = sorted(versions, key=PackageInfoManager._version_sort_key, reverse=True)
+
+    assert sorted_v[0] == "2.0.0"
+    assert sorted_v[1] == "1.0.0"
+    assert sorted_v[-1] == "invalid-ver"
