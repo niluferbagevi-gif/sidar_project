@@ -64,7 +64,11 @@ class ConversationMemory:
             try:
                 content = self._fernet.decrypt(raw).decode("utf-8")
             except Exception:
-                # Eski şifrelenmemiş dosya olabilir — düz metin dene
+                # Eski şifrelenmemiş (geçiş dönemi) dosya — düz metin dene
+                logger.warning(
+                    "⚠️ Oturum dosyası şifre çözümlenemedi, düz metin deneniyor: %s",
+                    file_path.name,
+                )
                 content = raw.decode("utf-8")
         else:
             content = raw.decode("utf-8")
@@ -110,9 +114,9 @@ class ConversationMemory:
                         "user_count": user_count,
                         "asst_count": asst_count,
                     })
-                except json.JSONDecodeError as exc:
+                except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                     logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
-                    # Bozuk dosyayı .json.broken uzantısıyla karantinaya al
+                    # Bozuk / şifre çözülemeyen dosyayı karantinaya al
                     broken_path = file_path.with_suffix(".json.broken")
                     try:
                         file_path.rename(broken_path)

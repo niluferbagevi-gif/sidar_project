@@ -78,8 +78,10 @@ app.add_middleware(
 # ─────────────────────────────────────────────
 #  RATE LIMITING (basit in-memory)
 # Kapsam:
-#   /chat          → 20 istek/60 sn/IP (LLM çağrısı, ağır)
-#   POST + DELETE  → 60 istek/60 sn/IP (oturum/repo mutasyonları, hafif)
+#   /chat                                   → 20 istek/60 sn/IP  (LLM çağrısı, ağır)
+#   POST + DELETE                           → 60 istek/60 sn/IP  (mutasyon endpoint'leri)
+#   GET /git-info /git-branches             → 30 istek/60 sn/IP  (dosya sistemi / git I/O)
+#       /files /file-content                →  (GET I/O kapsamında)
 # ─────────────────────────────────────────────
 
 _rate_data: dict[str, list[float]] = defaultdict(list)
@@ -267,46 +269,47 @@ async def status():
     })
 
 @app.get("/metrics")
-async def metrics():
+async def metrics(request: Request):
     """
-    Temel operasyonel metrikler (JSON).
-    Uptime, oturum sayısı, RAG belge sayısı, rate limit istatistikleri.
-    prometheus_client kuruluysa 'Accept: text/plain' başlığıyla Prometheus formatı döner.
+    Temel operasyonel metrikler.
+    - Varsayılan: JSON formatı (her istemci için çalışır).
+    - 'Accept: text/plain' başlığı + prometheus_client kurulu ise Prometheus formatı döner.
     """
     agent = await get_agent()
-    uptime_s = int(time.monotonic() - _start_time)
+    uptime_s  = int(time.monotonic() - _start_time)
     rag_docs  = len(agent.docs._index)
     sessions  = agent.memory.get_all_sessions()
+    rl_total  = sum(len(v) for v in _rate_data.values())
 
     payload = {
-        "version":                agent.VERSION,
-        "uptime_seconds":         uptime_s,
-        "sessions_total":         len(sessions),
-        "active_session_turns":   len(agent.memory),
-        "rag_documents":          rag_docs,
-        "rate_limit_buckets":     len(_rate_data),
-        "rate_limit_requests_in_window": sum(len(v) for v in _rate_data.values()),
-        "provider":               agent.cfg.AI_PROVIDER,
-        "gpu_enabled":            agent.cfg.USE_GPU,
+        "version":                       agent.VERSION,
+        "uptime_seconds":                uptime_s,
+        "sessions_total":                len(sessions),
+        "active_session_turns":          len(agent.memory),
+        "rag_documents":                 rag_docs,
+        "rate_limit_buckets":            len(_rate_data),
+        "rate_limit_requests_in_window": rl_total,
+        "provider":                      agent.cfg.AI_PROVIDER,
+        "gpu_enabled":                   agent.cfg.USE_GPU,
     }
 
-    # Opsiyonel Prometheus metin formatı (prometheus_client kuruluysa)
-    try:
-        from prometheus_client import (
-            CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST,
-        )
-        from starlette.responses import Response as _Resp
-        reg = CollectorRegistry()
-        Gauge("sidar_uptime_seconds",      "Sunucu çalışma süresi (s)", registry=reg).set(uptime_s)
-        Gauge("sidar_sessions_total",      "Toplam oturum sayısı",       registry=reg).set(len(sessions))
-        Gauge("sidar_rag_documents_total", "RAG belge sayısı",           registry=reg).set(rag_docs)
-        Gauge("sidar_active_turns",        "Aktif oturum tur sayısı",    registry=reg).set(len(agent.memory))
-        Gauge("sidar_rate_limit_requests", "Rate limit penceredeki istek", registry=reg).set(
-            sum(len(v) for v in _rate_data.values())
-        )
-        return _Resp(generate_latest(reg), media_type=CONTENT_TYPE_LATEST)
-    except ImportError:
-        pass  # prometheus_client kurulu değil — JSON ile devam et
+    # Prometheus formatı: istemci açıkça talep ederse VE kütüphane kuruluysa sun
+    accept = request.headers.get("Accept", "")
+    if "text/plain" in accept:
+        try:
+            from prometheus_client import (
+                CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST,
+            )
+            from starlette.responses import Response as _PromeResp
+            reg = CollectorRegistry()
+            Gauge("sidar_uptime_seconds",      "Sunucu çalışma süresi (s)",     registry=reg).set(uptime_s)
+            Gauge("sidar_sessions_total",      "Toplam oturum sayısı",           registry=reg).set(len(sessions))
+            Gauge("sidar_rag_documents_total", "RAG belge sayısı",               registry=reg).set(rag_docs)
+            Gauge("sidar_active_turns",        "Aktif oturum tur sayısı",        registry=reg).set(len(agent.memory))
+            Gauge("sidar_rate_limit_requests", "Rate limit penceredeki istek",   registry=reg).set(rl_total)
+            return _PromeResp(generate_latest(reg), media_type=CONTENT_TYPE_LATEST)
+        except ImportError:
+            pass  # prometheus_client kurulu değil — JSON ile devam et
 
     return JSONResponse(payload)
 

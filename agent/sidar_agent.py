@@ -478,7 +478,11 @@ class SidarAgent:
         return result
 
     async def _tool_docs_search(self, a: str) -> str:
-        _, result = self.docs.search(a)
+        # Opsiyonel mode: "sorgu|mode"  (mode: auto/vector/bm25/keyword)
+        parts = a.split("|", 1)
+        query = parts[0].strip()
+        mode  = parts[1].strip() if len(parts) > 1 else "auto"
+        _, result = self.docs.search(query, mode=mode)
         return result
 
     async def _tool_docs_add(self, a: str) -> str:
@@ -526,6 +530,8 @@ class SidarAgent:
         else:
             gpu_line = f"Yok ({getattr(self.cfg, 'GPU_INFO', 'N/A')})"
 
+        enc_status = "Etkin (Fernet)" if getattr(self.cfg, "MEMORY_ENCRYPTION_KEY", "") else "Devre Dışı"
+
         lines = [
             f"[Proje Kök Dizini]\n{dir_tree}",
             "",
@@ -536,6 +542,7 @@ class SidarAgent:
             f"  Proje Dizini : {base}",
             f"  Erişim Seviye: {self.cfg.ACCESS_LEVEL.upper()}",
             f"  Debug Modu   : {self.cfg.DEBUG_MODE}",
+            f"  Bellek Şifre : {enc_status}",
             "",
             "## 1. AI_PROVIDER  [config.py satır 225]",
             f"  Değer    : {self.cfg.AI_PROVIDER.upper()}",

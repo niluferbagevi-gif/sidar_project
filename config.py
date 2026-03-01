@@ -351,6 +351,15 @@ class Config:
             )
             is_valid = False
 
+        if cls.MEMORY_ENCRYPTION_KEY:
+            try:
+                from cryptography.fernet import Fernet  # noqa: F401
+            except ImportError:
+                logger.warning(
+                    "⚠️  MEMORY_ENCRYPTION_KEY ayarlanmış ama 'cryptography' paketi kurulu değil.\n"
+                    "   Şifreleme devre dışı kalacak. Kurmak için: pip install cryptography"
+                )
+
         if cls.AI_PROVIDER == "ollama":
             try:
                 import httpx
@@ -419,6 +428,8 @@ class Config:
         else:
             print(f"  Gemini Modeli    : {cls.GEMINI_MODEL}")
         print(f"  RAG Dizini       : {cls.RAG_DIR.relative_to(BASE_DIR)}")
+        enc_status = "Etkin (Fernet)" if cls.MEMORY_ENCRYPTION_KEY else "Devre Dışı"
+        print(f"  Bellek Şifreleme : {enc_status}")
         print("═" * 62 + "\n")
 
 
