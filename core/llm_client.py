@@ -82,10 +82,20 @@ class LLMClient:
             "stream": stream,
             "options": options,
         }
-        # JSON modu yalnızca ReAct döngüsü için zorunlu; özetleme gibi
-        # düz metin gereken çağrılarda atlanır.
+        # Structured output: Ollama ≥0.4 JSON şeması destekler.
+        # ToolCall şeması ile modeli SADECE {thought, tool, argument} üretmeye zorla.
+        # Bu hallucination ve yanlış formatlı çıktıların önüne geçer.
         if json_mode:
-            payload["format"] = "json"
+            payload["format"] = {
+                "type": "object",
+                "properties": {
+                    "thought":  {"type": "string"},
+                    "tool":     {"type": "string"},
+                    "argument": {"type": "string"},
+                },
+                "required": ["thought", "tool", "argument"],
+                "additionalProperties": False,
+            }
         
         timeout = getattr(self.config, "OLLAMA_TIMEOUT", 60)
         

@@ -32,7 +32,16 @@ logger = logging.getLogger(__name__)
 # LLM'in önceki araç sonuçlarını tutarlı parse edebilmesi için
 # tek bir şema kullanılır.
 # ─────────────────────────────────────────────
-_FMT_TOOL_OK  = "[ARAÇ:{name}]\n{result}"   # başarılı araç çıktısı
+_FMT_TOOL_OK = (
+    "[ARAÇ:{name}:SONUÇ]\n"
+    "===\n"
+    "{result}\n"
+    "===\n"
+    "KURAL: Yukarıdaki değerleri AYNEN kullan. ASLA kendi bilginden değer uydurma.\n"
+    "Eğer görev tamamlandıysa MUTLAKA şu formatta yanıt ver:\n"
+    "{{\"thought\": \"analiz\", \"tool\": \"final_answer\", \"argument\": \"<Markdown özet>\"}}\n"
+    "Devam gerekiyorsa sonraki aracı çağır."
+)
 _FMT_TOOL_ERR = "[ARAÇ:{name}:HATA]\n{error}"  # araç hatası (bilinmeyen araç vb.)
 _FMT_SYS_ERR  = "[Sistem Hatası] {msg}"        # ayrıştırma / doğrulama hatası
 
