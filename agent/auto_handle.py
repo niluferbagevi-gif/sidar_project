@@ -45,6 +45,14 @@ class AutoHandle:
     #  ANA GİRİŞ NOKTASI (ASYNC)
     # ─────────────────────────────────────────────
 
+    # Çok adımlı komutları tespit eden regex: "ardından", "sonrasında", numaralı adımlar vb.
+    # Bu ifadeler varsa AutoHandle tek adım döndüremez → ReAct'a bırak.
+    _MULTI_STEP_RE = re.compile(
+        r"\bardından\b|\bsonrasında\b|\bönce\b.{1,60}\bsonra\b"
+        r"|\b\d+\s*[\.\)]\s+\w|\bve\s+ardından\b|\bşunları\s+(yap|bul|göster|listele)\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+
     async def handle(self, text: str) -> Tuple[bool, str]:
         """
         text: kullanıcı mesajı
@@ -54,6 +62,11 @@ class AutoHandle:
             (False, "")    — LLM'e ilet
         """
         t = text.lower().strip()
+
+        # Çok adımlı komutlar (ardından, önce...sonra, 1. ... 2. ...) direkt ReAct'a gider.
+        # AutoHandle tek adım döndürdüğü için zincirli istekleri kırar.
+        if self._MULTI_STEP_RE.search(text):
+            return False, ""
 
         # ── Temel araçlar (Senkron) ──────────────────────────
         result = self._try_list_directory(t, text)
