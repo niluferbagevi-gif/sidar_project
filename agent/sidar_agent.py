@@ -471,29 +471,36 @@ class SidarAgent:
         return self.docs.delete_document(a)
 
     async def _tool_get_config(self, _: str) -> str:
-        """Çalışma anındaki Config değerlerini döndürür (.env'den yüklenmiş gerçek değerler)."""
-        info = {
-            "PROJECT_NAME":    self.cfg.PROJECT_NAME,
-            "VERSION":         self.cfg.VERSION,
-            "AI_PROVIDER":     self.cfg.AI_PROVIDER,
-            "CODING_MODEL":    self.cfg.CODING_MODEL,
-            "TEXT_MODEL":      self.cfg.TEXT_MODEL,
-            "OLLAMA_URL":      self.cfg.OLLAMA_URL,
-            "ACCESS_LEVEL":    self.cfg.ACCESS_LEVEL,
-            "USE_GPU":         self.cfg.USE_GPU,
-            "GPU_INFO":        self.cfg.GPU_INFO,
-            "GPU_COUNT":       self.cfg.GPU_COUNT,
-            "CUDA_VERSION":    self.cfg.CUDA_VERSION,
-            "CPU_COUNT":       self.cfg.CPU_COUNT,
-            "MAX_REACT_STEPS": self.cfg.MAX_REACT_STEPS,
-            "MAX_MEMORY_TURNS":self.cfg.MAX_MEMORY_TURNS,
-            "BASE_DIR":        str(self.cfg.BASE_DIR),
-            "GITHUB_REPO":     self.cfg.GITHUB_REPO or "(ayarlanmamış)",
-            "DEBUG_MODE":      self.cfg.DEBUG_MODE,
-        }
-        lines = ["[Gerçek Config Değerleri — .env + Ortam Değişkenleri]"]
-        for k, v in info.items():
-            lines.append(f"  {k}: {v}")
+        """Çalışma anındaki gerçek Config değerlerini döndürür (.env dahil)."""
+        gpu_line = (
+            f"{self.cfg.GPU_INFO} ({self.cfg.GPU_COUNT} GPU, CUDA {self.cfg.CUDA_VERSION})"
+            if self.cfg.USE_GPU else f"Yok ({self.cfg.GPU_INFO})"
+        )
+        lines = [
+            "[Gerçek Config Değerleri — .env + Ortam Değişkenleri]",
+            "",
+            "# Temel",
+            f"  Proje        : {self.cfg.PROJECT_NAME} v{self.cfg.VERSION}",
+            f"  Proje Dizini : {self.cfg.BASE_DIR}",
+            f"  Erişim Seviye: {self.cfg.ACCESS_LEVEL.upper()}",
+            f"  Debug Modu   : {self.cfg.DEBUG_MODE}",
+            "",
+            "# AI Modeli",
+            f"  AI Sağlayıcı : {self.cfg.AI_PROVIDER.upper()}",
+            f"  Coding Modeli: {self.cfg.CODING_MODEL}",
+            f"  Text Modeli  : {self.cfg.TEXT_MODEL}",
+            f"  Ollama URL   : {self.cfg.OLLAMA_URL}",
+            f"  Ollama Timeout: {self.cfg.OLLAMA_TIMEOUT}s",
+            "",
+            "# Donanım",
+            f"  GPU          : {gpu_line}",
+            f"  CPU Çekirdek : {self.cfg.CPU_COUNT}",
+            "",
+            "# Entegrasyon",
+            f"  GitHub Repo  : {self.cfg.GITHUB_REPO or '(ayarlanmamış)'}",
+            f"  ReAct Adım   : max {self.cfg.MAX_REACT_STEPS}",
+            f"  Bellek Turu  : max {self.cfg.MAX_MEMORY_TURNS}",
+        ]
         return "\n".join(lines)
 
     async def _execute_tool(self, tool_name: str, tool_arg: str) -> Optional[str]:
@@ -530,6 +537,7 @@ class SidarAgent:
             "docs_list":              self._tool_docs_list,
             "docs_delete":            self._tool_docs_delete,
             "get_config":             self._tool_get_config,
+            "print_config_summary":   self._tool_get_config,   # alias — gereksiz LLM turu önleme
         }
         handler = dispatch.get(tool_name)
         return await handler(tool_arg) if handler else None
