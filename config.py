@@ -145,12 +145,18 @@ def check_hardware() -> HardwareInfo:
             )
             # VRAM fraksiyonunu hemen uygula (GPU_MEMORY_FRACTION env'den okunur)
             frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
-            if 0.1 <= frac < 1.0:
-                try:
-                    torch.cuda.set_per_process_memory_fraction(frac, device=0)
-                    logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
-                except Exception as exc:
-                    logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
+            if not (0.1 <= frac < 1.0):
+                logger.warning(
+                    "GPU_MEMORY_FRACTION=%.2f geçersiz aralık (0.1–1.0 bekleniyor) "
+                    "— varsayılan 0.8 kullanılıyor.",
+                    frac,
+                )
+                frac = 0.8
+            try:
+                torch.cuda.set_per_process_memory_fraction(frac, device=0)
+                logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
+            except Exception as exc:
+                logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
         else:
             if wsl2:
                 logger.warning(

@@ -39,12 +39,16 @@ logger = logging.getLogger(__name__)
 
 cfg = Config()
 _agent: SidarAgent | None = None
-_agent_lock = asyncio.Lock()
+# Event loop başlamadan önce asyncio.Lock() oluşturmak Python <3.10'da
+# DeprecationWarning üretir. Lazy başlatma ile bu risk tamamen ortadan kalkar.
+_agent_lock: asyncio.Lock | None = None
 
 
 async def get_agent() -> SidarAgent:
     """Singleton ajan — ilk async çağrıda başlatılır (asyncio.Lock ile korunur)."""
-    global _agent
+    global _agent, _agent_lock
+    if _agent_lock is None:
+        _agent_lock = asyncio.Lock()   # event loop başladıktan sonra oluştur
     if _agent is None:
         async with _agent_lock:
             if _agent is None:

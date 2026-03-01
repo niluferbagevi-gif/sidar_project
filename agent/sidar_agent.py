@@ -28,6 +28,15 @@ from agent.definitions import SIDAR_SYSTEM_PROMPT
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
+#  ARAÇ MESAJ FORMAT SABİTLERİ
+# LLM'in önceki araç sonuçlarını tutarlı parse edebilmesi için
+# tek bir şema kullanılır.
+# ─────────────────────────────────────────────
+_FMT_TOOL_OK  = "[ARAÇ:{name}]\n{result}"   # başarılı araç çıktısı
+_FMT_TOOL_ERR = "[ARAÇ:{name}:HATA]\n{error}"  # araç hatası (bilinmeyen araç vb.)
+_FMT_SYS_ERR  = "[Sistem Hatası] {msg}"        # ayrıştırma / doğrulama hatası
+
+# ─────────────────────────────────────────────
 #  PYDANTIC VERİ MODELİ (YAPISAL ÇIKTI)
 # ─────────────────────────────────────────────
 class ToolCall(BaseModel):
@@ -110,11 +119,12 @@ class SidarAgent:
             self._lock = asyncio.Lock()
 
         # Bellek yazma ve hızlı eşleme kilitli bölgede yapılır
+        # memory.add() → asyncio.to_thread: dosya I/O event loop'u bloke etmez
         async with self._lock:
-            self.memory.add("user", user_input)
+            await asyncio.to_thread(self.memory.add, "user", user_input)
             handled, quick_response = await self.auto.handle(user_input)
             if handled:
-                self.memory.add("assistant", quick_response)
+                await asyncio.to_thread(self.memory.add, "assistant", quick_response)
 
         # Lock serbest bırakıldı
         if handled:
@@ -185,7 +195,7 @@ class SidarAgent:
                 tool_arg = action_data.argument
 
                 if tool_name == "final_answer":
-                    self.memory.add("assistant", tool_arg)
+                    await asyncio.to_thread(self.memory.add, "assistant", tool_arg)
                     yield str(tool_arg)
                     return
 
@@ -198,22 +208,27 @@ class SidarAgent:
                 if tool_result is None:
                     messages = messages + [
                          {"role": "assistant", "content": llm_response_accumulated},
-                         {"role": "user", "content": f"[Sistem Hatası] '{tool_name}' adında bir araç yok veya geçersiz bir işlem seçildi."}
+                         {"role": "user", "content": _FMT_TOOL_ERR.format(
+                             name=tool_name,
+                             error="Bu araç yok veya geçersiz bir işlem seçildi."
+                         )},
                     ]
                     continue
 
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
-                    {"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"},
+                    {"role": "user", "content": _FMT_TOOL_OK.format(name=tool_name, result=tool_result)},
                 ]
-            
+
             except ValidationError as ve:
                 logger.warning("Pydantic doğrulama hatası:\n%s", ve)
-                error_feedback = (
-                    f"[Sistem Hatası] Ürettiğin JSON yapısı beklentilere uymuyor.\n"
-                    f"Eksik veya hatalı alanlar:\n{ve}\n\n"
-                    f"Lütfen sadece şu formata uyan BİR TANE JSON döndür:\n"
-                    f'{{"thought": "düşüncen", "tool": "araç_adı", "argument": "argüman"}}'
+                error_feedback = _FMT_SYS_ERR.format(
+                    msg=(
+                        f"Ürettiğin JSON yapısı beklentilere uymuyor.\n"
+                        f"Eksik veya hatalı alanlar:\n{ve}\n\n"
+                        f"Lütfen sadece şu formata uyan BİR TANE JSON döndür:\n"
+                        f'{{"thought": "düşüncen", "tool": "araç_adı", "argument": "argüman"}}'
+                    )
                 )
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
@@ -221,9 +236,12 @@ class SidarAgent:
                 ]
             except (ValueError, json.JSONDecodeError) as e:
                 logger.warning("JSON ayrıştırma hatası: %s", e)
-                error_feedback = (
-                    f"[Sistem Hatası] Yanıtın geçerli bir JSON formatında değil veya bozuk: {e}\n\n"
-                    f"Lütfen yanıtını herhangi bir markdown (```json) bloğuna almadan, sadece düz geçerli bir JSON objesi olarak ver."
+                error_feedback = _FMT_SYS_ERR.format(
+                    msg=(
+                        f"Yanıtın geçerli bir JSON formatında değil veya bozuk: {e}\n\n"
+                        f"Lütfen yanıtını herhangi bir markdown (```json) bloğuna almadan, "
+                        f"sadece düz geçerli bir JSON objesi olarak ver."
+                    )
                 )
                 messages = messages + [
                     {"role": "assistant", "content": llm_response_accumulated},
@@ -249,7 +267,7 @@ class SidarAgent:
         if not a: return "Dosya yolu belirtilmedi."
         # Disk okuma event loop'u bloke eder — thread'e itilir
         ok, result = await asyncio.to_thread(self.code.read_file, a)
-        if ok: self.memory.set_last_file(a)
+        if ok: await asyncio.to_thread(self.memory.set_last_file, a)
         return result
 
     async def _tool_write_file(self, a: str) -> str:

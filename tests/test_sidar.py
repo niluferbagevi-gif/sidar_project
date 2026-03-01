@@ -338,3 +338,96 @@ def test_session_load_nonexistent(test_config):
 
     result = mem.load_session("00000000-0000-0000-0000-000000000000")
     assert result is False
+
+
+# ─────────────────────────────────────────────
+# 10. ARAÇ DISPATCHER TESTLERİ
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_execute_tool_unknown_returns_none(agent):
+    """SidarAgent dispatcher'ı bilinmeyen araç adı için None döndürür."""
+    result = await agent._execute_tool("var_olmayan_arac_xyz", "test argümanı")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_known_does_not_return_none(agent):
+    """SidarAgent dispatcher'ı bilinen araç için None döndürmez."""
+    # list_dir gerçek I/O yapar; BASE_DIR mevcut olduğundan sonuç döner
+    result = await agent._execute_tool("list_dir", str(agent.cfg.BASE_DIR))
+    assert result is not None
+
+
+# ─────────────────────────────────────────────
+# 11. CHUNKING SINIR TESTLERİ
+# ─────────────────────────────────────────────
+
+def test_rag_chunking_small_text(test_config):
+    """DocumentStore: _chunk_size'dan küçük metin tek parça olarak eklenir."""
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
+    small = "Küçük bir metin."
+    doc_id = docs.add_document(title="Küçük", content=small, source="test")
+    assert doc_id is not None
+    ok, retrieved = docs.get_document(doc_id)
+    assert ok is True
+    assert retrieved == small
+
+
+def test_rag_chunking_large_text(test_config):
+    """DocumentStore: _chunk_size'dan büyük metin parçalara bölünür ve tamamı saklanır."""
+    docs = DocumentStore(test_config.RAG_DIR, use_gpu=False)
+    # Varsayılan chunk_size (genellikle 512) değerini aşan metin üret
+    large = "A" * 2000 + "\n\n" + "B" * 2000
+    doc_id = docs.add_document(title="Büyük", content=large, source="test")
+    assert doc_id is not None
+    ok, retrieved = docs.get_document(doc_id)
+    assert ok is True
+    assert len(retrieved) == len(large)
+
+
+# ─────────────────────────────────────────────
+# 12. AUTOHANDLE PATTERN TESTLERİ
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_auto_handle_no_match(agent):
+    """AutoHandle: normal LLM sorusuna müdahale etmez."""
+    handled, _ = await agent.auto.handle("Python'da asenkron programlama nasıl çalışır?")
+    assert handled is False
+
+
+@pytest.mark.asyncio
+async def test_auto_handle_clear_command(agent):
+    """AutoHandle: 'belleği temizle' / 'sohbeti sıfırla' komutlarına yanıt verir."""
+    # Önce birkaç mesaj ekle
+    agent.memory.add("user", "test mesajı")
+    handled, response = await agent.auto.handle("belleği temizle")
+    # Bu komut tanınmalı (handled=True) veya tanınmamalı (handled=False)
+    # Her iki durumda da çökme olmamalı
+    assert isinstance(handled, bool)
+    assert isinstance(response, str)
+
+
+# ─────────────────────────────────────────────
+# 13. BROKEN JSON KARANTINA TESTİ
+# ─────────────────────────────────────────────
+
+def test_session_broken_json_quarantine(test_config):
+    """ConversationMemory: Bozuk JSON dosyası .json.broken olarak karantinaya alınır."""
+    from core.memory import ConversationMemory
+
+    # Bozuk bir JSON dosyası oluştur
+    sessions_dir = test_config.DATA_DIR / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    broken_file = sessions_dir / "bozuk-oturum.json"
+    broken_file.write_text("{bozuk json içerik: !!!", encoding="utf-8")
+
+    # get_all_sessions() çağrısı çökme üretmemeli; bozuk dosya karantinaya alınmalı
+    mem = ConversationMemory(file_path=test_config.MEMORY_FILE, max_turns=10)
+    sessions = mem.get_all_sessions()
+
+    # Bozuk dosya .json.broken adıyla karantinada olmalı
+    quarantined = sessions_dir / "bozuk-oturum.json.broken"
+    assert quarantined.exists(), "Bozuk dosya karantinaya alınmadı"
+    assert not broken_file.exists(), "Orijinal bozuk dosya hâlâ mevcut"

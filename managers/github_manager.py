@@ -212,11 +212,23 @@ class GitHubManager:
     # ─────────────────────────────────────────────
 
     def is_available(self) -> bool:
+        if not self._available and not self.token:
+            logger.debug(
+                "GitHub: Token eksik. .env dosyasına GITHUB_TOKEN=<token> ekleyin. "
+                "Token oluşturmak için: https://github.com/settings/tokens"
+            )
         return self._available
 
     def status(self) -> str:
         if not self._available:
-            return "GitHub: Bağlı değil (token eksik veya hatalı)"
+            if not self.token:
+                return (
+                    "GitHub: Bağlı değil\n"
+                    "  → Token eklemek için: .env dosyasına GITHUB_TOKEN=<token> satırı ekleyin\n"
+                    "  → Token oluşturmak için: https://github.com/settings/tokens\n"
+                    "  → Gerekli izinler: repo (okuma) veya public_repo (genel depolar)"
+                )
+            return "GitHub: Token geçersiz veya bağlantı hatası (log dosyasını kontrol edin)"
         repo_info = f" | Depo: {self.repo_name}" if self.repo_name else " | Depo: ayarlanmamış"
         return f"GitHub: Bağlı{repo_info}"
 

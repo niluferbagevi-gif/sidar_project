@@ -10,6 +10,7 @@ import re
 from typing import Tuple
 
 import httpx
+from packaging.version import Version, InvalidVersion
 
 logger = logging.getLogger(__name__)
 
@@ -254,16 +255,16 @@ class PackageInfoManager:
         return bool(re.search(r"[a-zA-Z]", version))
 
     @staticmethod
-    def _version_sort_key(version: str):
-        """Sürüm dizilerini sayısal olarak sırala."""
-        parts = re.split(r"[.\-]", version)
-        result = []
-        for p in parts:
-            try:
-                result.append(int(p))
-            except ValueError:
-                result.append(0)
-        return result
+    def _version_sort_key(version: str) -> Version:
+        """
+        Sürüm dizisini PEP 440 uyumlu şekilde sırala.
+        packaging.version.Version kullanımı: 1.0.0 > 1.0.0rc1 > 1.0.0b2 > 1.0.0a1
+        Geçersiz sürüm formatlarında 0.0.0 döndürülür (sona düşer).
+        """
+        try:
+            return Version(version)
+        except InvalidVersion:
+            return Version("0.0.0")
 
     def status(self) -> str:
         return "PackageInfo: PyPI + npm + GitHub Releases — Aktif (Asenkron)"
