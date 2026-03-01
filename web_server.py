@@ -16,6 +16,12 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+try:
+    import anyio
+    _ANYIO_CLOSED = anyio.ClosedResourceError
+except ImportError:  # anyio FastAPI/uvicorn bağımlılığıdır; normalde hep kurulu gelir
+    _ANYIO_CLOSED = None
+
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -135,7 +141,7 @@ async def chat(request: Request):
         """Asenkron SSE akışı: Ajan yanıtlarını dinler ve yayar."""
         try:
             agent = await get_agent()
-            
+
             # Eğer aktif bir başlık yoksa ve bu ilk mesajsa, basit bir başlık üretelim
             if len(agent.memory) == 0:
                 title = user_message[:30] + "..." if len(user_message) > 30 else user_message
@@ -151,11 +157,21 @@ async def chat(request: Request):
             # Akış başarıyla tamamlandı
             yield f"data: {json.dumps({'done': True})}\n\n"
 
+        except asyncio.CancelledError:
+            # İstemci bağlantıyı kesti (ESC / AbortController) — beklenen durum.
+            logger.info("Stream iptal edildi (CancelledError): istemci bağlantıyı kesti.")
         except Exception as exc:
+            # anyio.ClosedResourceError: kapalı sokete yazmaya çalışıldı — beklenen durum.
+            if _ANYIO_CLOSED and isinstance(exc, _ANYIO_CLOSED):
+                logger.info("Stream iptal edildi (ClosedResourceError): istemci bağlantıyı kesti.")
+                return
             logger.exception("Agent respond hatası: %s", exc)
-            err_chunk = json.dumps({"chunk": f"\n[Sistem Hatası] {exc}"})
-            yield f"data: {err_chunk}\n\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            try:
+                err_chunk = json.dumps({"chunk": f"\n[Sistem Hatası] {exc}"})
+                yield f"data: {err_chunk}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            except Exception:
+                pass  # Hata yanıtı gönderilirken de bağlantı kopabilir
 
     return StreamingResponse(
         sse_generator(),
