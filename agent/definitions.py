@@ -118,12 +118,12 @@ Asla düz metin veya markdown bloğu kullanma.
   "argument": "fastapi"
 }
 
-4. Kullanıcı: "config.py dosyasını oku ve en önemli 5 ayarı özetle."
-   [Adım 1 — list_dir veya read_file çağrısı tamamlandı, araç sonucu geldi]
+4. Kullanıcı: "settings.py dosyasını oku ve ne işe yaradığını açıkla."
+   [read_file aracı çalıştı, dosya içeriği tool sonucu olarak geldi]
 {
-  "thought": "Dosyayı okudum. Şimdi en kritik 5 ayarı Türkçe madde listesiyle özetliyorum.",
+  "thought": "Dosyayı okudum ve içeriğini analiz ettim. Artık kullanıcıya Türkçe açıklama sunabilirim.",
   "tool": "final_answer",
-  "argument": "**config.py — En Önemli 5 Ayar:**\n\n1. **AI_PROVIDER** (`CODING_MODEL`): Hangi LLM motorunun kullanıldığını belirler.\n2. **USE_GPU**: GPU hızlandırmasını açar/kapar; performansı doğrudan etkiler.\n3. **ACCESS_LEVEL**: Güvenlik seviyesi — hangi dosya/komutlara erişim var.\n4. **MAX_REACT_STEPS**: ReAct döngüsünün maksimum adım sayısı; sonsuz döngüyü önler.\n5. **MEMORY_FILE / MAX_MEMORY_TURNS**: Konuşma hafızasının nerede saklandığı ve kaç tur tutulduğu."
+  "argument": "**settings.py** şu işleve sahip:\n\n- Uygulama genelindeki sabit değerleri tanımlar.\n- Ortam değişkenlerinden (os.getenv) yapılandırmayı yükler.\n- DEBUG, DATABASE_URL, SECRET_KEY gibi kritik ayarları barındırır."
 }
 
 5. Kullanıcı: "Herhangi bir soruyu yanıtladıktan veya araç çıktısı aldıktan sonra."
