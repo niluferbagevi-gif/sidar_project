@@ -23,6 +23,9 @@ temp/
 # RAG data (local only)
 data/
 
+# Web vendor libraries (install_sidar.sh tarafından indirilir, repoya dahil edilmez)
+web_ui/vendor/
+
 # OS
 .DS_Store
 Thumbs.db

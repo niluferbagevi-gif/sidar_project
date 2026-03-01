@@ -26,7 +26,7 @@ except ImportError:  # anyio FastAPI/uvicorn bağımlılığıdır; normalde hep
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 
 from config import Config
 from agent.sidar_agent import SidarAgent
@@ -142,6 +142,20 @@ WEB_DIR = Path(__file__).parent / "web_ui"
 async def favicon():
     """Tarayıcının favicon isteğini 404 hatası vermeden sessizce (204) geçiştirir."""
     return Response(status_code=204)
+
+
+@app.get("/vendor/{file_path:path}", include_in_schema=False)
+async def serve_vendor(file_path: str):
+    """Yerel vendor kütüphanelerini servis eder (highlight.js, marked.js).
+    install_sidar.sh tarafından web_ui/vendor/ dizinine indirilmiş dosyalar buradan sunulur.
+    """
+    vendor_dir = (WEB_DIR / "vendor").resolve()
+    safe_path = (vendor_dir / file_path).resolve()
+    if not str(safe_path).startswith(str(vendor_dir)):
+        return Response(status_code=403)
+    if not safe_path.exists():
+        return Response(status_code=404)
+    return FileResponse(safe_path)
 
 
 @app.get("/", response_class=HTMLResponse)

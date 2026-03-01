@@ -66,7 +66,7 @@ services:
       - USE_GPU=true
       - GPU_DEVICE=${GPU_DEVICE:-0}
       - GPU_MEMORY_FRACTION=${GPU_MEMORY_FRACTION:-0.8}
-      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-false}
+      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-true}   # Ampere+ (RTX 30xx/40xx) FP16 destekler; eski GPU için .env'de false yapın
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
@@ -154,7 +154,7 @@ services:
       - USE_GPU=true
       - GPU_DEVICE=${GPU_DEVICE:-0}
       - GPU_MEMORY_FRACTION=${GPU_MEMORY_FRACTION:-0.8}
-      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-false}
+      - GPU_MIXED_PRECISION=${GPU_MIXED_PRECISION:-true}   # Ampere+ (RTX 30xx/40xx) FP16 destekler; eski GPU için .env'de false yapın
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
