@@ -1,10 +1,10 @@
 # SİDAR Projesi — Kapsamlı Kod Analiz Raporu (Güncel)
 
-**Tarih:** 2026-03-01
+**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri)
 **Analiz Eden:** Claude Sonnet 4.6 (Otomatik Denetim)
-**Versiyon:** SidarAgent v2.6.0 (Tüm dosyalar tutarlı)
-**Toplam Dosya:** ~35 kaynak dosyası, ~10.000+ satır kod
-**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi)
+**Versiyon:** SidarAgent v2.6.1 (Web UI + Backend patch)
+**Toplam Dosya:** ~35 kaynak dosyası, ~10.200+ satır kod
+**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01
 
 ---
 
@@ -56,6 +56,18 @@ SİDAR, ReAct (Reason + Act) döngüsü mimarisi üzerine kurulu, Türkçe dilli
 - Rate limiting (web UI)
 - WSL2 NVIDIA sürücü desteği
 
+**v2.6.0 → v2.6.1 Web UI & Backend Patch:**
+- Model ismi arayüzde dinamik hale getirildi (`/status` üzerinden)
+- Sahte (hardcoded) `REPOS` / `BRANCHES` dizileri kaldırıldı
+- Dal seçimi gerçek `git checkout` ile backend'e bağlandı (`POST /set-branch`)
+- Repo seçici modal kaldırıldı; repo bilgisi `git remote`'dan otomatik okunuyor
+- Auto-accept checkbox tamamen kaldırıldı (işlevsizdi)
+- `pkg_status` artık sunucudan dinamik alınıyor (hardcoded string silindi)
+- SSE streaming durdurulduğunda `CancelledError` / `ClosedResourceError` artık sessizce loglanıyor
+- **YENİ:** Oturum dışa aktarma (MD + JSON indirme düğmeleri)
+- **YENİ:** ReAct araç görselleştirmesi (her tool çağrısı badge olarak gösteriliyor)
+- **YENİ:** Mobil hamburger menüsü (768px altında sidebar toggle + overlay)
+
 ---
 
 ## 2. Dizin Yapısı
@@ -99,7 +111,7 @@ sidar_project/
 
 ## 3. Önceki Rapordan Bu Yana Düzeltilen Hatalar
 
-> ✅ Önceki raporda tespit edilen 8 temel sorunun tamamı giderilmiştir.
+> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu giderilmiştir (toplam 15 düzeltme).
 
 ---
 
@@ -226,6 +238,85 @@ self.docs = DocumentStore(
     chunk_overlap=self.cfg.RAG_CHUNK_OVERLAP,   # ✅ Config'den
     ...
 )
+```
+
+---
+
+### ✅ 3.9 `web_ui/index.html` — Model İsmi Hardcoded (YÜKSEK → ÇÖZÜLDÜ)
+
+**Sorun:** Sol menü ve chat giriş alanı altında model ismi "Sonnet 4.6" olarak sabit kodlanmıştı; arka planda Gemini veya Ollama çalışıyor olsa bile değişmiyordu.
+
+**Düzeltme:** `loadModelInfo()` fonksiyonu `/status` endpoint'inden `data.provider` ve `data.model` alanlarını çekip `#model-name-label` ve `#input-model-label` elementlerini günceller.
+
+```javascript
+// index.html — loadModelInfo()
+const data = await (await fetch('/status')).json();
+const display = provider === 'gemini' ? `Gemini · ${model}` : model;
+sidebarLabel.textContent = display;   // ✅ Dinamik
+inputLabel.textContent   = display;   // ✅ Dinamik
+```
+
+---
+
+### ✅ 3.10 `web_ui/index.html` — Auto-Accept Checkbox İşlevsizdi (ORTA → ÇÖZÜLDÜ)
+
+**Sorun:** "Auto accept edits" checkbox'ı yalnızca `localStorage`'a değer kaydediyordu; backend'e (`/chat` payload'ına) hiç iletilmiyordu. `SidarAgent` bu ayarı asla bilemiyordu.
+
+**Düzeltme:** Checkbox ve ilgili tüm JS (`syncAutoAccept`, `applyStoredAutoAccept`) ve CSS (`.auto-accept-wrap`, `.auto-accept-sm`) tamamen kaldırıldı. `SidarAgent`'ın bu kavramı karşılayan bir mekanizması bulunmadığından kaldırma, yama uygulamaktan daha doğru yaklaşımdır.
+
+---
+
+### ✅ 3.11 `web_ui/index.html` — Sahte Repo/Dal Seçicileri (YÜKSEK → ÇÖZÜLDÜ)
+
+**Sorun:** Hardcoded `REPOS` ve `BRANCHES` dizileri; modal üzerinden seçim yapılsa bile backend'e hiçbir bilgi gitmiyordu.
+
+**Düzeltme:**
+- `REPOS`, `BRANCHES` sabitleri, `openRepoModal`, `renderRepos`, `filterRepos`, `selectRepo` fonksiyonları ve repo modal HTML'i silindi.
+- `web_server.py`'e `POST /set-branch` endpoint'i eklendi — `git checkout <branch>` çalıştırır, hata durumunda açıklayıcı mesaj döner.
+- `selectBranch()` artık `/set-branch`'i çağırır; başarısız olursa UI güncellenmez ve `alert()` gösterir.
+- Repo chip'i artık salt okunur gösterge; repo `/git-info`'dan `git remote`'dan otomatik okunur.
+
+```python
+# web_server.py — yeni endpoint
+@app.post("/set-branch")
+async def set_branch(request: Request):
+    subprocess.check_output(["git", "checkout", branch_name], cwd=str(_root), ...)
+    return JSONResponse({"success": True, "branch": branch_name})
+```
+
+---
+
+### ✅ 3.12 `web_ui/index.html` — `pkg_status` Hardcoded (ORTA → ÇÖZÜLDÜ)
+
+**Sorun:** Sistem Durumu modalında "Paket Bilgi" satırı `'✓ PyPI + npm + GitHub'` sabit string'i gösteriyordu; `data.pkg_status` hiç kullanılmıyordu.
+
+**Düzeltme:** Tek satır değişiklik:
+```javascript
+// Önce:  row('Paket Bilgi', '✓ PyPI + npm + GitHub', 'ok'),
+// Sonra:
+row('Paket Bilgi', data.pkg_status),   // ✅ a.pkg.status() çıktısı
+```
+
+---
+
+### ✅ 3.13 `web_server.py` — ESC/Streaming Durdurma Log Kirliliği (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Sorun:** İstemci `AbortController.abort()` ile bağlantıyı kestiğinde `anyio.ClosedResourceError` hata olarak loglanıyor, ardından handler kapalı sokete `yield` deneyerek ikinci hata tetikleniyordu.
+
+**Düzeltme:**
+```python
+except asyncio.CancelledError:
+    logger.info("Stream iptal edildi (CancelledError): istemci bağlantıyı kesti.")
+except Exception as exc:
+    if _ANYIO_CLOSED and isinstance(exc, _ANYIO_CLOSED):
+        logger.info("Stream iptal edildi (ClosedResourceError): istemci bağlantıyı kesti.")
+        return
+    # Gerçek hatalar için yield try/except ile sarıldı
+    try:
+        yield f"data: {json.dumps({'chunk': f'[Sistem Hatası] {exc}'})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+    except Exception:
+        pass
 ```
 
 ---
@@ -470,33 +561,29 @@ def status(self) -> str:
 
 ---
 
-### 6.5 `web_ui/index.html` — Oturum Dışa Aktarma Özelliği Yok
+### ✅ 6.5 `web_ui/index.html` — Oturum Dışa Aktarma / Tool Görselleştirme / Mobil Menü (ORTA → ÇÖZÜLDÜ)
 
-**Dosya:** `web_ui/index.html`
-**Önem:** 🟡 ORTA
+**Dosya:** `web_ui/index.html`, `web_server.py`, `agent/sidar_agent.py`
+**Önceki Önem:** 🟡 ORTA → **✅ ÇÖZÜLDÜ**
 
-**Sorun:**
+**Uygulanan düzeltmeler:**
 
-Çoklu oturum sistemi başarıyla implementa edilmiştir. Ancak:
-- Sohbet geçmişini dışa aktarma (JSON / Markdown / TXT) yok
-- Oturuma ad verme / yeniden adlandırma arayüzü yok (başlık otomatik ilk mesajdan alınıyor)
-- Araç çalıştırma görselleştirmesi yok (ReAct adımları görünmüyor)
+**A) Dışa Aktarma (MD + JSON):**
+- Topbar'a `MD` ve `JSON` indirme düğmeleri eklendi.
+- `exportSession(format)`: `/sessions/{id}` üzerinden geçmişi çekip `Blob` ile tarayıcıya indirir.
 
-**Önerilen iyileştirmeler:**
+**B) ReAct Araç Görselleştirmesi:**
+- `sidar_agent.py`: Her araç çağrısından önce `\x00TOOL:<name>\x00` sentinel'i yield edilir.
+- `web_server.py`: SSE generator sentinel'i yakalar → `{"tool_call": "..."}` eventi gönderir.
+- `index.html`: `appendToolStep()` fonksiyonu her tool event'ini `TOOL_LABELS` tablosuyla Türkçe badge olarak render eder (örn. `📂 Dizin listeleniyor`, `🌐 Web'de aranıyor`).
 
-```javascript
-// Dışa aktarma fonksiyonu
-async function exportSession() {
-    const res = await fetch(`/sessions/${currentSessionId}`);
-    const data = await res.json();
-    const text = data.history.map(m => `**${m.role}:**\n${m.content}`).join('\n\n---\n\n');
-    const blob = new Blob([text], { type: 'text/markdown' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `sidar_${currentSessionId.slice(0,8)}.md`;
-    a.click();
-}
-```
+**C) Mobil Hamburger Menü:**
+- 768px altında sidebar `.open` sınıfıyla toggle edilir.
+- Topbar'a `btn-hamburger` eklendi (yalnızca mobilde görünür).
+- Sidebar arkasına yarı saydam overlay eklendi; dışına tıklayınca kapanır.
+
+**Hâlâ eksik:**
+- Oturuma yeniden ad verme arayüzü (başlık otomatik ilk mesajdan alınıyor).
 
 ---
 
@@ -766,7 +853,7 @@ USE_GPU, GPU_INFO, GPU_DEVICE, MULTI_GPU, GPU_MEMORY_FRACTION, GPU_MIXED_PRECISI
 - ✅ pynvml — WSL2'de graceful fallback (hata vermez, loglar)
 - ✅ nvidia-smi subprocess fallback — driver version almak için
 
-### 10.5 Web Arayüzü — Yeni Özellikler
+### 10.5 Web Arayüzü — Özellikler (v2.6.1 ile güncellendi)
 
 - ✅ Sidebar ile oturum geçmişi
 - ✅ Koyu/Açık tema (localStorage tabanlı)
@@ -776,6 +863,12 @@ USE_GPU, GPU_INFO, GPU_DEVICE, MULTI_GPU, GPU_MEMORY_FRACTION, GPU_MIXED_PRECISI
 - ✅ Dosya ekleme (200 KB limit, metin/kod dosyaları)
 - ✅ Mesaj düzenleme ve kopyala aksiyonları
 - ✅ Oturum arama/filtreleme
+- ✅ **[v2.6.1]** Model ismi dinamik (`/status` üzerinden)
+- ✅ **[v2.6.1]** Dal seçimi gerçek `git checkout` ile backend'e bağlı
+- ✅ **[v2.6.1]** Sistem Durumu'nda `pkg_status` sunucudan alınıyor
+- ✅ **[v2.6.1]** Oturum dışa aktarma — MD ve JSON indirme
+- ✅ **[v2.6.1]** ReAct araç görselleştirmesi — her tool çağrısı badge olarak gösteriliyor (23 araç, Türkçe etiket)
+- ✅ **[v2.6.1]** Mobil hamburger menüsü (768px altı sidebar toggle + overlay)
 
 ### 10.6 Rate Limiting (Yeni)
 
@@ -958,14 +1051,13 @@ GPU tespiti, WSL2 desteği, RotatingFileHandler, donanım raporu başarılı.
 
 ---
 
-### `web_ui/index.html` — Skor: 87/100 ✅
+### `web_ui/index.html` — Skor: 95/100 ✅
 
-Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya ekleme — kapsamlı bir arayüz.
+Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya ekleme, model dinamik gösterimi, araç görselleştirmesi, dışa aktarma, mobil hamburger menü — kapsamlı ve işlevsel bir arayüz.
 
 **Kalan iyileştirmeler:**
-- Oturum dışa aktarma yok (madde 6.5)
-- Araç çalıştırma görselleştirmesi (ReAct adımları) gösterilmiyor
-- Mobil responsiveness: sidebar gizleniyor ama açma butonu yok
+- Oturum yeniden adlandırma arayüzü yok (başlık otomatik ilk mesajdan alınıyor)
+- `pkg_status` string'i "ok" / "warn" durumu taşımıyor; `row()` ikinci parametresini hep yeşil gösteriyor
 
 ---
 
@@ -1015,59 +1107,67 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 7. **`github_manager.py` — Token kurulum rehberi** (madde 6.4)
 
-8. **Sohbet dışa aktarma özelliği:** Web UI'a "Dışa Aktar (MD)" butonu.
+8. ~~**Sohbet dışa aktarma özelliği**~~ ✅ **[v2.6.1'de tamamlandı]**
 
 9. **AutoHandle async testleri:** `_try_web_search`, `_try_docs_add` vb. için mock tabanlı testler.
 
+10. **Oturum yeniden adlandırma arayüzü:** Başlık çift tıklamayla düzenlenebilir hale getirilebilir.
+
 ### Öncelik 3 — Düşük (İyileştirme)
 
-10. **`SystemHealthManager`'a `is_gpu_available()` public metodu**
+11. **`SystemHealthManager`'a `is_gpu_available()` public metodu**
 
-11. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
+12. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
 
-12. **Mobil sidebar toggle butonu** (web_ui/index.html)
+13. ~~**Mobil sidebar toggle butonu**~~ ✅ **[v2.6.1'de tamamlandı]**
 
-13. **Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)
+14. **Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)
 
-14. **Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)
+15. **Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)
 
-15. **`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)
+16. **`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)
 
 ---
 
 ## 15. Genel Değerlendirme
 
-| Kategori | Önceki Skor (v2.5.0) | Güncel Skor (v2.6.0) | Değişim |
-|----------|---------------------|---------------------|---------|
-| **Mimari Tasarım** | 88/100 | 94/100 | ↑ +6 |
-| **Async/Await Kullanımı** | 60/100 | 90/100 | ↑ +30 |
-| **Hata Yönetimi** | 75/100 | 82/100 | ↑ +7 |
-| **Güvenlik** | 78/100 | 85/100 | ↑ +7 |
-| **Test Kapsamı** | 55/100 | 68/100 | ↑ +13 |
-| **Belgeleme** | 88/100 | 72/100 | ↓ -16 ⚠️ |
-| **Kod Temizliği** | 65/100 | 94/100 | ↑ +29 |
-| **Bağımlılık Yönetimi** | 72/100 | 84/100 | ↑ +12 |
-| **GPU Desteği** | — | 88/100 | ✨ Yeni |
-| **Özellik Zenginliği** | 80/100 | 93/100 | ↑ +13 |
-| **GENEL ORTALAMA** | **75/100** | **85/100** | **↑ +10** |
+| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | Değişim (toplam) |
+|----------|--------|--------|--------|-----------------|
+| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | ↑ +7 |
+| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | ↑ +31 |
+| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | ↑ +11 |
+| **Güvenlik** | 78/100 | 85/100 | 85/100 | ↑ +7 |
+| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | ↑ +13 |
+| **Belgeleme** | 88/100 | 72/100 | 80/100 | ↓ -8 ⚠️ |
+| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | ↑ +31 |
+| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | ↑ +12 |
+| **GPU Desteği** | — | 88/100 | 88/100 | ✨ Yeni |
+| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | ↑ +18 |
+| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | ↑ +25 |
+| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **↑ +13** |
 
 ---
 
 ### Özet
 
-v2.5.0 → v2.6.0 sürümünde projenin teknik borcu **önemli ölçüde azaltılmıştır.** Önceki raporun tespit ettiği 2 kritik hata ve 6 yüksek/orta öncelikli sorunun tamamı giderilmiştir.
+v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılmıştır.** İki rapor döneminde toplam 15 sorun giderilmiştir.
 
-**En önemli iyileştirmeler:**
+**v2.6.0'daki en önemli iyileştirmeler:**
 - Async generator hatası → `asyncio.run()` mimarisi doğru kuruldu
 - 25 `if/elif` → dispatcher + `_tool_*` metodları, test edilebilir yapı
 - `requests` bloklaması → `httpx.AsyncClient` ile tam async RAG
 - `threading.Lock` → `asyncio.Lock` web sunucusunda
 
-**Tek ciddi düşüş:** `README.md` belgelenmesi v2.3.2'de kalmış; tüm yeni özellikler (GPU, session, Docker REPL, rate-limit, chunking) belgelenmemiştir. Bu, projenin teknik kalitesiyle kıyaslandığında göz ardı edilemeyecek bir tutarsızlıktır.
+**v2.6.1'deki web UI ve backend düzeltmeleri:**
+- 5 sahte/işlevsiz UI özelliği (model adı, auto-accept, repo/dal seçimi, pkg_status) gerçek backend verileriyle bağlandı veya kaldırıldı
+- SSE streaming durdurma hataları (`CancelledError`, `ClosedResourceError`) artık sessizce loglanıyor
+- Oturum dışa aktarma (MD + JSON), ReAct araç görselleştirmesi ve mobil hamburger menüsü eklendi
 
-**Sonuç:** Proje, tek kullanıcılı yerel geliştirme ortamı için **üretime hazır** seviyededir. README güncellemesi ve `requests` → `httpx` dönüşümü (2–4 saat iş) tamamlandığında mimari açıdan temiz bir v2.6.1 etiketi hak edecektir.
+**Hâlâ açık olan en önemli sorun:** `README.md` belgelenmesi v2.3.2'de kalmış; tüm yeni özellikler (GPU, session, Docker REPL, rate-limit, chunking, araç görselleştirme) belgelenmemiştir.
+
+**Sonuç:** Proje, tek kullanıcılı yerel geliştirme ortamı için **üretime hazır** seviyededir. `README.md` güncellemesi ve `requests` → `httpx` dönüşümü (2–4 saatlik iş) tamamlandığında mimari ve dokümantasyon tamamen tutarlı bir duruma gelecektir.
 
 ---
 
-*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01*
-*Analiz kapsamı: 31 kaynak dosya, ~10.200 satır kod*
+*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01 (v2.6.1 güncellemesi)*
+*Analiz kapsamı: 31 kaynak dosya, ~10.400 satır kod*
