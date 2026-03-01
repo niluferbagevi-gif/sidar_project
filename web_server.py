@@ -277,6 +277,27 @@ async def git_branches():
     return JSONResponse({"branches": branches or ["main"], "current": current})
 
 
+@app.post("/set-branch")
+async def set_branch(request: Request):
+    """Aktif git dalını değiştirir (git checkout)."""
+    body = await request.json()
+    branch_name = body.get("branch", "").strip()
+    if not branch_name:
+        return JSONResponse({"success": False, "error": "Dal adı boş."}, status_code=400)
+
+    _root = Path(__file__).parent
+    try:
+        subprocess.check_output(
+            ["git", "checkout", branch_name],
+            cwd=str(_root),
+            stderr=subprocess.STDOUT,
+        )
+        return JSONResponse({"success": True, "branch": branch_name})
+    except subprocess.CalledProcessError as exc:
+        detail = exc.output.decode().strip() if exc.output else str(exc)
+        return JSONResponse({"success": False, "error": detail}, status_code=400)
+
+
 @app.post("/set-repo")
 async def set_repo(request: Request):
     """GitHub deposunu çalışma zamanında değiştirir."""
