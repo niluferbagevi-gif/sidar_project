@@ -1,6 +1,6 @@
 # SİDAR — Yazılım Mühendisi AI Asistanı
 
-> **v2.3.2** — LotusAI ekosisteminden ilham alınmış bağımsız yazılım mühendisi AI projesi.
+> **v2.6.1** — ReAct mimarisi üzerine kurulu, Türkçe dilli, tam async yazılım mühendisi AI projesi.
 
 ```
  ╔══════════════════════════════════════════════╗
@@ -10,7 +10,7 @@
  ║  ╚════██║██║██║  ██║██╔══██║██╔══██╗         ║
  ║  ███████║██║██████╔╝██║  ██║██║  ██║         ║
  ║  ╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝         ║
- ║  Yazılım Mimarı & Baş Mühendis AI  v2.3.2   ║
+ ║  Yazılım Mimarı & Baş Mühendis AI  v2.6.1  ║
  ╚══════════════════════════════════════════════╝
 ```
 
@@ -42,7 +42,7 @@
 - JSON doğrulama
 - Dosya yamalama (`patch_file` — sadece değişen satırlar)
 - Dizin listeleme ve proje denetimi (`audit`)
-- REPL: Alt süreçte güvenli kod çalıştırma (`execute_code`, 10 sn timeout)
+- **Docker REPL Sandbox**: `python:3.11-alpine` içinde ağ/RAM/CPU kısıtlı izole kod çalıştırma (10 sn timeout)
 - Metrik takibi (okunan/yazılan/doğrulanan)
 
 ### OpenClaw Güvenlik Sistemi (SecurityManager)
@@ -53,49 +53,71 @@
 | `sandbox` | ✓ | Yalnızca `/temp` | ✓ | ✗ |
 | `full` | ✓ | Her yer | ✓ | ✓ |
 
-### Akıllı Bellek Yönetimi (ConversationMemory)
+### Çoklu Oturum Bellek Yönetimi (ConversationMemory)
+- UUID tabanlı, `data/sessions/*.json` şeklinde ayrı dosyalarda saklanan çoklu sohbet oturumları
 - Thread-safe, JSON tabanlı kalıcı depolama
 - Kayan pencere (varsayılan: 20 tur = 40 mesaj)
-- **Otomatik Özetleme**: Pencere %80 dolduğunda LLM ile özetleme tetiklenir; eski mesajlar sıkıştırılır, kritik bağlam korunur
-- Son işlenen dosya takibi
+- **Otomatik Özetleme**: Pencere %80 dolduğunda LLM ile özetleme tetiklenir
+- En son güncellenen oturum başlangıçta otomatik yükleniyor
+- `create_session()`, `load_session()`, `delete_session()`, `update_title()` API'si
 
 ### ReAct Döngüsü (SidarAgent)
 - **AutoHandle**: Örüntü tabanlı hızlı komut eşleme (LLM gerektirmez)
 - **ReAct**: `Düşün → Araç çağır → Gözlemle` döngüsü (max 10 adım)
-- **JSON Hata Geri Besleme**: Parse hatası alındığında modele hata detayı + beklenen format geri beslenir
+- **Pydantic v2 Doğrulama**: JSON ayrıştırma hatası alındığında modele hata detayı + beklenen format geri beslenir
+- **Araç Görselleştirme**: Her tool çağrısı SSE eventi olarak istemciye iletilir; web UI'da badge olarak gösterilir
 - Streaming yanıt (daktilo efekti)
-- Lock tasarımı: Bellek/auto-handle kısa kilitli; generator akışı lock dışında
+
+### GPU Hızlandırma (v2.6.0+)
+- PyTorch CUDA 12.1 desteği (RTX / Ampere serisi)
+- FP16 mixed precision embedding (`GPU_MIXED_PRECISION=true`)
+- VRAM fraksiyonu kontrolü (`GPU_MEMORY_FRACTION`)
+- Çoklu GPU desteği (`MULTI_GPU=true`)
+- WSL2 NVIDIA sürücü desteği (pynvml + nvidia-smi fallback)
 
 ### GitHub Entegrasyonu (GitHubManager)
 - Depo bilgisi ve istatistikleri
 - Son commit listesi
 - Uzak dosya okuma (`github_read`)
 - Branch listeleme ve kod arama
+- Çalışma zamanında aktif depo değiştirme (`/set-repo`)
 
 ### Web & Araştırma (WebSearchManager)
-- DuckDuckGo web araması (`web_search`)
+- **Tavily** (öncelikli), **Google Custom Search**, **DuckDuckGo** (sırasıyla denenir)
 - URL içerik çekme — HTML temizleme dahil (`fetch_url`)
 - Kütüphane dokümantasyon araması (`search_docs`)
 - Stack Overflow araması (`search_stackoverflow`)
-- `.env` üzerinden yapılandırılabilir: `WEB_SEARCH_MAX_RESULTS`, `WEB_FETCH_TIMEOUT`, `WEB_FETCH_MAX_CHARS`
 
 ### Paket Bilgi Sistemi (PackageInfoManager)
 - PyPI paket bilgisi ve sürüm karşılaştırma (`pypi`, `pypi_compare`)
 - npm paket bilgisi (`npm`)
 - GitHub Releases listesi ve en güncel sürüm (`gh_releases`, `gh_latest`)
-- `.env` üzerinden yapılandırılabilir: `PACKAGE_INFO_TIMEOUT`
 
 ### Hibrit RAG Belge Deposu (DocumentStore)
-- ChromaDB vektör araması (semantik)
+- ChromaDB vektör araması (semantik) + GPU embedding desteği
 - BM25 anahtar kelime araması
-- Yedek: basit kelime eşleme
-- URL'den belge ekleme, listeleme, silme
-- `RAG_TOP_K` env değişkeni ile sonuç sayısı yapılandırılabilir
+- **Recursive Character Chunking** (`\nclass ` → `\ndef ` → `\n\n` → `\n` → ` ` öncelik sırası)
+- URL'den async belge ekleme (`httpx.AsyncClient`)
+- `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`, `RAG_TOP_K` env değişkenleri ile yapılandırılabilir
 
 ### Sistem Sağlığı (SystemHealthManager)
-- CPU ve RAM kullanım izleme
-- GPU/CUDA bilgisi ve VRAM takibi
+- CPU ve RAM kullanım izleme (psutil)
+- GPU/CUDA bilgisi ve VRAM takibi (pynvml)
 - GPU bellek optimizasyonu (VRAM boşaltma + Python GC)
+
+### Web Arayüzü (v2.6.1)
+- **Çoklu oturum sidebar**: oturum geçişi, oluşturma, silme, arama/filtreleme
+- **Dışa Aktarma**: Sohbet geçmişini MD veya JSON olarak indirme
+- **ReAct Araç Görselleştirmesi**: Her tool çağrısı animasyonlu Türkçe badge (23 araç)
+- **Mobil Uyum**: 768px altında hamburger menüsü + sidebar overlay
+- Koyu/Açık tema (localStorage tabanlı)
+- Klavye kısayolları (`Ctrl+K`, `Ctrl+L`, `Alt+T`, `Esc`)
+- Streaming durdur butonu (AbortController)
+- Kod bloğu kopyala butonu (hover ile görünür)
+- Dosya ekleme (200 KB limit, metin/kod dosyaları)
+- Dinamik model ismi gösterimi (`/status` üzerinden)
+- Dal seçimi — gerçek `git checkout` ile backend'e bağlı
+- Rate limiting (20 istek/dakika/IP, yalnızca `/chat`)
 
 ---
 
@@ -107,14 +129,14 @@
 | `read_file` | Dosya oku | dosya_yolu |
 | `write_file` | Dosya yaz (tamamını) | `path\|\|\|content` |
 | `patch_file` | Dosya yamala (fark) | `path\|\|\|eski\|\|\|yeni` |
-| `execute_code` | Python REPL çalıştır | python_kodu |
+| `execute_code` | Python REPL (Docker sandbox) | python_kodu |
 | `audit` | Proje denetimi | `.` |
 | `health` | Sistem sağlık raporu | — |
 | `gpu_optimize` | GPU bellek temizle | — |
 | `github_commits` | Son commit listesi | sayı |
 | `github_info` | Depo bilgisi | — |
 | `github_read` | Uzak depodaki dosyayı oku | dosya_yolu |
-| `web_search` | DuckDuckGo ile ara | sorgu |
+| `web_search` | Tavily/Google/DDG ile ara | sorgu |
 | `fetch_url` | URL içeriğini çek | url |
 | `search_docs` | Kütüphane dokümanı ara | `lib konu` |
 | `search_stackoverflow` | Stack Overflow araması | sorgu |
@@ -144,10 +166,14 @@ conda activate sidar-ai
 ### pip ile
 
 ```bash
-pip install python-dotenv requests psutil GPUtil pynvml ollama \
+pip install python-dotenv httpx psutil pynvml \
             google-generativeai PyGithub duckduckgo-search \
-            rank-bm25 chromadb sentence-transformers pytest pytest-cov
+            rank-bm25 chromadb sentence-transformers \
+            fastapi uvicorn pydantic docker \
+            pytest pytest-asyncio pytest-cov
 ```
+
+> **Not:** GPU desteği için `torch` ve `torchvision`'ı [PyTorch resmi sitesinden](https://pytorch.org/get-started/locally/) CUDA sürümünüze uygun wheel ile kurun.
 
 ### Çevre Değişkenleri
 
@@ -167,7 +193,11 @@ ollama serve
 ### Docker ile
 
 ```bash
-docker compose up --build
+# CPU modu
+docker compose up --build sidar-web-cpu
+
+# GPU modu (NVIDIA)
+docker compose up --build sidar-web-gpu
 ```
 
 ---
@@ -194,11 +224,13 @@ python web_server.py --provider gemini --port 7860
 ```
 
 Web arayüzü özellikleri:
-- Streaming chat (daktilo efekti)
-- Markdown ve kod bloğu renklendirme
-- Hızlı eylem butonları (8 hazır komut)
-- ⚡ Durum paneli (canlı sistem bilgisi)
-- Bellek temizleme
+- Streaming chat (daktilo efekti) + araç görselleştirmesi
+- Çoklu oturum yönetimi (sidebar)
+- Sohbet geçmişini MD/JSON olarak dışa aktarma
+- Markdown ve kod bloğu renklendirme (highlight.js)
+- Sistem durumu paneli (model, versiyon, GitHub, RAG, GPU)
+- Dal seçimi (gerçek git checkout)
+- Mobil uyumlu hamburger menüsü
 
 ### 💻 Terminal (CLI) Modu
 
@@ -226,7 +258,7 @@ python main.py --provider gemini -c "FastAPI nedir?"
 --log           Log seviyesi (DEBUG/INFO/WARNING)
 ```
 
-### Dahili Komutlar
+### Dahili Komutlar (CLI)
 
 ```
 .status     Sistem durumunu göster
@@ -267,7 +299,7 @@ python main.py --provider gemini -c "FastAPI nedir?"
 
 # Web Araştırma
 "FastAPI'nin son sürümünü kontrol et"
-"web'de ara: Python async best practices 2024"
+"web'de ara: Python async best practices 2025"
 "pypi: httpx"
 "stackoverflow: Python type hints generic"
 
@@ -285,37 +317,38 @@ sidar_project/
 ├── agent/
 │   ├── __init__.py
 │   ├── definitions.py      # Sidar karakter profili ve sistem talimatı (25 araç)
-│   ├── sidar_agent.py      # Ana ajan (ReAct, özetleme, JSON feedback, lock fix)
-│   └── auto_handle.py      # Örüntü tabanlı hızlı komut eşleyici
+│   ├── sidar_agent.py      # Ana ajan (ReAct, Pydantic v2, dispatcher, araç sentinel)
+│   └── auto_handle.py      # Örüntü tabanlı hızlı komut eşleyici (async)
 ├── core/
 │   ├── __init__.py
-│   ├── memory.py           # Thread-safe bellek + otomatik özetleme desteği
-│   ├── llm_client.py       # Ollama / Gemini API istemcisi
-│   └── rag.py              # Hibrit RAG (ChromaDB + BM25), top_k yapılandırılabilir
+│   ├── memory.py           # Çoklu oturum (session) yönetimi — thread-safe JSON
+│   ├── llm_client.py       # Ollama stream + Gemini async istemcisi
+│   └── rag.py              # Hibrit RAG (ChromaDB + BM25), Recursive Chunking, GPU
 ├── managers/
 │   ├── __init__.py
-│   ├── code_manager.py     # Dosya operasyonları, REPL, sözdizimi
-│   ├── system_health.py    # CPU/RAM/GPU izleme
-│   ├── github_manager.py   # GitHub API entegrasyonu
-│   ├── security.py         # OpenClaw erişim kontrol sistemi
-│   ├── web_search.py       # DuckDuckGo + URL fetch (Config bağlı)
-│   └── package_info.py     # PyPI / npm / GitHub Releases (Config bağlı)
+│   ├── code_manager.py     # Dosya operasyonları, AST, Docker REPL sandbox
+│   ├── system_health.py    # CPU/RAM/GPU izleme (pynvml + nvidia-smi fallback)
+│   ├── github_manager.py   # GitHub API entegrasyonu (binary koruma, branch)
+│   ├── security.py         # OpenClaw 3 seviyeli erişim kontrol sistemi
+│   ├── web_search.py       # Tavily + Google + DuckDuckGo (async, çoklu motor)
+│   └── package_info.py     # PyPI + npm + GitHub Releases (async)
 ├── tests/
 │   ├── __init__.py
-│   └── test_sidar.py       # 8 test sınıfı, 50+ test (mock dahil)
+│   └── test_sidar.py       # 11 test sınıfı (GPU + Chunking + Pydantic testleri dahil)
 ├── web_ui/
-│   └── index.html          # Chat arayüzü (dark theme, Markdown, SSE streaming)
-├── data/                   # Bellek ve RAG veritabanı (gitignore'da)
+│   └── index.html          # Tam özellikli web arayüzü (SSE, session, export, mobil)
+├── data/                   # Oturum JSON'ları ve RAG veritabanı (gitignore'da)
 ├── temp/                   # Sandbox modunda yazma dizini (gitignore'da)
-├── logs/                   # Log dosyaları (gitignore'da)
-├── config.py               # Merkezi yapılandırma (env → Config sınıfı)
-├── main.py                 # Giriş noktası & CLI
-├── web_server.py           # FastAPI + SSE web arayüzü sunucusu
-├── github_upload.py        # GitHub'a otomatik yükleme yardımcı betiği (bağımsız)
-├── Dockerfile              # Docker imajı (python:3.11-slim, v2.3.2)
-├── docker-compose.yml      # Docker Compose servisi
-├── environment.yml         # Conda ortamı
-└── .env.example            # Ortam değişkenleri şablonu
+├── logs/                   # Log dosyaları — RotatingFileHandler (gitignore'da)
+├── config.py               # Merkezi yapılandırma + GPU tespiti + WSL2 desteği
+├── main.py                 # CLI giriş noktası (async döngü, asyncio.run doğru kullanımı)
+├── web_server.py           # FastAPI + SSE + Rate limiting + Session API + /set-branch
+├── github_upload.py        # GitHub'a otomatik yükleme yardımcı betiği
+├── Dockerfile              # CPU/GPU dual-mode build (python:3.11-slim)
+├── docker-compose.yml      # 4 servis: CPU/GPU × CLI/Web
+├── environment.yml         # Conda — PyTorch CUDA 12.1 wheel, pytest-asyncio
+├── .env.example            # Açıklamalı ortam değişkeni şablonu
+└── install_sidar.sh        # Ubuntu/WSL sıfırdan kurulum scripti
 ```
 
 ---
@@ -328,15 +361,18 @@ pytest tests/ -v
 pytest tests/ -v --cov=. --cov-report=term-missing
 ```
 
-**Test sınıfları:**
+**Test sınıfları (11 adet):**
+- `TestCodeManager` — Dosya yazma/okuma ve AST doğrulama
+- `TestToolCallPydantic` — Pydantic v2 ToolCall şeması doğrulama
+- `TestWebSearchManager` — Motor seçimi ve durum (async)
+- `TestDocumentStore` — Chunking + retrieve + GPU parametreleri
+- `TestSidarAgentInit` — SidarAgent başlatma (async)
+- `TestHardwareInfo` — HardwareInfo dataclass alanları
+- `TestConfigGPU` — Config GPU alanları
+- `TestSystemHealthManager` — CPU-only rapor
+- `TestSystemHealthGPU` — GPU bilgi yapısı
+- `TestRAGGPU` — DocumentStore GPU parametreleri
 - `TestSecurityManager` — OpenClaw izin sistemi
-- `TestCodeManager` — Dosya işlemleri ve sözdizimi
-- `TestSystemHealthManager` — Donanım izleme
-- `TestConversationMemory` — Bellek + özetleme (needs_summarization, apply_summary)
-- `TestDocumentStore` — RAG boş durum ve yapılandırma
-- `TestWebSearchManager` — Mock tabanlı web arama ve fetch
-- `TestPackageInfoManager` — Mock tabanlı PyPI ve npm sorguları
-- `TestLLMClient` — Sağlayıcı doğrulama ve hata yönetimi
 
 ---
 
@@ -344,31 +380,48 @@ pytest tests/ -v --cov=. --cov-report=term-missing
 
 ```env
 # AI Sağlayıcı
-AI_PROVIDER=ollama          # ollama | gemini
+AI_PROVIDER=ollama              # ollama | gemini
 CODING_MODEL=qwen2.5-coder:7b
 OLLAMA_URL=http://localhost:11434/api
-GEMINI_API_KEY=             # Gemini kullanılacaksa
+GEMINI_API_KEY=                 # Gemini kullanılacaksa
 
 # Güvenlik
-ACCESS_LEVEL=sandbox        # restricted | sandbox | full
+ACCESS_LEVEL=sandbox            # restricted | sandbox | full
 
 # GitHub
 GITHUB_TOKEN=
 GITHUB_REPO=kullanici/depo
 
-# Bellek
+# Web Sunucu
+WEB_HOST=127.0.0.1
+WEB_PORT=7860
+
+# Bellek & Oturum
 MAX_MEMORY_TURNS=20
+MEMORY_FILE=data/sessions/memory.json
 
 # Web Arama
+TAVILY_API_KEY=                 # Tavily kullanılacaksa (öncelikli)
+GOOGLE_API_KEY=                 # Google Custom Search kullanılacaksa
+GOOGLE_CSE_ID=
 WEB_SEARCH_MAX_RESULTS=5
 WEB_FETCH_TIMEOUT=15
 WEB_FETCH_MAX_CHARS=4000
 
 # RAG
 RAG_TOP_K=3
+RAG_CHUNK_SIZE=1000
+RAG_CHUNK_OVERLAP=200
 
 # Paket Bilgi
 PACKAGE_INFO_TIMEOUT=12
+
+# GPU (opsiyonel)
+USE_GPU=false                   # true: GPU embedding aktif
+GPU_DEVICE=0
+GPU_MEMORY_FRACTION=0.8
+GPU_MIXED_PRECISION=false
+MULTI_GPU=false
 ```
 
 ---
@@ -380,6 +433,17 @@ black .
 flake8 . --max-line-length=100
 mypy . --ignore-missing-imports
 ```
+
+---
+
+## Sürüm Geçmişi
+
+| Versiyon | Önemli Değişiklikler |
+|----------|----------------------|
+| **v2.6.1** | Web UI düzeltmeleri: dışa aktarma, araç görselleştirme, mobil menü, dinamik model adı, gerçek git checkout, CancelledError düzeltmesi |
+| **v2.6.0** | GPU hızlandırma, Docker REPL sandbox, çoklu oturum, Recursive Chunking, Pydantic v2, rate limiting, WSL2 desteği |
+| **v2.5.0** | Async mimari (httpx, asyncio.Lock), dispatcher tablosu, pytest-asyncio |
+| **v2.3.2** | İlk kararlı sürüm |
 
 ---
 
