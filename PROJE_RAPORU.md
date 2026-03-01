@@ -111,7 +111,7 @@ sidar_project/
 
 ## 3. Önceki Rapordan Bu Yana Düzeltilen Hatalar
 
-> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu + v2.7.x'teki 5 kritik hata + v2.7.x'teki 7 ek sorun giderilmiştir (toplam 27 düzeltme).
+> ✅ v2.5.0 raporundaki 8 temel sorun + v2.6.0 raporundaki 7 web UI / backend sorunu + 5 kritik hata + 9 yüksek öncelikli sorun + 7 ek sorun giderilmiştir (toplam 36 düzeltme).
 
 ---
 
@@ -547,39 +547,7 @@ Her iki metoda da `if not self.health:` kontrolü eklenmiş; `None` durumunda ku
 
 ---
 
-## 4. Mevcut Kritik Hatalar
-
-> ✅ Bu bölümde kayıtlı **tüm kritik hatalar giderilmiştir.** Ayrıntılar için bkz. §3.23 – §3.27.
-
-| # | Sorun | Durum |
-|---|-------|-------|
-| 3.23 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi — §3.23'e taşındı |
-| 3.24 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi — §3.24'e taşındı |
-| 3.25 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi — §3.25'e taşındı |
-| 3.26 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi — §3.26'ya taşındı |
-| 3.27 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi — §3.27'ye taşındı |
-
----
-
-## 5. Yüksek Öncelikli Sorunlar
-
-> ✅ 9 yüksek öncelikli sorunun **tamamı düzeltilmiştir.**
->
-> | # | Sorun | Durum |
-> |---|-------|-------|
-> | 5.1 | README.md Versiyon Tutarsızlığı | ✅ Düzeltildi |
-> | 5.2 | `config.py` Senkron `requests` Kullanımı | ✅ Düzeltildi |
-> | 5.3 | `environment.yml` `requests` Bağımlılığı | ✅ Düzeltildi |
-> | 5.4 | Stream Generator Yeniden Kullanım Riski | ✅ Düzeltildi |
-> | 5.5 | ChromaDB Delete+Upsert Yarış Koşulu | ✅ Düzeltildi |
-> | 5.6 | Tavily 401/403 Hatasında Fallback Yok | ✅ Düzeltildi |
-> | 5.7 | pynvml Hataları Sessizce Yutuldu | ✅ Düzeltildi |
-> | 5.8 | Uzantısız Dosyalar Güvenlik Kontrolünü Atlar | ✅ Düzeltildi |
-> | 5.9 | Rate Limiting TOCTOU Yarış Koşulu | ✅ Düzeltildi |
-
----
-
-### ✅ 5.1 `README.md` — Versiyon Tutarsızlığı (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.28 `README.md` — Versiyon Tutarsızlığı ve Eksik Özellik Belgeleri (YÜKSEK → ÇÖZÜLDÜ)
 
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
 
@@ -595,7 +563,7 @@ Her iki metoda da `if not self.health:` kontrolü eklenmiş; `None` durumunda ku
 
 ---
 
-### ✅ 5.2 `config.py:validate_critical_settings()` — Senkron `requests` Kullanımı (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.29 `config.py:validate_critical_settings()` — Senkron `requests` Kullanımı (YÜKSEK → ÇÖZÜLDÜ)
 
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
 
@@ -612,7 +580,7 @@ Seçenek A (önerilen) uygulandı. Proje genelinde `httpx` kullanımı artık tu
 
 ---
 
-### ✅ 5.3 `environment.yml` — `requests` Bağımlılığı (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.30 `environment.yml` — `requests` Bağımlılığı (YÜKSEK → ÇÖZÜLDÜ)
 
 **Dosya:** `environment.yml`
 **Önem:** ~~🟠 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
@@ -629,7 +597,7 @@ Tüm HTTP istekleri artık `httpx` ile yapılmaktadır. `requests` bağımlılı
 
 ---
 
-### ✅ 5.4 `agent/sidar_agent.py:145-155` — Stream Generator'ın Yeniden Kullanım Riski (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.31 `agent/sidar_agent.py:145-155` — Stream Generator'ın Yeniden Kullanım Riski (YÜKSEK → ÇÖZÜLDÜ)
 
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
 
@@ -653,7 +621,7 @@ Ara adımlarda `yield` yalnızca `f"\x00TOOL:{tool_name}\x00"` (araç bildirimi)
 
 ---
 
-### ✅ 5.5 `core/rag.py:287` — ChromaDB Delete + Upsert Yarış Koşulu (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.32 `core/rag.py:287` — ChromaDB Delete + Upsert Yarış Koşulu (YÜKSEK → ÇÖZÜLDÜ)
 
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
 
@@ -671,7 +639,7 @@ with self._write_lock:            # threading.Lock — ChromaDB senkron API ile 
 
 ---
 
-### ✅ 5.6 `managers/web_search.py:115-136` — Tavily 401/403 Hatasında Fallback Yok (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.33 `managers/web_search.py:115-136` — Tavily 401/403 Hatasında Fallback Yok (YÜKSEK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/web_search.py`
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
@@ -710,7 +678,7 @@ if self.engine == "tavily" and self.tavily_key:
 
 ---
 
-### ✅ 5.7 `managers/system_health.py:159-171` — pynvml Hataları Sessizce Yutuldu (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.34 `managers/system_health.py:159-171` — pynvml Hataları Sessizce Yutuldu (YÜKSEK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/system_health.py`
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
@@ -734,7 +702,7 @@ except Exception as exc:
 
 ---
 
-### ✅ 5.8 `managers/github_manager.py:148-149` — Uzantısız Dosyalar Güvenlik Kontrolünü Atlar (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.35 `managers/github_manager.py:148-149` — Uzantısız Dosyalar Güvenlik Kontrolünü Atlar (YÜKSEK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/github_manager.py`
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
@@ -764,7 +732,7 @@ Uzantısız dosyalar artık ayrı bir kontrol dalıyla `SAFE_EXTENSIONLESS` whit
 
 ---
 
-### ✅ 5.9 `web_server.py:83-92` — Rate Limiting TOCTOU Yarış Koşulu (YÜKSEK → ÇÖZÜLDÜ)
+### ✅ 3.36 `web_server.py:83-92` — Rate Limiting TOCTOU Yarış Koşulu (YÜKSEK → ÇÖZÜLDÜ)
 
 **Önem:** ~~🔴 YÜKSEK~~ → ✅ **ÇÖZÜLDÜ**
 
@@ -787,6 +755,38 @@ async def _is_rate_limited(ip: str) -> bool:
 ```
 
 Fonksiyon `async def` haline getirildi ve `async with _rate_lock:` ile tüm kontrol+yaz bloğu atomik yapıldı.
+
+---
+
+## 4. Mevcut Kritik Hatalar
+
+> ✅ Bu bölümde kayıtlı **tüm kritik hatalar giderilmiştir.** Ayrıntılar için bkz. §3.23 – §3.27.
+
+| # | Sorun | Durum |
+|---|-------|-------|
+| 3.23 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi — §3.23'e taşındı |
+| 3.24 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi — §3.24'e taşındı |
+| 3.25 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi — §3.25'e taşındı |
+| 3.26 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi — §3.26'ya taşındı |
+| 3.27 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi — §3.27'ye taşındı |
+
+---
+
+## 5. Yüksek Öncelikli Sorunlar
+
+> ✅ Bu bölümde kayıtlı **tüm yüksek öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.28 – §3.36.
+
+| # | Sorun | Durum |
+|---|-------|-------|
+| 3.28 | README.md Versiyon Tutarsızlığı | ✅ Düzeltildi — §3.28'e taşındı |
+| 3.29 | `config.py` Senkron `requests` Kullanımı | ✅ Düzeltildi — §3.29'a taşındı |
+| 3.30 | `environment.yml` `requests` Bağımlılığı | ✅ Düzeltildi — §3.30'a taşındı |
+| 3.31 | Stream Generator Yeniden Kullanım Riski | ✅ Düzeltildi — §3.31'e taşındı |
+| 3.32 | ChromaDB Delete+Upsert Yarış Koşulu | ✅ Düzeltildi — §3.32'ye taşındı |
+| 3.33 | Tavily 401/403 Hatasında Fallback Yok | ✅ Düzeltildi — §3.33'e taşındı |
+| 3.34 | pynvml Hataları Sessizce Yutuldu | ✅ Düzeltildi — §3.34'e taşındı |
+| 3.35 | Uzantısız Dosyalar Güvenlik Kontrolünü Atlar | ✅ Düzeltildi — §3.35'e taşındı |
+| 3.36 | Rate Limiting TOCTOU Yarış Koşulu | ✅ Düzeltildi — §3.36'ya taşındı |
 
 ---
 
