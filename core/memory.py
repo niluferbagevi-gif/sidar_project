@@ -17,23 +17,66 @@ class ConversationMemory:
     """
     Thread-safe ve kalıcı (persistent) çoklu konuşma (session) belleği yöneticisi.
     Verileri sessions dizininde ayrı JSON dosyalarında saklar.
+    MEMORY_ENCRYPTION_KEY ayarlandığında oturum dosyaları Fernet (AES-128-CBC) ile şifrelenir.
     """
 
-    def __init__(self, file_path: Path, max_turns: int = 20) -> None:
+    def __init__(self, file_path: Path, max_turns: int = 20,
+                 encryption_key: str = "") -> None:
         # Eski memory.json yolunu alıp yerine 'sessions' klasörü oluşturuyoruz
         self.sessions_dir = file_path.parent / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.max_turns = max_turns
         self._lock = threading.RLock()
-        
+
+        # Opsiyonel Fernet şifreleme
+        self._fernet = self._init_fernet(encryption_key)
+
         # Aktif oturum (seçili sohbet) bilgileri
         self.active_session_id: Optional[str] = None
         self.active_title: str = "Yeni Sohbet"
         self._turns: List[Dict] = []
         self._last_file: Optional[str] = None
-        
+
         # Başlangıçta oturumları yükle veya yeni oluştur
         self._init_sessions()
+
+    @staticmethod
+    def _init_fernet(key: str):
+        """Fernet şifreleme nesnesini oluşturur; key boşsa None döner."""
+        if not key:
+            return None
+        try:
+            from cryptography.fernet import Fernet
+            token = key.encode() if isinstance(key, str) else key
+            fernet = Fernet(token)
+            logger.info("✅ Bellek şifrelemesi etkin (Fernet/AES-128-CBC).")
+            return fernet
+        except Exception as exc:
+            logger.warning(
+                "⚠️ Bellek şifreleme başlatılamadı: %s — Düz metin kullanılacak.", exc
+            )
+            return None
+
+    def _read_session_file(self, file_path: Path) -> dict:
+        """Oturum dosyasını okur; şifreli ise çözer, düz metin ise doğrudan parse eder."""
+        raw = file_path.read_bytes()
+        if self._fernet:
+            try:
+                content = self._fernet.decrypt(raw).decode("utf-8")
+            except Exception:
+                # Eski şifrelenmemiş dosya olabilir — düz metin dene
+                content = raw.decode("utf-8")
+        else:
+            content = raw.decode("utf-8")
+        return json.loads(content)
+
+    def _write_session_file(self, file_path: Path, data: dict) -> None:
+        """Oturum dosyasını yazar; şifreleme etkinse Fernet ile şifreler."""
+        json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        if self._fernet:
+            file_path.write_bytes(self._fernet.encrypt(json_bytes))
+        else:
+            file_path.write_bytes(json_bytes)
 
     def _init_sessions(self) -> None:
         """Mevcut oturumları bul, yoksa yeni bir tane oluştur ve aktif yap."""
@@ -55,7 +98,7 @@ class ConversationMemory:
         with self._lock:
             for file_path in self.sessions_dir.glob("*.json"):
                 try:
-                    data = json.loads(file_path.read_text(encoding="utf-8"))
+                    data = self._read_session_file(file_path)
                     turns = data.get("turns", [])
                     user_count = sum(1 for t in turns if t.get("role") == "user")
                     asst_count = sum(1 for t in turns if t.get("role") == "assistant")
@@ -107,7 +150,7 @@ class ConversationMemory:
 
         try:
             with self._lock:
-                data = json.loads(file_path.read_text(encoding="utf-8"))
+                data = self._read_session_file(file_path)
                 self.active_session_id = session_id
                 self.active_title = data.get("title", "İsimsiz Sohbet")
                 self._turns = data.get("turns", [])
@@ -159,10 +202,7 @@ class ConversationMemory:
             }
             file_path = self.sessions_dir / f"{self.active_session_id}.json"
             with self._lock:
-                file_path.write_text(
-                    json.dumps(data, ensure_ascii=False, indent=2),
-                    encoding="utf-8"
-                )
+                self._write_session_file(file_path, data)
         except Exception as exc:
             logger.error(f"Bellek kaydetme hatası: {exc}")
 

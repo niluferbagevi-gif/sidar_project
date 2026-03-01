@@ -66,6 +66,10 @@ dependencies:
       # sentence-transformers: USE_GPU=true ise CUDA üzerinde embedding yapar
       - sentence-transformers>=2.2.0
 
+      # ── Güvenlik & Şifreleme ──────────────────────────────────────────────
+      # MEMORY_ENCRYPTION_KEY ayarlandığında oturum dosyaları Fernet ile şifrelenir
+      - cryptography>=41.0.0
+
       # ── Web Arayüzü ───────────────────────────────────────────────────────
       - fastapi>=0.104.0
       - uvicorn[standard]>=0.24.0

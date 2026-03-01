@@ -2521,20 +2521,20 @@ Python, virtualenv, `.env`, `logs/`, `temp/`, `data/`, OS dosyaları, IDE konfig
 
 26. **`definitions.py:23` — Eğitim tarihi yorumunu güncelle** (madde 7.7)
 
-27. **`package_info.py` — npm sayısal pre-release** (madde 7.8): `-\d+$` pattern ekle.
+27. ~~**`package_info.py` — npm sayısal pre-release** (madde 7.8): `-\d+$` pattern ekle.~~ → ✅ **MEVCUT** (`_is_prerelease()` satır 262'de zaten uygulanmıştı)
 
 28. ~~**`tests/test_sidar.py` — `_gpu_available` private attribute erişimi** (U-15):
     `get_gpu_info()["available"]` public API kullan.~~ → ✅ **TAMAMLANDI** (§3.70)
 
-29. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
+29. ~~**`search_docs()` — motor bağımsız sorgu** (madde 7.2)~~ → ✅ **TAMAMLANDI** (`core/rag.py` `search(mode=)`: `"auto"` | `"vector"` | `"bm25"` | `"keyword"`)
 
 30. ~~**Mobil sidebar toggle butonu**~~ ✅ **[v2.6.1'de tamamlandı]**
 
-31. **Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)
+31. ~~**Rate limiting — tüm endpoint'lere yayma** (en azından `/clear`)~~ → ✅ **TAMAMLANDI** (`/clear` zaten POST→mut kapsamındaydı; `/git-info`, `/git-branches`, `/files`, `/file-content` GET endpoint'lerine 30 req/60s limit eklendi)
 
-32. **Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)
+32. ~~**Prometheus/OpenTelemetry metrik endpoint'i** (`/metrics`)~~ → ✅ **TAMAMLANDI** (`web_server.py` `/metrics` endpoint'i; `prometheus_client` kuruluysa Prometheus text format, değilse JSON)
 
-33. **`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)
+33. ~~**`memory.json` şifreleme seçeneği** (hassas kurumsal kullanım için)~~ → ✅ **TAMAMLANDI** (`core/memory.py` Fernet/AES-128-CBC şifreleme; `MEMORY_ENCRYPTION_KEY` env ile opsiyonel opt-in; `config.py`, `.env.example`, `environment.yml`, `sidar_agent.py` güncellendi)
 
 ---
 
@@ -2723,4 +2723,4 @@ Not: §13 skor geçmişleri (`78 → 84 → 89` gibi) proje evrimini belgeler; A
 *Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01*
 *Son güncelleme: v2.6.1 U-Yamaları uygulandı + tüm ~35 kaynak dosyanın satır satır final incelemesi (Session 4–5)*
 *Analiz kapsamı: ~35 kaynak dosya, ~10.400+ satır kod*
-*Toplam doğrulanan düzeltme: **72** (54 önceki + 15 U-yaması + 3 N-yaması) | Açık sorunlar: **0 — Proje tamamlandı ✅***
+*Toplam doğrulanan düzeltme: **77** (54 önceki + 15 U-yaması + 3 N-yaması + 5 Öncelik-3) | Açık sorunlar: **0 — Proje tamamlandı ✅***

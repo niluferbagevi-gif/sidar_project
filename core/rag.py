@@ -386,10 +386,16 @@ class DocumentStore:
     #  ARAMA (HİBRİT)
     # ─────────────────────────────────────────────
 
-    def search(self, query: str, top_k: int = None) -> Tuple[bool, str]:
+    def search(self, query: str, top_k: int = None, mode: str = "auto") -> Tuple[bool, str]:
         """
         Sorguya göre en ilgili belgeleri bul.
-        Öncelik: ChromaDB (Vektör) -> BM25 -> Keyword
+
+        mode:
+          "auto"    → Öncelik sırasıyla: ChromaDB → BM25 → Keyword (varsayılan)
+          "vector"  → Yalnızca ChromaDB vektör arama
+          "bm25"    → Yalnızca BM25 arama
+          "keyword" → Yalnızca anahtar kelime eşleşmesi
+
         top_k verilmezse __init__'teki default_top_k kullanılır.
         """
         if top_k is None:
@@ -400,18 +406,29 @@ class DocumentStore:
                 "Belge eklemek için: TOOL:docs_add:<başlık>|<url>"
             )
 
-        # 1. Vektör Arama (En iyi sonuçlar)
+        if mode == "vector":
+            if self._chroma_available and self.collection:
+                return self._chroma_search(query, top_k)
+            return False, "Vektör arama kullanılamıyor — ChromaDB kurulu değil."
+
+        if mode == "bm25":
+            if self._bm25_available:
+                return self._bm25_search(query, top_k)
+            return False, "BM25 kullanılamıyor — rank_bm25 kurulu değil."
+
+        if mode == "keyword":
+            return self._keyword_search(query, top_k)
+
+        # Auto cascade (mode == "auto" veya bilinmeyen değer)
         if self._chroma_available and self.collection:
             try:
                 return self._chroma_search(query, top_k)
             except Exception as exc:
                 logger.warning("ChromaDB arama hatası (BM25'e düşülüyor): %s", exc)
 
-        # 2. BM25 Arama
         if self._bm25_available:
             return self._bm25_search(query, top_k)
-        
-        # 3. Basit Kelime Araması
+
         return self._keyword_search(query, top_k)
 
     def _chroma_search(self, query: str, top_k: int) -> Tuple[bool, str]:

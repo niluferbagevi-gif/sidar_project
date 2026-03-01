@@ -85,8 +85,12 @@ app.add_middleware(
 _rate_data: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT           = 20   # /chat — LLM çağrısı başına limit
 _RATE_LIMIT_MUTATIONS = 60   # Diğer POST/DELETE — mutasyon endpoint'leri
-_RATE_WINDOW          = 60   # saniye cinsinden pencere (her iki limit için)
+_RATE_LIMIT_GET_IO    = 30   # GET I/O endpoint'leri (git, dosya, vb.)
+_RATE_WINDOW          = 60   # saniye cinsinden pencere (tüm limitler için)
+_RATE_GET_IO_PATHS    = frozenset(["/git-info", "/git-branches", "/files", "/file-content"])
 _rate_lock: asyncio.Lock | None = None  # _agent_lock ile tutarlı: lazy init
+
+_start_time = time.monotonic()  # Sunucu başlangıç zamanı (/metrics için)
 
 
 async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool:
@@ -126,6 +130,13 @@ async def rate_limit_middleware(request: Request, call_next):
         if await _is_rate_limited(f"{client_ip}:mut", _RATE_LIMIT_MUTATIONS):
             return JSONResponse(
                 {"error": "Çok fazla işlem isteği. Lütfen bir dakika bekleyin."},
+                status_code=429,
+            )
+    elif request.method == "GET" and request.url.path in _RATE_GET_IO_PATHS:
+        # Dosya sistemi / Git I/O endpoint'leri — orta limit (30 req/60s)
+        if await _is_rate_limited(f"{client_ip}:get", _RATE_LIMIT_GET_IO):
+            return JSONResponse(
+                {"error": "Çok fazla sorgu isteği. Lütfen bir dakika bekleyin."},
                 status_code=429,
             )
 
@@ -254,6 +265,51 @@ async def status():
         "cuda_version": getattr(a.cfg, "CUDA_VERSION", "N/A"),
         "gpu_devices": gpu_info.get("devices", []),
     })
+
+@app.get("/metrics")
+async def metrics():
+    """
+    Temel operasyonel metrikler (JSON).
+    Uptime, oturum sayısı, RAG belge sayısı, rate limit istatistikleri.
+    prometheus_client kuruluysa 'Accept: text/plain' başlığıyla Prometheus formatı döner.
+    """
+    agent = await get_agent()
+    uptime_s = int(time.monotonic() - _start_time)
+    rag_docs  = len(agent.docs._index)
+    sessions  = agent.memory.get_all_sessions()
+
+    payload = {
+        "version":                agent.VERSION,
+        "uptime_seconds":         uptime_s,
+        "sessions_total":         len(sessions),
+        "active_session_turns":   len(agent.memory),
+        "rag_documents":          rag_docs,
+        "rate_limit_buckets":     len(_rate_data),
+        "rate_limit_requests_in_window": sum(len(v) for v in _rate_data.values()),
+        "provider":               agent.cfg.AI_PROVIDER,
+        "gpu_enabled":            agent.cfg.USE_GPU,
+    }
+
+    # Opsiyonel Prometheus metin formatı (prometheus_client kuruluysa)
+    try:
+        from prometheus_client import (
+            CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST,
+        )
+        from starlette.responses import Response as _Resp
+        reg = CollectorRegistry()
+        Gauge("sidar_uptime_seconds",      "Sunucu çalışma süresi (s)", registry=reg).set(uptime_s)
+        Gauge("sidar_sessions_total",      "Toplam oturum sayısı",       registry=reg).set(len(sessions))
+        Gauge("sidar_rag_documents_total", "RAG belge sayısı",           registry=reg).set(rag_docs)
+        Gauge("sidar_active_turns",        "Aktif oturum tur sayısı",    registry=reg).set(len(agent.memory))
+        Gauge("sidar_rate_limit_requests", "Rate limit penceredeki istek", registry=reg).set(
+            sum(len(v) for v in _rate_data.values())
+        )
+        return _Resp(generate_latest(reg), media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
+        pass  # prometheus_client kurulu değil — JSON ile devam et
+
+    return JSONResponse(payload)
+
 
 # ─────────────────────────────────────────────
 #  ÇOKLU SOHBET (SESSIONS) ROTALARI
