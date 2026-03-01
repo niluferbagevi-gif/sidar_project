@@ -1,6 +1,6 @@
 """
 Sidar Project — Merkezi Yapılandırma Modülü
-Sürüm: 2.6.0 (GPU & Donanım Hızlandırma Desteği)
+Sürüm: 2.6.1 (GPU & Donanım Hızlandırma Desteği)
 Açıklama: Sistem ayarları, donanım tespiti, dizin yönetimi ve loglama altyapısı.
 """
 
