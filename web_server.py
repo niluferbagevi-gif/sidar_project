@@ -62,11 +62,11 @@ async def get_agent() -> SidarAgent:
 
 app = FastAPI(title="Sidar Web UI", docs_url=None, redoc_url=None)
 
-# CORS: Yalnızca localhost'tan gelen isteklere izin ver
+# CORS: Yalnızca localhost'tan gelen isteklere izin ver (port cfg.WEB_PORT'tan okunur)
 _ALLOWED_ORIGINS = [
-    "http://localhost:7860",
-    "http://127.0.0.1:7860",
-    "http://0.0.0.0:7860",
+    f"http://localhost:{cfg.WEB_PORT}",
+    f"http://127.0.0.1:{cfg.WEB_PORT}",
+    f"http://0.0.0.0:{cfg.WEB_PORT}",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -86,7 +86,7 @@ _rate_data: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT           = 20   # /chat — LLM çağrısı başına limit
 _RATE_LIMIT_MUTATIONS = 60   # Diğer POST/DELETE — mutasyon endpoint'leri
 _RATE_WINDOW          = 60   # saniye cinsinden pencere (her iki limit için)
-_rate_lock            = asyncio.Lock()  # TOCTOU koruması: kontrol+yaz atomik
+_rate_lock: asyncio.Lock | None = None  # _agent_lock ile tutarlı: lazy init
 
 
 async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool:
@@ -95,6 +95,9 @@ async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool:
     key: IP adresi veya 'IP:namespace' formatında bileşik anahtar
     limit: pencere boyunca izin verilen maksimum istek sayısı
     """
+    global _rate_lock
+    if _rate_lock is None:
+        _rate_lock = asyncio.Lock()  # event loop başladıktan sonra oluştur
     async with _rate_lock:
         now = time.monotonic()
         window_start = now - _RATE_WINDOW
@@ -367,7 +370,7 @@ async def git_info():
     if remote:
         # https://github.com/owner/repo.git  →  owner/repo
         # git@github.com:owner/repo.git      →  owner/repo
-        repo = remote.rstrip(".git")
+        repo = remote.removesuffix(".git")
         repo = repo.split("github.com/")[-1].split("github.com:")[-1]
 
     return JSONResponse({"branch": branch, "repo": repo or "sidar_project"})
@@ -393,6 +396,9 @@ async def git_branches():
     return JSONResponse({"branches": branches or ["main"], "current": current})
 
 
+_BRANCH_RE = re.compile(r"^[a-zA-Z0-9/_.-]+$")
+
+
 @app.post("/set-branch")
 async def set_branch(request: Request):
     """Aktif git dalını değiştirir (git checkout)."""
@@ -400,6 +406,8 @@ async def set_branch(request: Request):
     branch_name = body.get("branch", "").strip()
     if not branch_name:
         return JSONResponse({"success": False, "error": "Dal adı boş."}, status_code=400)
+    if not _BRANCH_RE.match(branch_name):
+        return JSONResponse({"success": False, "error": "Geçersiz dal adı: yalnızca harf, rakam, '/', '_', '-', '.' kullanılabilir."}, status_code=400)
 
     _root = Path(__file__).parent
     try:
