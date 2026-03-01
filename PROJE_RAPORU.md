@@ -1,10 +1,10 @@
 # SİDAR Projesi — Kapsamlı Kod Analiz Raporu (Güncel)
 
-**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri + Derinlemesine Analiz + Kritik Hata Doğrulama)
+**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri + Derinlemesine Analiz + Kritik Hata Doğrulama + Dosyalar Arası Uyumsuzluk Taraması)
 **Analiz Eden:** Claude Sonnet 4.6 (Otomatik Denetim)
-**Versiyon:** SidarAgent v2.6.1 (Web UI + Backend patch + Kritik hata yamaları)
+**Versiyon:** SidarAgent v2.6.0 (kodda) / v2.6.1 (raporda — versiyon uyumsuzluğu mevcut, bkz. U-08)
 **Toplam Dosya:** ~35 kaynak dosyası, ~10.400+ satır kod
-**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01 / Derinlemesine analiz: 2026-03-01
+**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01 / Derinlemesine analiz: 2026-03-01 / Uyumsuzluk taraması: 2026-03-01
 
 ---
 
@@ -1148,7 +1148,9 @@ def _is_prerelease(version: str) -> bool:
 
 ## 4. Mevcut Kritik Hatalar
 
-> ✅ Bu bölümde kayıtlı **tüm kritik hatalar giderilmiştir.** Ayrıntılar için bkz. §3.23 – §3.27.
+> ⚠️ **2 yeni kritik hata tespit edildi** (yeni uyumsuzluk taramasından).
+
+### Önceki Kritik Hatalar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1158,11 +1160,20 @@ def _is_prerelease(version: str) -> bool:
 | 3.26 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi — §3.26'ya taşındı |
 | 3.27 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi — §3.27'ye taşındı |
 
+### Yeni Kritik Hatalar (Açık — §8.2'den)
+
+| # | Sorun | Dosya | Durum |
+|---|-------|-------|-------|
+| U-01 | `get_document()` dönüş formatı ile test assertion'ları uyuşmuyor — `test_rag_chunking_small_text` ve `test_rag_chunking_large_text` testleri **yanlış sonuç üretir** | `tests/test_sidar.py:374,386` — `core/rag.py:383` | ❌ Açık |
+| U-02 | `SecurityManager.status_report()` SANDBOX modunda "Terminal: ✗" gösteriyor ama `can_execute()` True döndürüyor — **kullanıcıya yanlış bilgi** | `managers/security.py:79,92` | ❌ Açık |
+
 ---
 
 ## 5. Yüksek Öncelikli Sorunlar
 
-> ✅ Bu bölümde kayıtlı **tüm yüksek öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.28 – §3.36.
+> ⚠️ **3 yeni yüksek öncelikli sorun tespit edildi** (yeni uyumsuzluk taramasından).
+
+### Önceki Yüksek Öncelikli Sorunlar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1176,11 +1187,21 @@ def _is_prerelease(version: str) -> bool:
 | 3.35 | Uzantısız Dosyalar Güvenlik Kontrolünü Atlar | ✅ Düzeltildi — §3.35'e taşındı |
 | 3.36 | Rate Limiting TOCTOU Yarış Koşulu | ✅ Düzeltildi — §3.36'ya taşındı |
 
+### Yeni Yüksek Öncelikli Sorunlar (Açık — §8.2'den)
+
+| # | Sorun | Dosya | Durum |
+|---|-------|-------|-------|
+| U-03 | `.env.example`'da `HF_HUB_OFFLINE` iki kez tanımlı; 57. satırda `=0`, 113. satırda `=1` — ikincisi birincisini geçersiz kılar | `.env.example:57,113` | ❌ Açık |
+| U-04 | Conda ortamı CUDA 12.1 (cu121) wheel, Docker GPU build CUDA 12.4 (cu124) wheel kullanıyor — farklı PyTorch sürümleri | `environment.yml:29` — `docker-compose.yml:46,130` | ❌ Açık |
+| U-05 | CORS izin listesi port 7860'a sabit kodlanmış; `WEB_PORT` değiştirilirse web arayüzü çalışmaz | `web_server.py:66-70` — `config.py:WEB_PORT` | ❌ Açık |
+
 ---
 
 ## 6. Orta Öncelikli Sorunlar
 
-> ✅ Bu bölümde kayıtlı **tüm orta öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.37 – §3.46.
+> ⚠️ **4 yeni orta öncelikli sorun tespit edildi** (yeni uyumsuzluk taramasından).
+
+### Önceki Orta Öncelikli Sorunlar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1195,12 +1216,23 @@ def _is_prerelease(version: str) -> bool:
 | 3.45 | Araç Sonucu Format Tutarsızlığı | ✅ Düzeltildi — §3.45'e taşındı |
 | 3.46 | Bozuk JSON Sessizce Atlanıyor | ✅ Düzeltildi — §3.46'ya taşındı |
 
+### Yeni Orta Öncelikli Sorunlar (Açık — §8.2'den)
+
+| # | Sorun | Dosya | Durum |
+|---|-------|-------|-------|
+| U-06 | `_rate_lock` modül seviyesinde; `_agent_lock` lazy init — aynı dosyada tutarsız pattern | `web_server.py:89,44` | ❌ Açık |
+| U-07 | `DocumentStore` sınıfı `core/__init__.py`'den dışa aktarılmıyor | `core/__init__.py` — `core/rag.py` | ❌ Açık |
+| U-08 | Kod versiyonu "2.6.0", rapor versiyonu "2.6.1" — senkronize değil | `sidar_agent.py:55`, `config.py` — `PROJE_RAPORU.md` | ❌ Açık |
+| U-09 | Web UI chat'te "belleği temizle" doğal dil komutu AutoHandle tarafından işlenmiyor | `agent/auto_handle.py` — `web_server.py:/clear` | ❌ Açık |
+
 ---
 
 
 ## 7. Düşük Öncelikli Sorunlar
 
-> ✅ Bu bölümde kayıtlı **tüm düşük öncelikli sorunlar giderilmiştir.** Ayrıntılar için bkz. §3.47 – §3.54.
+> ⚠️ **3 yeni düşük öncelikli sorun tespit edildi** (yeni uyumsuzluk taramasından).
+
+### Önceki Düşük Öncelikli Sorunlar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1213,12 +1245,22 @@ def _is_prerelease(version: str) -> bool:
 | 3.53 | Eğitim Verisi Tarihi Yorumu | ✅ Onaylandı — §3.53'e taşındı |
 | 3.54 | npm Sayısal Pre-Release Algılama | ✅ Düzeltildi — §3.54'e taşındı |
 
+### Yeni Düşük Öncelikli Sorunlar (Açık — §8.2'den)
+
+| # | Sorun | Dosya | Durum |
+|---|-------|-------|-------|
+| U-10 | Dal adı `git checkout`'a geçilmeden önce yalnızca `strip()` ile temizleniyor; git flag injection koruması yok | `web_server.py:330-345` | ❌ Açık |
+| U-11 | HEALTHCHECK Python sürecini kontrol ediyor; HTTP servis sağlığını doğrulamıyor | `Dockerfile:82-83` | ❌ Açık |
+| U-12 | `"erişim"` regex'i çok geniş; yaygın Türkçe sorularda güvenlik ekranını yanlışlıkla tetikleyebilir | `auto_handle.py:217` | ❌ Açık |
+
 ---
 
 
 ## 8. Dosyalar Arası Uyumsuzluk Tablosu
 
-> Son kontrol tarihi: 2026-03-01 — 17 uyumsuzluktan **17'si giderilmiştir.** ✅ Tümü kapatıldı
+> Son kontrol tarihi: 2026-03-01 (Güncel tarama) — Önceki 17 uyumsuzluktan **17'si giderilmiştir**. Yeni taramada **12 yeni uyumsuzluk** tespit edilmiştir.
+
+### 8.1 Önceki Sürümlerde Giderilen Uyumsuzluklar (Kapalı)
 
 | # | Dosya A | Dosya B | Uyumsuzluk Türü | Önem | Durum |
 |---|---------|---------|----------------|------|-------|
@@ -1243,6 +1285,221 @@ def _is_prerelease(version: str) -> bool:
 **Notlar:**
 - **#5 (Geçersiz):** Proje `python=3.11` gerektirir (bkz. `environment.yml:6`). Python 3.10+ ile `asyncio.Lock()` event loop dışında oluşturulabilir; sorun geçersizdir.
 - **#4 (Düzeltildi):** `sidar_agent.py` içindeki tüm `memory.add()` ve `memory.set_last_file()` çağrıları `asyncio.to_thread()` ile thread pool'a iletildi. `memory.py` senkron API'si korundu.
+
+---
+
+### 8.2 Güncel Taramada Tespit Edilen Yeni Uyumsuzluklar (Açık)
+
+> Analiz tarihi: 2026-03-01 — Satır satır inceleme sonucu tespit edilen **12 yeni uyumsuzluk**.
+
+| # | Dosya A | Dosya B | Uyumsuzluk Açıklaması | Önem | Durum |
+|---|---------|---------|----------------------|------|-------|
+| U-01 | `tests/test_sidar.py:374` | `core/rag.py:383` | `get_document()` test assertion hatası | 🔴 KRİTİK | ❌ Açık |
+| U-02 | `managers/security.py:92` | `managers/security.py:79` | `status_report()` SANDBOX terminal iznini yanlış gösteriyor | 🔴 KRİTİK | ❌ Açık |
+| U-03 | `.env.example:57` | `.env.example:113` | `HF_HUB_OFFLINE` anahtarı çift tanımlı, çelişkili değerler | 🔴 YÜKSEK | ❌ Açık |
+| U-04 | `environment.yml:29` (cu121) | `docker-compose.yml:46,130` (cu124) | PyTorch CUDA wheel versiyonu tutarsızlığı | 🔴 YÜKSEK | ❌ Açık |
+| U-05 | `web_server.py:66-70` | `config.py:WEB_PORT` | CORS izin listesi port 7860'a sabit kodlanmış, `WEB_PORT` değişkeni dikkate alınmıyor | 🔴 YÜKSEK | ❌ Açık |
+| U-06 | `web_server.py:89` (`_rate_lock`) | `web_server.py:44` (`_agent_lock`) | `_rate_lock` modül seviyesinde oluşturuluyor; `_agent_lock` lazy init kullanıyor | 🟡 ORTA | ❌ Açık |
+| U-07 | `core/__init__.py` | `core/rag.py` | `DocumentStore` sınıfı `core` paketinin `__all__`'ından dışa aktarılmıyor | 🟡 ORTA | ❌ Açık |
+| U-08 | `sidar_agent.py:55` (`VERSION="2.6.0"`) | `PROJE_RAPORU.md` başlığı (`v2.6.1`) | Kod versiyonu ile rapor versiyonu uyuşmuyor | 🟡 ORTA | ❌ Açık |
+| U-09 | `agent/auto_handle.py` (tüm dosya) | `web_server.py:POST /clear` | Web UI'da doğal dil "belleği temizle" komutu AutoHandle tarafından işlenmiyor | 🟡 ORTA | ❌ Açık |
+| U-10 | `web_server.py:330-345` | `managers/security.py` | Dal adı `git checkout`'a geçilmeden önce sanitize edilmiyor | 🟡 ORTA | ❌ Açık |
+| U-11 | `Dockerfile:82-83` (HEALTHCHECK) | `web_server.py` (FastAPI) | HEALTHCHECK HTTP servis durumunu değil sadece Python sürecini kontrol ediyor | 🟢 DÜŞÜK | ❌ Açık |
+| U-12 | `auto_handle.py:217` (erişim regex) | Türkçe doğal dil | `"erişim"` kelimesi çok yaygın; güvenlik durum ekranını yanlışlıkla tetikleyebilir | 🟢 DÜŞÜK | ❌ Açık |
+
+---
+
+#### U-01 Detay: `tests/test_sidar.py` — `get_document()` Dönüş Formatı Uyumsuzluğu
+
+**Sorun:** `core/rag.py:383` `get_document()` şu formatı döndürür:
+```python
+return True, f"[{doc_id}] {meta['title']}\nKaynak: {meta.get('source', '-')}\n\n{content}"
+```
+Ancak `tests/test_sidar.py:372-374` şunu kontrol ediyor:
+```python
+ok, retrieved = docs.get_document(doc_id)
+assert ok is True
+assert retrieved == small   # ❌ FAIL: retrieved başlık+kaynak öneki içeriyor
+```
+Ve `tests/test_sidar.py:381-386`:
+```python
+ok, retrieved = docs.get_document(doc_id)
+assert ok is True
+assert len(retrieved) == len(large)   # ❌ FAIL: retrieved önekle birlikte çok daha uzun
+```
+İki test de **TestPassed gibi görünse bile anlamsızdır** ve gerçekte hatalı assertion'lar nedeniyle başarısız olur.
+
+---
+
+#### U-02 Detay: `managers/security.py` — `status_report()` SANDBOX Terminal İzni Yanlış
+
+**Sorun:** `can_execute()` SANDBOX modunda kod çalıştırmaya izin veriyor:
+```python
+# security.py:79
+def can_execute(self) -> bool:
+    return self.level >= SANDBOX   # ✅ SANDBOX'ta True döner
+```
+Ama `status_report()` Terminal iznini yanlış gösteriyor:
+```python
+# security.py:92
+perms.append(f"Terminal: {'✓' if self.level == FULL else '✗'}")
+# ❌ SANDBOX modunda '✗' (yasak) yazıyor ama aslında Docker REPL çalışabiliyor
+```
+Kullanıcı arayüzde "Terminal: ✗" görürken Docker sandbox REPL gerçekte çalışabilir durumda. Tutarsız bilgi.
+
+---
+
+#### U-03 Detay: `.env.example` — `HF_HUB_OFFLINE` Çift Tanımlı
+
+**Sorun:** Aynı değişken iki farklı satırda, farklı değerlerle tanımlı:
+```bash
+# .env.example:57
+HF_HUB_OFFLINE=0    # ← İlk tanım: model indirmesine izin ver
+
+# .env.example:113
+HF_HUB_OFFLINE=1    # ← İkinci tanım: çevrimdışı mod (override eder)
+```
+Kullanıcı `.env` oluştururken hangi değerin geçerli olacağını bilemez. İkinci tanım birincisini geçersiz kılar.
+
+---
+
+#### U-04 Detay: `environment.yml` vs `docker-compose.yml` — CUDA Wheel Sürümü Tutarsızlığı
+
+**Sorun:**
+```yaml
+# environment.yml:29 (Conda/doğrudan kurulum)
+- --extra-index-url https://download.pytorch.org/whl/cu121  # CUDA 12.1
+
+# docker-compose.yml:46 (GPU Docker servisi)
+TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124     # CUDA 12.4
+
+# Dockerfile:51 (GPU build-arg)
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu   # CPU varsayılan
+# GPU build: docker-compose cu124 geçiyor
+```
+Conda ortamında kurulan PyTorch CUDA 12.1 (cu121) wheel'ı, Docker GPU build'ında kurulan CUDA 12.4 (cu124) wheel'ıyla **farklı sürümler** olabilir. Geliştiricilerin farklı ortamlarda farklı PyTorch davranışı görmesine neden olur.
+
+---
+
+#### U-05 Detay: `web_server.py` — CORS Port Sabit Kodlanmış
+
+**Sorun:**
+```python
+# web_server.py:66-70
+_ALLOWED_ORIGINS = [
+    "http://localhost:7860",    # ← Sabit port
+    "http://127.0.0.1:7860",   # ← Sabit port
+    "http://0.0.0.0:7860",     # ← Sabit port
+]
+```
+Ancak `config.py:299` ve `.env.example:111`:
+```python
+WEB_PORT: int = get_int_env("WEB_PORT", 7860)  # Değiştirilebilir
+```
+Kullanıcı `WEB_PORT=8080` ayarlarsa, CORS tüm istekleri bloklar çünkü `http://localhost:8080` izin listesinde yok. `_ALLOWED_ORIGINS` `cfg.WEB_PORT` kullanarak dinamik oluşturulmalı.
+
+---
+
+#### U-06 Detay: `web_server.py` — `_rate_lock` / `_agent_lock` Tutarsız Başlatma
+
+**Sorun:**
+```python
+# web_server.py:44 — _agent_lock DOĞRU: lazy init
+_agent_lock: asyncio.Lock | None = None  # event loop başladıktan sonra oluşturulacak
+
+# web_server.py:89 — _rate_lock TUTARSIZ: modül seviyesinde
+_rate_lock = asyncio.Lock()  # import anında oluşturuluyor
+```
+Aynı dosyada aynı pattern için iki farklı yaklaşım kullanılıyor. Python 3.11 için fonksiyonel sorun olmasa da tutarsızlık kod bakımını zorlaştırır.
+
+---
+
+#### U-07 Detay: `core/__init__.py` — `DocumentStore` Dışa Aktarılmıyor
+
+**Sorun:**
+```python
+# core/__init__.py
+from .memory import ConversationMemory
+from .llm_client import LLMClient
+# ❌ DocumentStore eksik!
+__all__ = ["ConversationMemory", "LLMClient"]
+```
+Diğer tüm modüller `__init__.py`'den dışa aktarılmışken `DocumentStore` dışarıda bırakılmış. Tüm importlar `from core.rag import DocumentStore` şeklinde doğrudan yapılıyor (tutarlı değil).
+
+---
+
+#### U-08 Detay: `sidar_agent.py` / `config.py` — Versiyon Rapor Uyumsuzluğu
+
+**Sorun:**
+```python
+# sidar_agent.py:55
+VERSION = "2.6.0"
+
+# config.py:207-208
+VERSION: str = "2.6.0"
+```
+Ancak `PROJE_RAPORU.md:5`:
+```
+**Versiyon:** SidarAgent v2.6.1 (Web UI + Backend patch + Kritik hata yamaları)
+```
+Rapora göre uygulanan v2.6.1 yamaları kodda versiyon güncellemesini içermiyor. `main.py:50` banner'ı da `v2.6.0` gösteriyor.
+
+---
+
+#### U-09 Detay: `auto_handle.py` — Web UI'da "Belleği Temizle" Komutu Desteklenmiyor
+
+**Sorun:** CLI'da `.clear` komutu `main.py` tarafından doğrudan handle ediliyor. Web UI'da `/clear` endpoint'i var. Ancak kullanıcı web chat'te "belleği temizle", "sohbeti sıfırla" gibi doğal dil komutları yazarsa `AutoHandle` bunu işlemiyor, LLM'e gönderiliyor.
+
+`auto_handle.py`'de bu pattern için hiçbir handler yok. `test_auto_handle_clear_command` testi de bunu kabul ederek:
+```python
+# tests/test_sidar.py:406-408
+assert isinstance(handled, bool)   # ❌ Her zaman geçer, gerçek test değil
+assert isinstance(response, str)
+```
+
+---
+
+#### U-10 Detay: `web_server.py` — Dal Adı Sanitize Edilmeden `git checkout`'a Geçiliyor
+
+**Sorun:**
+```python
+# web_server.py:330-345
+branch_name = body.get("branch", "").strip()
+# ❌ Yalnızca whitespace temizleniyor; git flag injection kontrolü yok
+subprocess.check_output(
+    ["git", "checkout", branch_name],  # Liste formatı shell injection'ı engeller
+    ...
+)
+```
+Subprocess list formatı shell injection'ı önler, ancak git'e özel bayraklar (örn: `--force`, `--orphan`) hâlâ zararlı olabilir. Dal adı `^[a-zA-Z0-9/_.-]+$` regex ile doğrulanmalı.
+
+---
+
+#### U-11 Detay: `Dockerfile` — HEALTHCHECK HTTP Sağlığını Kontrol Etmiyor
+
+**Sorun:**
+```dockerfile
+# Dockerfile:82-83
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD ps aux | grep "[p]ython" || exit 1
+```
+Python süreci çalışıyor ama web servis yanıt vermiyorsa (port bağlanamadı, exception, vb.) HEALTHCHECK yine de `healthy` döner. `web_server.py` modu için `curl http://localhost:7860/status` ile HTTP sağlık kontrolü yapılmalı.
+
+---
+
+#### U-12 Detay: `auto_handle.py` — `"erişim"` Regex'i Çok Geniş
+
+**Sorun:**
+```python
+# auto_handle.py:217
+if re.search(r"erişim|güvenlik|openclaw|access.*level|yetki", t):
+    return True, self.code.security.status_report()
+```
+Türkçe'de "erişim" (access) son derece yaygın bir kelime. Örnek:
+- "Bu API'ye **erişim** nasıl yapılır?" → Güvenlik durum raporu gösterir ❌
+- "Dosyaya **erişim** izni var mı?" → Güvenlik durum raporu gösterir ❌
+
+LLM'e iletilmesi gereken meşru sorular yanlışlıkla yakalanır.
 
 ---
 
