@@ -1,6 +1,9 @@
 """
 Sidar Project - Web Arama Yöneticisi
 Tavily, Google Custom Search ve DuckDuckGo motorları ile asenkron web araması.
+Sürüm: 2.6.1
+
+Motor öncelik sırası (auto modu): Tavily → Google → DuckDuckGo
 """
 
 import logging
@@ -69,14 +72,17 @@ class WebSearchManager:
     #  ANA ARAMA YÖNLENDİRİCİ (ASYNC)
     # ─────────────────────────────────────────────
 
-    async def search(self, query: str, max_results: int = None) -> Tuple[bool, str]:
+    async def search(self, query: str, max_results: Optional[int] = None) -> Tuple[bool, str]:
         """
         Belirlenen motora veya fallback (yedek) mantığına göre arama yapar.
         """
         n = max_results or self.MAX_RESULTS
 
+        tavily_already_tried = False
+
         if self.engine == "tavily" and self.tavily_key:
             ok, res = await self._search_tavily(query, n)
+            tavily_already_tried = True
             if ok:
                 return ok, res
             # 401/403 veya başka bir hata → aşağıdaki auto-fallback'e düş
@@ -87,7 +93,8 @@ class WebSearchManager:
             return await self._search_duckduckgo(query, n)
 
         # AUTO MODU VEYA FALLBACK: Tavily -> Google -> DuckDuckGo
-        if self.tavily_key:
+        # tavily_already_tried=True ise yukarıda denendiydi ve başarısız oldu — atla
+        if self.tavily_key and not tavily_already_tried:
             ok, res = await self._search_tavily(query, n)
             if ok and "sonuç bulunamadı" not in res.lower() and "[HATA]" not in res:
                 return ok, res
@@ -248,8 +255,22 @@ class WebSearchManager:
             flags=re.DOTALL | re.IGNORECASE,
         )
         clean = re.sub(r"<[^>]+>", " ", clean)
-        clean = clean.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        clean = clean.replace("&nbsp;", " ").replace("&quot;", '"')
+        # Yaygın HTML entity'lerini decode et
+        clean = (
+            clean
+            .replace("&amp;",  "&")
+            .replace("&lt;",   "<")
+            .replace("&gt;",   ">")
+            .replace("&nbsp;", " ")
+            .replace("&quot;", '"')
+            .replace("&apos;", "'")
+            .replace("&#39;",  "'")
+            .replace("&mdash;", "—")
+            .replace("&ndash;", "–")
+            .replace("&hellip;", "…")
+        )
+        # Sayısal entity'leri temizle (örn. &#160; &#8211;)
+        clean = re.sub(r"&#\d+;", " ", clean)
         clean = re.sub(r"\s+", " ", clean)
         return clean.strip()
 
@@ -275,3 +296,16 @@ class WebSearchManager:
         else:
             q = f"stackoverflow {query}"
         return await self.search(q, max_results=5)
+
+    def __repr__(self) -> str:
+        engines = []
+        if self.tavily_key:
+            engines.append("Tavily")
+        if self.google_key and self.google_cx:
+            engines.append("Google")
+        if self._ddg_available:
+            engines.append("DuckDuckGo")
+        return (
+            f"<WebSearchManager engine={self.engine} "
+            f"available={[e for e in engines]}>"
+        )

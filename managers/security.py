@@ -1,6 +1,7 @@
 """
 Sidar Project - Güvenlik Yöneticisi
 OpenClaw erişim kontrol sistemi.
+Sürüm: 2.6.1
 """
 
 import logging
@@ -40,7 +41,13 @@ class SecurityManager:
     # ─────────────────────────────────────────────
 
     def can_read(self, path: Optional[str] = None) -> bool:
-        """Her erişim seviyesinde okuma serbesttir."""
+        """
+        Her erişim seviyesinde okuma serbesttir.
+
+        Args:
+            path: Kontrol edilecek yol (ileride yol bazlı ACL için ayrılmıştır;
+                  şu an kullanılmamaktadır — her koşulda True döner).
+        """
         return True
 
     # ─────────────────────────────────────────────

@@ -1,6 +1,7 @@
 """
 Sidar Project - Kod Yöneticisi
 Dosya okuma, yazma, sözdizimi doğrulama ve DOCKER İZOLELİ kod analizi (REPL).
+Sürüm: 2.6.1
 """
 
 import ast
@@ -59,14 +60,15 @@ class CodeManager:
             logger.warning("Docker SDK kurulu değil. (pip install docker)")
         except Exception as first_err:
             # WSL2 fallback: Docker Desktop alternatif socket yollarını dene
-            import docker
+            # (docker modülü zaten try bloğunda import edildi; yeniden import gerekmez)
+            import docker as _docker_mod  # noqa: F811 — try bloğu ImportError vermediyse önbellektedir
             wsl_sockets = [
                 "unix:///var/run/docker.sock",
                 "unix:///mnt/wsl/docker-desktop/run/guest-services/backend.sock",
             ]
             for socket_path in wsl_sockets:
                 try:
-                    self.docker_client = docker.DockerClient(base_url=socket_path)
+                    self.docker_client = _docker_mod.DockerClient(base_url=socket_path)
                     self.docker_client.ping()
                     self.docker_available = True
                     logger.info("Docker bağlantısı WSL2 socket ile kuruldu: %s", socket_path)
@@ -398,10 +400,17 @@ class CodeManager:
                 "audits_done": self._audits_done,
             }
 
+    def status(self) -> str:
+        """Docker ve sandbox durumunu özetleyen durum satırı döndürür."""
+        if self.docker_available:
+            return f"CodeManager: Docker Sandbox Aktif (imaj: {self.docker_image})"
+        return "CodeManager: Subprocess Modu (Docker erişilemez — kod yerel Python ile çalışır)"
+
     def __repr__(self) -> str:
         m = self.get_metrics()
         return (
             f"<CodeManager reads={m['files_read']} "
             f"writes={m['files_written']} "
-            f"checks={m['syntax_checks']}>"
+            f"checks={m['syntax_checks']} "
+            f"docker={'on' if self.docker_available else 'off'}>"
         )

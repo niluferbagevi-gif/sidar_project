@@ -1,6 +1,7 @@
 """
 Sidar Project - Paket Bilgi Yöneticisi
 PyPI, npm Registry ve GitHub Releases entegrasyonu (Asenkron).
+Sürüm: 2.6.1
 
 Gerçek zamanlı paket sürüm kontrolü, changelog ve bağımlılık sorguları.
 """
@@ -277,3 +278,6 @@ class PackageInfoManager:
 
     def status(self) -> str:
         return "PackageInfo: PyPI + npm + GitHub Releases — Aktif (Asenkron)"
+
+    def __repr__(self) -> str:
+        return f"<PackageInfoManager timeout={self.TIMEOUT}s>"

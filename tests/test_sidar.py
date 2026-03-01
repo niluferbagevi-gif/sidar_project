@@ -1,6 +1,9 @@
 """
 Sidar Project - Temel Test ve Entegrasyon Suiti
 Çalıştırmak için kök dizinde: pytest tests/
+
+pytest-asyncio modu: pyproject.toml / pytest.ini'da
+  asyncio_mode = "auto"  ya da her async test @pytest.mark.asyncio ile işaretlenmiştir.
 """
 
 import asyncio
@@ -240,7 +243,7 @@ def test_rag_gpu_params(test_config):
 
 
 # ─────────────────────────────────────────────
-# 9. SESSION LIFECYCLE TESTLERİ
+# 7. SESSION LIFECYCLE TESTLERİ
 # ─────────────────────────────────────────────
 
 def test_session_create(test_config):
@@ -341,7 +344,7 @@ def test_session_load_nonexistent(test_config):
 
 
 # ─────────────────────────────────────────────
-# 10. ARAÇ DISPATCHER TESTLERİ
+# 8. ARAÇ DISPATCHER TESTLERİ
 # ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -360,7 +363,7 @@ async def test_execute_tool_known_does_not_return_none(agent):
 
 
 # ─────────────────────────────────────────────
-# 11. CHUNKING SINIR TESTLERİ
+# 9. CHUNKING SINIR TESTLERİ
 # ─────────────────────────────────────────────
 
 def test_rag_chunking_small_text(test_config):
@@ -391,7 +394,7 @@ def test_rag_chunking_large_text(test_config):
 
 
 # ─────────────────────────────────────────────
-# 12. AUTOHANDLE PATTERN TESTLERİ
+# 10. AUTOHANDLE PATTERN TESTLERİ
 # ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -412,7 +415,7 @@ async def test_auto_handle_clear_command(agent):
 
 
 # ─────────────────────────────────────────────
-# 13. BROKEN JSON KARANTINA TESTİ
+# 11. BROKEN JSON KARANTINA TESTİ
 # ─────────────────────────────────────────────
 
 def test_session_broken_json_quarantine(test_config):
@@ -436,7 +439,7 @@ def test_session_broken_json_quarantine(test_config):
 
 
 # ─────────────────────────────────────────────
-# 14. JSON PARSE DOĞRULUĞU (GREEDY REGEX YERİNE JSONDecoder)
+# 12. JSON PARSE DOĞRULUĞU (GREEDY REGEX YERİNE JSONDecoder)
 # ─────────────────────────────────────────────
 
 def test_json_decoder_picks_first_valid_object():
@@ -498,7 +501,7 @@ def test_json_decoder_embedded_in_markdown():
 
 
 # ─────────────────────────────────────────────
-# 15. UTF-8 MULTİBYTE BUFFER GÜVENLİĞİ
+# 13. UTF-8 MULTİBYTE BUFFER GÜVENLİĞİ
 # ─────────────────────────────────────────────
 
 def test_utf8_multibyte_two_byte_split():
@@ -581,7 +584,7 @@ def test_utf8_invalid_bytes_use_replace_fallback():
 
 
 # ─────────────────────────────────────────────
-# 16. AUTO_HANDLE HEALTH=NONE NULL GUARD
+# 14. AUTO_HANDLE HEALTH=NONE NULL GUARD
 # ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -613,7 +616,7 @@ async def test_auto_handle_health_returns_report_when_available(agent):
 
 
 # ─────────────────────────────────────────────
-# 17. RATE LIMITER (TOCTOU SENARYOSU)
+# 15. RATE LIMITER (TOCTOU SENARYOSU)
 # ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -676,7 +679,7 @@ async def test_rate_limiter_concurrent_toctou():
 
 
 # ─────────────────────────────────────────────
-# 18. RAG CONCURRENT DELETE+UPSERT
+# 16. RAG CONCURRENT DELETE+UPSERT
 # ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -722,7 +725,7 @@ async def test_rag_update_replaces_old_chunks(test_config):
 
 
 # ─────────────────────────────────────────────
-# 19. GITHUB MANAGER UZANTISIZ DOSYA BYPASS
+# 17. GITHUB MANAGER UZANTISIZ DOSYA BYPASS
 # ─────────────────────────────────────────────
 
 def test_github_manager_safe_extensions_set():
@@ -759,7 +762,7 @@ def test_github_manager_no_token_status_guidance():
 
 
 # ─────────────────────────────────────────────
-# 20. PACKAGE_INFO VERSION SORT PRE-RELEASE
+# 18. PACKAGE_INFO VERSION SORT PRE-RELEASE
 # ─────────────────────────────────────────────
 
 def test_version_sort_stable_beats_prerelease():

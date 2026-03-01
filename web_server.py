@@ -250,16 +250,25 @@ async def status():
     """Ajan durum bilgisini JSON olarak döndür."""
     a = await get_agent()
     gpu_info = a.health.get_gpu_info()
+    # Sağlayıcıya göre doğru model adını gönder
+    if a.cfg.AI_PROVIDER == "gemini":
+        model_display = getattr(a.cfg, "GEMINI_MODEL", "gemini-2.0-flash")
+    else:
+        model_display = a.cfg.CODING_MODEL
+
+    enc_status = "Etkin (Fernet)" if getattr(a.cfg, "MEMORY_ENCRYPTION_KEY", "") else "Devre Dışı"
+
     return JSONResponse({
         "version": a.VERSION,
         "provider": a.cfg.AI_PROVIDER,
-        "model": a.cfg.CODING_MODEL,
+        "model": model_display,
         "access_level": a.cfg.ACCESS_LEVEL,
         "memory_count": len(a.memory),
         "github": a.github.is_available(),
         "web_search": a.web.is_available(),
         "rag_status": a.docs.status(),
         "pkg_status": a.pkg.status(),
+        "enc_status": enc_status,
         # GPU bilgisi
         "gpu_enabled": a.cfg.USE_GPU,
         "gpu_info": a.cfg.GPU_INFO,
