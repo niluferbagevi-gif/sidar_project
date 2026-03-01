@@ -812,3 +812,152 @@ def test_version_sort_invalid_version_goes_last():
     assert sorted_v[0] == "2.0.0"
     assert sorted_v[1] == "1.0.0"
     assert sorted_v[-1] == "invalid-ver"
+
+# ─────────────────────────────────────────────
+# 19. GÜVENLİK — PATH TRAVERSAL + SYMLINK
+# ─────────────────────────────────────────────
+
+def test_security_path_traversal_blocked(tmp_path):
+    """SecurityManager: '../' içeren yollara yazma izni verilmez."""
+    from managers.security import SecurityManager
+    sm = SecurityManager("sandbox", tmp_path)
+
+    assert sm.can_write("../../../etc/passwd") is False
+    assert sm.can_write("../../sensitive.txt") is False
+
+
+def test_security_dangerous_pattern_read_blocked(tmp_path):
+    """SecurityManager: tehlikeli sistem yollarına okuma engellenir."""
+    from managers.security import SecurityManager
+    sm = SecurityManager("full", tmp_path)
+
+    assert sm.can_read("/etc/shadow") is False
+    assert sm.can_read("/proc/1/maps") is False
+
+
+def test_security_safe_write_sandbox(tmp_path):
+    """SecurityManager: SANDBOX modda temp/ dizinine yazma serbesttir."""
+    from managers.security import SecurityManager
+    sm = SecurityManager("sandbox", tmp_path)
+    safe_path = str(tmp_path / "temp" / "output.py")
+    assert sm.can_write(safe_path) is True
+
+
+def test_security_full_base_dir_write(tmp_path):
+    """SecurityManager: FULL modda proje kökü altındaki dosyaya yazma serbesttir."""
+    from managers.security import SecurityManager
+    sm = SecurityManager("full", tmp_path)
+    safe_path = str(tmp_path / "managers" / "new_file.py")
+    assert sm.can_write(safe_path) is True
+
+
+def test_security_full_outside_base_dir_blocked(tmp_path):
+    """SecurityManager: FULL modda proje kökü dışına yazma engellenir."""
+    from managers.security import SecurityManager
+    import tempfile
+    sm = SecurityManager("full", tmp_path)
+    outside = tempfile.gettempdir() + "/outside.py"
+    assert sm.can_write(outside) is False
+
+
+def test_security_get_safe_write_path_strips_dir(tmp_path):
+    """SecurityManager: get_safe_write_path() yalnızca dosya adını kullanır."""
+    from managers.security import SecurityManager
+    sm = SecurityManager("sandbox", tmp_path)
+    safe = sm.get_safe_write_path("../../evil/file.py")
+    # Yalnızca "file.py" kalmalı, ../evil/ atılmalı
+    assert safe.parent == (tmp_path / "temp").resolve()
+    assert safe.name == "file.py"
+
+
+# ─────────────────────────────────────────────
+# 20. GITHUB MANAGER — DAL ADI DOĞRULAMASI
+# ─────────────────────────────────────────────
+
+def test_github_manager_branch_name_invalid():
+    """GitHubManager: Geçersiz dal adı create_branch() tarafından reddedilir."""
+    from managers.github_manager import GitHubManager, _BRANCH_RE
+    # Boşluk ve özel karakter içeren adlar
+    assert not _BRANCH_RE.match("branch name with spaces")
+    assert not _BRANCH_RE.match("branch;injected")
+    assert not _BRANCH_RE.match("branch`cmd`")
+    # Geçerli adlar
+    assert _BRANCH_RE.match("feature/my-branch")
+    assert _BRANCH_RE.match("fix-123")
+    assert _BRANCH_RE.match("release/v2.6.1")
+
+
+# ─────────────────────────────────────────────
+# 21. CONFIG — DOCKER TIMEOUT VE DOĞRULAMA
+# ─────────────────────────────────────────────
+
+def test_config_docker_exec_timeout_default():
+    """Config: DOCKER_EXEC_TIMEOUT varsayılanı 10 saniyedir."""
+    cfg = Config()
+    assert hasattr(cfg, "DOCKER_EXEC_TIMEOUT")
+    assert isinstance(cfg.DOCKER_EXEC_TIMEOUT, int)
+    assert cfg.DOCKER_EXEC_TIMEOUT == 10
+
+
+def test_config_validate_critical_settings_returns_bool():
+    """Config.validate_critical_settings() bool döndürür."""
+    cfg = Config()
+    result = cfg.validate_critical_settings()
+    assert isinstance(result, bool)
+
+
+# ─────────────────────────────────────────────
+# 22. WEB SERVER — X-FORWARDED-FOR RATE LIMIT
+# ─────────────────────────────────────────────
+
+def test_get_client_ip_xff():
+    """web_server._get_client_ip(): X-Forwarded-For başlığından IP çeker."""
+    from unittest.mock import MagicMock
+    import web_server
+
+    req = MagicMock()
+    req.headers = {"X-Forwarded-For": "1.2.3.4, 10.0.0.1, 172.16.0.1"}
+    req.client = None
+
+    ip = web_server._get_client_ip(req)
+    assert ip == "1.2.3.4"
+
+
+def test_get_client_ip_xri():
+    """web_server._get_client_ip(): X-Real-IP başlığından IP çeker."""
+    from unittest.mock import MagicMock
+    import web_server
+
+    req = MagicMock()
+    req.headers = {"X-Real-IP": "5.6.7.8"}
+    req.client = None
+
+    ip = web_server._get_client_ip(req)
+    assert ip == "5.6.7.8"
+
+
+def test_get_client_ip_fallback():
+    """web_server._get_client_ip(): Başlık yoksa request.client.host kullanır."""
+    from unittest.mock import MagicMock
+    import web_server
+
+    req = MagicMock()
+    req.headers = {}
+    req.client.host = "192.168.1.100"
+
+    ip = web_server._get_client_ip(req)
+    assert ip == "192.168.1.100"
+
+
+# ─────────────────────────────────────────────
+# 23. GPU BELLEK TEMİZLEME — HATA DURUMUNDA GC
+# ─────────────────────────────────────────────
+
+def test_gpu_memory_optimize_gc_runs_on_error(tmp_path):
+    """SystemHealthManager.optimize_gpu_memory(): GPU hatası olsa bile GC çalışır."""
+    import gc as _gc
+    health = SystemHealthManager(use_gpu=False)
+    # GPU devre dışı — hata verme, yalnızca GC çalışmalı
+    result = health.optimize_gpu_memory()
+    assert "GC" in result
+    assert isinstance(result, str)

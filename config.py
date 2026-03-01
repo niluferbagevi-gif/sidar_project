@@ -293,6 +293,8 @@ class Config:
 
     # ─── Docker REPL Sandbox ─────────────────────────────────
     DOCKER_PYTHON_IMAGE: str = os.getenv("DOCKER_PYTHON_IMAGE", "python:3.11-alpine")
+    # Maksimum Docker sandbox çalışma süresi (saniye) — sonsuz döngü koruması
+    DOCKER_EXEC_TIMEOUT: int = get_int_env("DOCKER_EXEC_TIMEOUT", 10)
 
     # ─── Bellek Şifrelemesi ───────────────────────────────────────
     # Boş bırakılırsa şifreleme devre dışı (varsayılan).
@@ -354,11 +356,25 @@ class Config:
         if cls.MEMORY_ENCRYPTION_KEY:
             try:
                 from cryptography.fernet import Fernet  # noqa: F401
+                # Anahtarı ön doğrulama — geçersiz formatta erken hata ver
+                try:
+                    Fernet(cls.MEMORY_ENCRYPTION_KEY.encode())
+                except Exception as key_exc:
+                    logger.error(
+                        "❌ MEMORY_ENCRYPTION_KEY geçersiz Fernet anahtarı: %s\n"
+                        "   Geçerli anahtar üretmek için:\n"
+                        "   python -c \"from cryptography.fernet import Fernet; "
+                        "print(Fernet.generate_key().decode())\"",
+                        key_exc,
+                    )
+                    is_valid = False
             except ImportError:
-                logger.warning(
-                    "⚠️  MEMORY_ENCRYPTION_KEY ayarlanmış ama 'cryptography' paketi kurulu değil.\n"
-                    "   Şifreleme devre dışı kalacak. Kurmak için: pip install cryptography"
+                logger.error(
+                    "❌ MEMORY_ENCRYPTION_KEY ayarlanmış ama 'cryptography' paketi kurulu değil.\n"
+                    "   Bu kritik bir güvenlik ayarıdır. Şifreleme olmadan devam etmek\n"
+                    "   güvenlik riskine yol açabilir. Kurmak için: pip install cryptography"
                 )
+                is_valid = False
 
         if cls.AI_PROVIDER == "ollama":
             try:

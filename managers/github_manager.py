@@ -5,9 +5,13 @@ Sürüm: 2.6.1
 """
 
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Güvenli dal adı kalıbı: yalnızca harf, rakam, /, _, -, . izinli
+_BRANCH_RE = re.compile(r"^[a-zA-Z0-9/_.\-]+$")
 
 
 class GitHubManager:
@@ -173,8 +177,11 @@ class GitHubManager:
             return True, decoded
             
         except UnicodeDecodeError:
-            # Yine de decode hatası alırsak (örneğin uzantısı .txt ama içi binary bozuk bir dosya)
-             return False, f"⚠ Hata: '{file_path}' dosyası UTF-8 formatında okunamadı. Dosya binary (ikili veri) içeriyor olabilir."
+            # Uzantısı .txt ama içi binary/bozuk olan dosyalar için fallback
+            return False, (
+                f"⚠ Hata: '{file_path}' dosyası UTF-8 formatında okunamadı. "
+                "Dosya binary (ikili veri) içeriyor olabilir."
+            )
         except Exception as exc:
             return False, f"Uzak dosya okunamadı ({file_path}): {exc}"
 
@@ -249,9 +256,24 @@ class GitHubManager:
             return False, f"GitHub dosya yazma hatası: {exc}"
 
     def create_branch(self, branch_name: str, from_branch: Optional[str] = None) -> Tuple[bool, str]:
-        """Yeni git dalı oluştur."""
+        """
+        Yeni git dalı oluştur.
+
+        Args:
+            branch_name: Oluşturulacak dal adı (yalnızca harf/rakam//_/./- izinli).
+            from_branch: Kaynak dal (None ise varsayılan dal kullanılır).
+
+        Returns:
+            (başarı, mesaj)
+        """
         if not self._repo:
             return False, "Aktif depo yok."
+        # Güvenlik: dal adı injection koruması
+        if not branch_name or not _BRANCH_RE.match(branch_name):
+            return False, (
+                f"Geçersiz dal adı: '{branch_name}'. "
+                "Yalnızca harf, rakam, '/', '_', '-', '.' kullanılabilir."
+            )
         try:
             source = from_branch or self._repo.default_branch
             source_ref = self._repo.get_branch(source)
