@@ -1254,25 +1254,31 @@ def _is_prerelease(version: str) -> bool:
 
 ## 8. Dosyalar Arası Uyumsuzluk Tablosu
 
-| # | Dosya A | Dosya B | Uyumsuzluk Türü | Önem |
-|---|---------|---------|----------------|------|
-| 1 | `README.md` (v2.3.2) | Tüm proje (v2.6.0) | Versiyon drift | 🔴 YÜKSEK |
-| 2 | `config.py:validate_critical_settings()` | Tüm proje (httpx) | Senkron `requests` kullanımı | 🔴 YÜKSEK |
-| 3 | `environment.yml` | `config.py` | `requests` bağımlılığı (config httpx'e geçince silinebilir) | 🔴 YÜKSEK |
-| 4 | `memory.py` (threading.RLock) | Async mimari | RLock async bağlamda I/O yapıyor | 🟡 ORTA |
-| 5 | `web_server.py` (asyncio.Lock module-level) | Python <3.10 uyumu | Loop bağımsız lock oluşturma | 🟡 ORTA |
-| 6 | `README.md` | `web_server.py`, `memory.py`, `config.py` | Yeni özellikler (session, GPU, rate-limit) belgelenmemiş | 🟡 ORTA |
-| 7 | `tests/test_sidar.py` | `memory.py` (session API) | Session lifecycle testleri eksik | 🟡 ORTA |
-| 8 | `web_search.py:search_docs()` | DuckDuckGo motoru | `site:` OR operatörü DDG'de sınırlı | 🟢 DÜŞÜK |
-| 9 | `sidar_agent.py:163` (greedy regex) | JSON çıktısı veren LLM | Açgözlü `\{.*\}` regex yanlış JSON yakalayabilir | 🔴 KRİTİK |
-| 10 | `llm_client.py:129` (UTF-8 errors="replace") | Türkçe/multibyte içerik | TCP sınırında multibyte karakter sessizce bozulur | 🔴 KRİTİK |
-| 11 | `code_manager.py:208` (hardcoded image) | `config.py` (DOCKER_PYTHON_IMAGE eksik) | Docker image özelleştirilemez | 🔴 KRİTİK |
-| 12 | `memory.py:170` (mesaj sayısı limiti) | LLM context window | Token sayısı kontrolsüz büyüyebilir | 🔴 KRİTİK |
-| 13 | `auto_handle.py:156` (no null check) | `SystemHealthManager` init | health=None durumunda AttributeError | 🔴 KRİTİK |
-| 14 | `github_manager.py:148` (uzantısız bypass) | `SAFE_TEXT_EXTENSIONS` whitelist | Extensionless binary dosyaları filtreden kaçar | 🔴 YÜKSEK |
-| 15 | `web_server.py:89-91` (TOCTOU) | Rate limit mantığı | Eş zamanlı istek check-write atomik değil | 🔴 YÜKSEK |
-| 16 | `rag.py:287` (delete+upsert) | ChromaDB collection | Eş zamanlı güncelleme race condition | 🔴 YÜKSEK |
-| 17 | `definitions.py:23` (eğitim tarihi) | Claude Sonnet 4.6 (Aug 2025) | Yanlış bilgi sınırı yorumu | 🟢 DÜŞÜK |
+> Son kontrol tarihi: 2026-03-01 — 17 uyumsuzluktan **15'i giderilmiştir.**
+
+| # | Dosya A | Dosya B | Uyumsuzluk Türü | Önem | Durum |
+|---|---------|---------|----------------|------|-------|
+| 1 | `README.md` (v2.3.2) | Tüm proje (v2.6.0) | Versiyon drift | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 2 | `config.py:validate_critical_settings()` | Tüm proje (httpx) | Senkron `requests` kullanımı | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 3 | `environment.yml` | `config.py` | `requests` bağımlılığı kaldırılmadı | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 4 | `memory.py` (threading.RLock) | Async mimari | RLock async bağlamda I/O yapıyor | 🟡 ORTA | ⚠️ Açık |
+| 5 | `web_server.py` (asyncio.Lock module-level) | Python <3.10 uyumu | Loop bağımsız lock oluşturma | 🟡 ORTA | ✅ Geçersiz |
+| 6 | `README.md` | `web_server.py`, `memory.py`, `config.py` | Yeni özellikler belgelenmemiş | 🟡 ORTA | ✅ Düzeltildi |
+| 7 | `tests/test_sidar.py` | `memory.py` (session API) | Session lifecycle testleri eksik | 🟡 ORTA | ✅ Düzeltildi |
+| 8 | `web_search.py:search_docs()` | DuckDuckGo motoru | `site:` OR operatörü DDG'de sınırlı | 🟢 DÜŞÜK | ✅ Düzeltildi |
+| 9 | `sidar_agent.py:163` (greedy regex) | JSON çıktısı veren LLM | Açgözlü `\{.*\}` regex yanlış JSON yakalayabilir | 🔴 KRİTİK | ✅ Düzeltildi |
+| 10 | `llm_client.py:129` (UTF-8 errors="replace") | Türkçe/multibyte içerik | TCP sınırında multibyte karakter sessizce bozulur | 🔴 KRİTİK | ✅ Düzeltildi |
+| 11 | `code_manager.py:208` (hardcoded image) | `config.py` (DOCKER_PYTHON_IMAGE) | Docker image özelleştirilemez | 🔴 KRİTİK | ✅ Düzeltildi |
+| 12 | `memory.py:170` (mesaj sayısı limiti) | LLM context window | Token sayısı kontrolsüz büyüyebilir | 🔴 KRİTİK | ✅ Düzeltildi |
+| 13 | `auto_handle.py:156` (no null check) | `SystemHealthManager` init | health=None durumunda AttributeError | 🔴 KRİTİK | ✅ Düzeltildi |
+| 14 | `github_manager.py:148` (uzantısız bypass) | `SAFE_TEXT_EXTENSIONS` whitelist | Extensionless binary dosyaları filtreden kaçar | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 15 | `web_server.py:89-91` (TOCTOU) | Rate limit mantığı | Eş zamanlı istek check-write atomik değil | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 16 | `rag.py:287` (delete+upsert) | ChromaDB collection | Eş zamanlı güncelleme race condition | 🔴 YÜKSEK | ✅ Düzeltildi |
+| 17 | `definitions.py:23` (eğitim tarihi) | Claude Sonnet 4.6 (Aug 2025) | Yanlış bilgi sınırı yorumu | 🟢 DÜŞÜK | ✅ Düzeltildi |
+
+**Notlar:**
+- **#5 (Geçersiz):** Proje `python=3.11` gerektirir (bkz. `environment.yml:6`). Python 3.10+ ile `asyncio.Lock()` event loop dışında oluşturulabilir; sorun geçersizdir.
+- **#4 (Açık):** `threading.RLock` + `_save()` çağrısı event loop'u teorik olarak bloklayabilir. Ancak JSON I/O süresi ihmal edilebilir düzeyde olduğundan pratik etkisi minimal. `asyncio.to_thread(self._save)` ile iyileştirilebilir.
 
 ---
 
@@ -1284,7 +1290,7 @@ def _is_prerelease(version: str) -> bool:
 |-------|----------|---------------|-------|
 | `python-dotenv` | ≥1.0.0 | `config.py` | ✅ Aktif |
 | `pyyaml` | ≥6.0.1 | `Dockerfile` build | ✅ Aktif |
-| `requests` | ≥2.31.0 | `config.py:validate_critical_settings()` | ⚠️ Tek kullanım — httpx'e geçilebilir |
+| ~~`requests`~~ | — | *Kaldırıldı* | ✅ Tüm HTTP httpx ile yapılıyor |
 | `httpx` | ≥0.25.0 | LLMClient, WebSearch, PackageInfo, RAG | ✅ Ana HTTP kütüphanesi |
 | `pydantic` | ≥2.4.0 | `ToolCall` modeli, validation | ✅ v2 API doğru |
 | `torch` | ≥2.4.0 | GPU embedding, CUDA kontrolü | ✅ CUDA 12.1 wheel |

@@ -22,6 +22,14 @@ class GitHubManager:
         ".sql", ".env", ".example", ".gitignore", ".dockerignore"
     }
 
+    # Uzantısız güvenli dosya isimleri (küçük harfle karşılaştırılır)
+    SAFE_EXTENSIONLESS = {
+        "makefile", "dockerfile", "procfile", "vagrantfile",
+        "rakefile", "jenkinsfile", "gemfile", "brewfile",
+        "cmakelists", "gradlew", "mvnw", "license", "changelog",
+        "readme", "authors", "contributors", "notice",
+    }
+
     def __init__(self, token: str, repo_name: str = "") -> None:
         self.token = token
         self.repo_name = repo_name
@@ -144,9 +152,20 @@ class GitHubManager:
             if "." in file_name:
                 extension = "." + file_name.split(".")[-1]
 
-            # Uzantı güvenli listede değilse ve bilinen bir uzantısız dosya değilse reddet
-            if extension and extension not in self.SAFE_TEXT_EXTENSIONS:
-                 return False, f"⚠ Güvenlik/Hata Koruması: '{file_name}' dosyasının binary (ikili) veya desteklenmeyen bir veri formatı (.png, .zip, vb.) olduğu varsayılarak okuma işlemi iptal edildi. Yalnızca metin tabanlı dosyalar okunabilir."
+            # Uzantısız dosyalar için whitelist kontrolü
+            if not extension:
+                if file_name.lower() not in self.SAFE_EXTENSIONLESS:
+                    return False, (
+                        f"⚠ Güvenlik: '{content_file.name}' uzantısız dosya güvenli listede değil. "
+                        f"İzin verilen uzantısız dosyalar: Makefile, Dockerfile, Procfile vb."
+                    )
+            # Uzantılı dosyalar için güvenli uzantı kontrolü
+            elif extension not in self.SAFE_TEXT_EXTENSIONS:
+                return False, (
+                    f"⚠ Güvenlik/Hata Koruması: '{file_name}' dosyasının binary (ikili) veya "
+                    f"desteklenmeyen bir veri formatı (.png, .zip, vb.) olduğu varsayılarak "
+                    f"okuma işlemi iptal edildi. Yalnızca metin tabanlı dosyalar okunabilir."
+                )
 
             # Güvenli olduğuna ikna olduysak, decode et
             decoded = content_file.decoded_content.decode("utf-8", errors="replace")

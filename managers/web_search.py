@@ -243,10 +243,20 @@ class WebSearchManager:
     # ─────────────────────────────────────────────
 
     async def search_docs(self, library: str, topic: str = "") -> Tuple[bool, str]:
-        q = f"{library} documentation {topic}".strip()
-        q += " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
+        base = f"{library} {topic} documentation".strip()
+        # Tavily veya Google varsa site: filtresi ekle; DDG'de OR operatörü güvenilmez
+        if self.tavily_key or (self.google_key and self.google_cx):
+            q = (base + " site:docs.python.org OR site:pypi.org"
+                 " OR site:readthedocs.io OR site:github.com")
+        else:
+            # DDG: site: filtresi yerine hedef odaklı arama terimi kullan
+            q = f"{library} {topic} official docs reference".strip()
         return await self.search(q, max_results=5)
 
     async def search_stackoverflow(self, query: str) -> Tuple[bool, str]:
-        q = f"site:stackoverflow.com {query}"
+        # site:stackoverflow.com Tavily/Google'da çalışır; DDG'de kısmen desteklenir
+        if self.tavily_key or (self.google_key and self.google_cx):
+            q = f"site:stackoverflow.com {query}"
+        else:
+            q = f"stackoverflow {query}"
         return await self.search(q, max_results=5)
