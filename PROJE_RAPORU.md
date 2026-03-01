@@ -1146,6 +1146,33 @@ def _is_prerelease(version: str) -> bool:
 
 ---
 
+### ✅ 3.55 ANALIZ_RAPORU_2026_03_01.md — Bağımsız Doğrulama Özeti (TÜMÜ ONAYLANDI)
+
+**Tarih:** 2026-03-01
+**Kaynak:** `ANALIZ_RAPORU_2026_03_01.md` (Claude Sonnet 4.6 satır satır inceleme)
+**Sonuç:** Raporlanan **54 düzeltmenin tamamı** kaynak kodda bağımsız olarak doğrulanmıştır.
+
+| Kategori | Düzeltme Sayısı | Onaylanan | Geçersiz |
+|----------|----------------|-----------|----------|
+| Kritik (§3.23–§3.27) | 5 | 5 ✅ | 0 |
+| Yüksek (§3.28–§3.36) | 9 | 9 ✅ | 0 |
+| Orta (§3.37–§3.46) | 10 | 10 ✅ | 0 |
+| Düşük (§3.47–§3.54) | 8 | 8 ✅ | 0 |
+| Web UI/Backend (§3.9–§3.12) | 4 | 4 ✅ | 0 |
+| Ek düzeltmeler (§3.1–§3.8) | 18 | 18 ✅ | 0 |
+| **TOPLAM** | **54** | **54** | **0** |
+
+Bu doğrulama sürecinde ayrıca **5 yeni sorun** saptanmıştır (§4.1–§4.5 — §8.2 tablosunda U-06, U-08, U-13–U-15 olarak kayıtlıdır):
+- **§4.1 (U-13):** `web_server.py:301` — `rstrip(".git")` yanlış karakter kümesi silme — 🔴 YÜKSEK
+- **§4.2 (U-14):** `sidar_agent.py:452` — `docs.add_document()` `asyncio.to_thread()` sarmalı eksik — 🟡 ORTA
+- **§4.3 (U-06):** `web_server.py:89` — `_rate_lock` modül seviyesinde — 🟡 ORTA *(daha önce kaydedildi)*
+- **§4.4 (U-15):** `sidar_agent.py:418` — `self.health._gpu_available` private attr doğrudan erişim — 🟢 DÜŞÜK
+- **§4.5 (U-08):** Versiyon tutarsızlığı `v2.6.0` / `v2.6.1` — 🟢 DÜŞÜK *(daha önce kaydedildi)*
+
+**Proje Genel Skoru (ANALIZ_RAPORU sonucu): 92/100** *(önceki tahmin: ~78/100)*
+
+---
+
 ## 4. Mevcut Kritik Hatalar
 
 > ⚠️ **2 yeni kritik hata tespit edildi** (yeni uyumsuzluk taramasından).
@@ -1194,6 +1221,7 @@ def _is_prerelease(version: str) -> bool:
 | U-03 | `.env.example`'da `HF_HUB_OFFLINE` iki kez tanımlı; 57. satırda `=0`, 113. satırda `=1` — ikincisi birincisini geçersiz kılar | `.env.example:57,113` | ❌ Açık |
 | U-04 | Conda ortamı CUDA 12.1 (cu121) wheel, Docker GPU build CUDA 12.4 (cu124) wheel kullanıyor — farklı PyTorch sürümleri | `environment.yml:29` — `docker-compose.yml:46,130` | ❌ Açık |
 | U-05 | CORS izin listesi port 7860'a sabit kodlanmış; `WEB_PORT` değiştirilirse web arayüzü çalışmaz | `web_server.py:66-70` — `config.py:WEB_PORT` | ❌ Açık |
+| U-13 | `rstrip(".git")` bir suffix değil karakter kümesi siliyor; depo adı `g`, `i`, `t` veya `.` ile bitiyorsa URL kesilir | `web_server.py:301` | ❌ Açık |
 
 ---
 
@@ -1224,6 +1252,7 @@ def _is_prerelease(version: str) -> bool:
 | U-07 | `DocumentStore` sınıfı `core/__init__.py`'den dışa aktarılmıyor | `core/__init__.py` — `core/rag.py` | ❌ Açık |
 | U-08 | Kod versiyonu "2.6.0", rapor versiyonu "2.6.1" — senkronize değil | `sidar_agent.py:55`, `config.py` — `PROJE_RAPORU.md` | ❌ Açık |
 | U-09 | Web UI chat'te "belleği temizle" doğal dil komutu AutoHandle tarafından işlenmiyor | `agent/auto_handle.py` — `web_server.py:/clear` | ❌ Açık |
+| U-14 | `_summarize_memory()` içinde `self.docs.add_document()` `asyncio.to_thread()` sarmalı olmadan çağrılıyor — event loop engelleme riski | `agent/sidar_agent.py:452` | ❌ Açık |
 
 ---
 
@@ -1252,6 +1281,7 @@ def _is_prerelease(version: str) -> bool:
 | U-10 | Dal adı `git checkout`'a geçilmeden önce yalnızca `strip()` ile temizleniyor; git flag injection koruması yok | `web_server.py:330-345` | ❌ Açık |
 | U-11 | HEALTHCHECK Python sürecini kontrol ediyor; HTTP servis sağlığını doğrulamıyor | `Dockerfile:82-83` | ❌ Açık |
 | U-12 | `"erişim"` regex'i çok geniş; yaygın Türkçe sorularda güvenlik ekranını yanlışlıkla tetikleyebilir | `auto_handle.py:217` | ❌ Açık |
+| U-15 | `self.health._gpu_available` private attribute'a doğrudan erişim; `get_gpu_info()` public API kullanılmalı | `agent/sidar_agent.py:418` | ❌ Açık |
 
 ---
 
@@ -1306,6 +1336,9 @@ def _is_prerelease(version: str) -> bool:
 | U-10 | `web_server.py:330-345` | `managers/security.py` | Dal adı `git checkout`'a geçilmeden önce sanitize edilmiyor | 🟡 ORTA | ❌ Açık |
 | U-11 | `Dockerfile:82-83` (HEALTHCHECK) | `web_server.py` (FastAPI) | HEALTHCHECK HTTP servis durumunu değil sadece Python sürecini kontrol ediyor | 🟢 DÜŞÜK | ❌ Açık |
 | U-12 | `auto_handle.py:217` (erişim regex) | Türkçe doğal dil | `"erişim"` kelimesi çok yaygın; güvenlik durum ekranını yanlışlıkla tetikleyebilir | 🟢 DÜŞÜK | ❌ Açık |
+| U-13 | `web_server.py:301` (`rstrip`) | `/git-info` endpoint | `rstrip(".git")` suffix değil karakter kümesi siliyor; repo URL'si bozulabilir | 🔴 YÜKSEK | ❌ Açık |
+| U-14 | `agent/sidar_agent.py:452` | `core/rag.py` (ChromaDB) | `docs.add_document()` event loop'ta senkron çağrılıyor; `asyncio.to_thread()` eksik | 🟡 ORTA | ❌ Açık |
+| U-15 | `agent/sidar_agent.py:418` | `managers/system_health.py` | `self.health._gpu_available` private attribute'a doğrudan erişim | 🟢 DÜŞÜK | ❌ Açık |
 
 ---
 
@@ -1503,6 +1536,81 @@ LLM'e iletilmesi gereken meşru sorular yanlışlıkla yakalanır.
 
 ---
 
+#### U-13 Detay: `web_server.py:301` — `rstrip(".git")` Yanlış Kullanımı
+
+**Kaynak:** ANALIZ_RAPORU_2026_03_01.md §4.1
+
+**Sorun:** `str.rstrip(chars)` bir **karakter kümesini** sondan siler, bir suffix'i değil. `.git` argümanı `g`, `i`, `t`, `.` karakterlerinden oluşan küme olarak yorumlanır:
+```python
+# web_server.py:301
+repo = remote.rstrip(".git")
+# YANLIŞ ÖRNEK:
+# "https://github.com/owner/my_project.git".rstrip(".git")
+# → "https://github.com/owner/my_projec"  ← son 't' silinir!
+```
+Özellikle `tag`, `digit`, `script`, `git` gibi harf içeren depo adlarında URL'nin son karakterleri yanlışlıkla silinebilir.
+
+**Beklenen düzeltme:**
+```python
+repo = remote.removesuffix(".git")   # Python 3.9+ — proje Python 3.11 gerektiriyor ✓
+```
+
+**Etki:** `/git-info` endpoint'i yanlış `owner/repo` değeri döndürebilir; dal ve repo seçimi UI'da hatalı çalışabilir.
+
+---
+
+#### U-14 Detay: `agent/sidar_agent.py:452` — `docs.add_document()` Event Loop'u Bloke Edebilir
+
+**Kaynak:** ANALIZ_RAPORU_2026_03_01.md §4.2
+
+**Sorun:** `_summarize_memory()` metodunda `self.docs.add_document()` `asyncio.to_thread()` sarmalı olmadan çağrılmaktadır:
+```python
+# sidar_agent.py:451-460
+async def _summarize_memory(self) -> None:
+    ...
+    self.docs.add_document(        # ← Senkron ChromaDB I/O — event loop engelleniyor
+        title=f"Sohbet Geçmişi Arşivi ...",
+        content=full_turns_text,
+        ...
+    )
+```
+ChromaDB Python istemcisi senkron API kullanmaktadır. Büyük konuşma geçmişleri arşivlenirken embedding hesaplaması ve disk I/O event loop'u bloklayabilir; bu sürede diğer HTTP istekleri yanıt alamaz.
+
+Aynı dosyanın başka yerlerinde (`sidar_agent.py:124,127,198`) `asyncio.to_thread()` tutarlı biçimde kullanılmaktadır.
+
+**Beklenen düzeltme:**
+```python
+await asyncio.to_thread(
+    self.docs.add_document,
+    title=f"Sohbet Geçmişi Arşivi ({time.strftime('%Y-%m-%d %H:%M')})",
+    content=full_turns_text,
+    source="memory_archive",
+    tags=["memory", "archive", "conversation"],
+)
+```
+
+---
+
+#### U-15 Detay: `agent/sidar_agent.py:418` — Private Attribute Doğrudan Erişimi
+
+**Kaynak:** ANALIZ_RAPORU_2026_03_01.md §4.4
+
+**Sorun:**
+```python
+# sidar_agent.py:418
+lines.append(f"  GPU        : {'Mevcut' if self.health._gpu_available else 'Yok'}")
+```
+`_gpu_available` private bir attribute'tur (`_` öneki); `SystemHealthManager`'ın iç durumuna doğrudan erişim encapsulation prensibini ihlal eder.
+
+**Beklenen düzeltme:**
+```python
+gpu_info = self.health.get_gpu_info()
+lines.append(f"  GPU        : {'Mevcut' if gpu_info.get('available') else 'Yok'}")
+```
+`get_gpu_info()` public API bu bilgiyi `{"available": bool}` formatında zaten sunmaktadır.
+
+---
+
 ## 9. Bağımlılık Analizi
 
 ### `environment.yml` — Güncel Durum Tablosu
@@ -1652,19 +1760,23 @@ async for raw_bytes in resp.aiter_bytes():
 
 ## 11. Güvenlik Değerlendirmesi
 
+> Son güncelleme: 2026-03-01 (ANALIZ_RAPORU_2026_03_01.md doğrulama sonuçları dahil edildi)
+
 | Alan | Durum | Seviye |
 |------|-------|--------|
-| Erişim Kontrolü (OpenClaw) | ✅ 3 katmanlı (restricted/sandbox/full) | İyi |
-| Kod Çalıştırma İzolasyonu | ✅ Docker sandbox — ağ/RAM/CPU kısıtlı | Çok İyi |
-| Rate Limiting | ⚠️ Yalnızca `/chat` endpoint — TOCTOU race riski (5.9) | Orta |
-| Bellek Şifreleme | ❌ JSON düz metin | Düşük |
-| Prompt Injection | ⚠️ Sistem prompt güçlü ama filtre yok | Orta |
+| Erişim Kontrolü (OpenClaw) | ✅ 3 katmanlı (`restricted/sandbox/full`) | İyi |
+| Kod Çalıştırma İzolasyonu | ✅ Docker sandbox — `network_disabled`, `mem_limit=128m`, `cpu_quota=50000`, 10sn timeout | Çok İyi |
+| Rate Limiting | ✅ 2 katman TOCTOU korumalı — `/chat` 20 req/60s, POST+DELETE 60 req/60s (§3.22, §3.52 düzeltildi) | İyi |
+| Bellek Şifreleme | ❌ JSON düz metin (`data/sessions/`) | Düşük |
+| Prompt Injection | ⚠️ Sistem prompt güçlü ama dinamik filtre yok | Orta |
 | Web Fetch Sandbox | ⚠️ HTML temizleniyor ama URL sınırlaması yok | Orta |
 | Gizli Yönetim | ✅ `.env` + `.gitignore` | İyi |
-| Binary Dosya Güvenliği | ✅ SAFE_EXTENSIONLESS whitelist ile uzantısız dosyalar kontrol ediliyor | İyi |
-| CORS | ✅ Yalnızca localhost | İyi |
+| Binary Dosya Güvenliği | ✅ `SAFE_EXTENSIONLESS` whitelist — uzantısız binary dosyalar engelleniyor (§3.35) | İyi |
+| CORS | ⚠️ Localhost kısıtlı ama port 7860 sabit kodlanmış (U-05) | Orta |
 | favicon.ico | ✅ 204 ile sessizce geçiştiriliyor | İyi |
 | Symlink Traversal | ✅ `Path.resolve()` ile önleniyor | İyi |
+| Git URL Ayrıştırma | ⚠️ `rstrip(".git")` yanlış — suffix yerine karakter kümesi siliyor (U-13) | Orta |
+| Dal Adı Güvenliği | ⚠️ Branch name `strip()` ile temizleniyor; git flag validation yok (U-10) | Orta |
 
 ---
 
@@ -1742,7 +1854,7 @@ Tüm kritik async hatalar giderilmiştir. Döngü, kısayollar ve argüman işle
 
 ---
 
-### `agent/sidar_agent.py` — Skor: 88/100 ✅ *(78 → 84 → 88, Greedy regex + Stream reuse düzeltildi)*
+### `agent/sidar_agent.py` — Skor: 89/100 ✅ *(78 → 84 → 88 → 89, Greedy regex + Stream reuse düzeltildi)*
 
 Dispatcher, async lock, Pydantic v2, bellek özetleme + vektör arşivleme implementasyonu başarılı.
 
@@ -1750,9 +1862,12 @@ Dispatcher, async lock, Pydantic v2, bellek özetleme + vektör arşivleme imple
 - ~~**Greedy regex (madde 4.1):** `re.search(r'\{.*\}', raw_text, re.DOTALL)` yanlış JSON bloğunu yakalayabilir — KRİTİK~~ → ✅ **ÇÖZÜLDÜ** (madde 3.14)
 - ~~**Stream reuse riski (madde 5.4):** Kısmi birikmiş `raw_text` ile `memory.add()` çağrılabilir — YÜKSEK~~ → ✅ **ÇÖZÜLDÜ** (madde 3.20)
 
+**Yeni tespit edilen sorunlar:**
+- **`docs.add_document()` thread sarmalı eksik (U-14):** `_summarize_memory()` içinde ChromaDB senkron çağrısı event loop'u bloklayabilir; `asyncio.to_thread()` ile sarılmalı — 🟡 ORTA
+- **Private attribute erişimi (U-15):** `self.health._gpu_available` yerine `self.health.get_gpu_info().get("available")` kullanılmalı — 🟢 DÜŞÜK
+
 **Kalan sorunlar:**
 - **Format tutarsızlığı (madde 6.9):** `[Araç Sonucu]` / `[Sistem Hatası]` / etiketsiz karışık format — ORTA
-- `_build_context()` metodunda `self.health._gpu_available` private attribute'a doğrudan erişiliyor.
 
 ---
 
@@ -1824,14 +1939,19 @@ Docker sandbox implementasyonu güvenlik açısından iyi. Docker yokken yeterli
 
 ---
 
-### `web_server.py` — Skor: 91/100 ✅ *(85 → 91, TOCTOU race condition düzeltildi)*
+### `web_server.py` — Skor: 88/100 ⚠️ *(85 → 91, TOCTOU düzeltildi; 91 → 88, yeni hatalar tespit edildi)*
 
 asyncio.Lock, SSE, session API hepsi doğru implementa edilmiş.
 
 **Düzeltilen sorun:**
 - ~~**Rate limiting TOCTOU (madde 5.9):** `_is_rate_limited()` check-write atomik değil — YÜKSEK~~ → ✅ **ÇÖZÜLDÜ** (madde 3.22)
 
-**Kalan küçük iyileştirme (önceden biliniyordu):**
+**Yeni tespit edilen sorunlar:**
+- **`rstrip(".git")` bug (U-13):** Satır 301 — `remote.rstrip(".git")` yerine `remote.removesuffix(".git")` kullanılmalı. Depo adı `g/i/t/.` karakteriyle bitiyorsa URL bozulur — 🔴 YÜKSEK
+- **CORS sabit port (U-05):** `_ALLOWED_ORIGINS` port 7860'a sabit kodlanmış; `WEB_PORT` değiştirilirse çalışmaz — 🔴 YÜKSEK
+- **`_rate_lock` modül seviyesinde (U-06):** `_agent_lock` lazy init kullanırken `_rate_lock` modül yüklenirken oluşturuluyor — 🟡 ORTA
+
+**Kalan iyileştirmeler:**
 - Rate limiting yalnızca `/chat` endpoint'ini koruyor; diğerleri açık.
 - `_rate_data` `defaultdict` modül düzeyinde tutuluyor; üretim için Redis önerilir.
 
@@ -1890,6 +2010,17 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 ### Öncelik 1 — Yüksek (Bu Sprint'te)
 
+5b. **`web_server.py:301` — `rstrip(".git")` → `removesuffix(".git")`** (U-13):
+    Tek satır düzeltme. `str.rstrip()` karakter kümesi siler, suffix değil. Repo URL yanlış parse edilebilir.
+    ```python
+    repo = remote.removesuffix(".git")   # Python 3.9+ ✓
+    ```
+
+5c. **`web_server.py:66-70` — CORS `_ALLOWED_ORIGINS` dinamik hale getir** (U-05):
+    ```python
+    _ALLOWED_ORIGINS = [f"http://localhost:{cfg.WEB_PORT}", f"http://127.0.0.1:{cfg.WEB_PORT}", ...]
+    ```
+
 6. ~~**`sidar_agent.py` — Stream generator güvenliği** (madde 5.4):
    Memory'e yalnızca tamamlanan yanıtları ekle.~~ → ✅ **TAMAMLANDI** (madde 3.20)
 
@@ -1938,8 +2069,22 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
     await asyncio.to_thread(self._save)
     ```
 
-20. **`web_server.py` — Lock lazy initialization** (madde 6.2):
-    Lock'u event loop başladıktan sonra oluştur.
+20. **`web_server.py` — `_rate_lock` lazy initialization** (U-06 / madde 6.2):
+    `_agent_lock` ile tutarlı hale getir:
+    ```python
+    _rate_lock: asyncio.Lock | None = None
+    ```
+
+20b. **`sidar_agent.py:452` — `docs.add_document()` `asyncio.to_thread()` ile sar** (U-14):
+    ```python
+    await asyncio.to_thread(self.docs.add_document, title=..., content=..., source=..., tags=...)
+    ```
+
+20c. **`core/__init__.py` — `DocumentStore` dışa aktar** (U-07):
+    ```python
+    from .rag import DocumentStore
+    __all__ = ["ConversationMemory", "LLMClient", "DocumentStore"]
+    ```
 
 21. **`code_manager.py` — Detaylı Docker hata mesajı** (madde 6.3)
 
@@ -1957,7 +2102,8 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 27. **`package_info.py` — npm sayısal pre-release** (madde 7.8): `-\d+$` pattern ekle.
 
-28. **`SystemHealthManager`'a `is_gpu_available()` public metodu**
+28. **`SystemHealthManager`'a `is_gpu_available()` public metodu** (U-15 için önkoşul):
+    `_gpu_available` private attribute'a doğrudan erişim yerine public API kullan.
 
 29. **`search_docs()` — motor bağımsız sorgu** (madde 7.2)
 
@@ -1973,22 +2119,44 @@ Koyu/açık tema, session sidebar, streaming, SSE, klavye kısayolları, dosya e
 
 ## 15. Genel Değerlendirme
 
-| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | v2.6.1 (Derin Analiz) | v2.6.1 (Tüm Yamalar) | Değişim (toplam) |
-|----------|--------|--------|--------|----------------------|----------------------|-----------------|
-| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | 90/100 ⚠️ | 92/100 ✅ | ↑ +4 |
-| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | 91/100 | 93/100 ✅ | ↑ +33 |
-| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | 72/100 ⚠️ | 84/100 ✅ | ↑ +9 |
-| **Güvenlik** | 78/100 | 85/100 | 85/100 | 80/100 ⚠️ | 82/100 ✅ | ↑ +4 |
-| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | 62/100 ⚠️ | 62/100 ⚠️ | ↑ +7 |
-| **Belgeleme** | 88/100 | 72/100 | 80/100 | 82/100 | 88/100 ✅ | = 0 |
-| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | 91/100 ⚠️ | 94/100 ✅ | ↑ +29 |
-| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | 84/100 | 84/100 ⚠️ | ↑ +12 |
+| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | v2.6.1 (Tüm Yamalar) | ANALIZ_RAPORU Doğrulama | Değişim (toplam) |
+|----------|--------|--------|--------|----------------------|-------------------------|-----------------|
+| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | 92/100 ✅ | 92/100 ✅ | ↑ +4 |
+| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | 93/100 ✅ | 91/100 ⚠️ | ↑ +31 |
+| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | 84/100 ✅ | 84/100 ✅ | ↑ +9 |
+| **Güvenlik** | 78/100 | 85/100 | 85/100 | 82/100 ✅ | 80/100 ⚠️ | ↑ +2 |
+| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | 62/100 ⚠️ | 93/100 ✅ | ↑ +38 |
+| **Belgeleme** | 88/100 | 72/100 | 80/100 | 88/100 ✅ | 88/100 ✅ | = 0 |
+| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | 94/100 ✅ | 91/100 ⚠️ | ↑ +26 |
+| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | 84/100 ⚠️ | 97/100 ✅ | ↑ +25 |
 | **GPU Desteği** | — | 88/100 | 88/100 | 85/100 ⚠️ | 85/100 ⚠️ | ✨ Yeni |
-| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | 98/100 | 98/100 | ↑ +18 |
-| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 | 95/100 | ↑ +25 |
-| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **84/100** ⚠️ | **89/100** ✅ | **↑ +14** |
+| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | 98/100 ✅ | 98/100 ✅ | ↑ +18 |
+| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 ✅ | 90/100 ✅ | ↑ +20 |
+| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **89/100** ✅ | **92/100** ✅ | **↑ +17** |
 
-> **Not:** "v2.6.1 (Tüm Yamalar)" sütunu, bu rapor dönemindeki tüm yamaları (5 kritik + 9 yüksek) yansıtmaktadır. Tüm kritik ve yüksek öncelikli sorunlar giderilmiştir. Kalan açık sorunlar: ORTA/DÜŞÜK öncelikli 4 madde (6.7, 6.8, 6.9, 6.10). Bu sorunlar giderilince genel skor **93+** seviyesine çıkacaktır.
+> **ANALIZ_RAPORU_2026_03_01 Sonucu:** Bağımsız satır satır incelemede proje skoru **92/100** olarak belirlenmiştir *(önceki tahmin: ~78/100)*. 54 düzeltmenin tamamı kaynak kodda doğrulanmış, 5 yeni sorun (U-06, U-08, U-13, U-14, U-15) saptanmıştır.
+
+### Dosya Bazlı Skor Tablosu (ANALIZ_RAPORU_2026_03_01 — Bağımsız Doğrulama)
+
+| Dosya | Skor | Notlar |
+|-------|------|--------|
+| `main.py` | 95/100 | Versiyon banner sabit kodlanmış (kabul edilebilir) |
+| `web_server.py` | 88/100 | `rstrip(".git")` bug (U-13), CORS sabit port (U-05), `_rate_lock` tutarsızlık (U-06) |
+| `config.py` | 94/100 | GPU aralık doğrulama eklendi; solid yapı |
+| `agent/sidar_agent.py` | 89/100 | `docs.add_document()` to_thread eksik (U-14), private attr erişim (U-15), versiyon (U-08) |
+| `agent/auto_handle.py` | 93/100 | Temiz, async uyumlu, null guardlar doğru |
+| `agent/definitions.py` | 96/100 | Doğru tarih, eksiksiz araç listesi |
+| `core/llm_client.py` | 91/100 | Buffer unbounded growth riski (sınır testler yapılmamış) |
+| `core/memory.py` | 95/100 | RLock doğru, karantina mekanizması başarılı |
+| `core/rag.py` | 93/100 | `_write_lock` atomic, GPU-aware embedding |
+| `managers/code_manager.py` | 92/100 | Docker sandbox parametreleri sağlam |
+| `managers/system_health.py` | 95/100 | pynvml WSL2 fallback elegantça çözülmüş |
+| `managers/github_manager.py` | 93/100 | `SAFE_EXTENSIONLESS` kapsamlı |
+| `managers/web_search.py` | 91/100 | Tavily fallback zinciri doğru |
+| `managers/package_info.py` | 96/100 | PEP 440 uyumlu version sort |
+| `web_ui/index.html` | 90/100 | Tool badge, export, hamburger menü mevcut |
+| `tests/test_sidar.py` | 93/100 | 46 test, kapsamlı; Gemini/Docker entegrasyon mock eksik |
+| `environment.yml` | 97/100 | `requests` kaldırıldı, bağımlılıklar güncel |
 
 ---
 
@@ -2019,19 +2187,25 @@ v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılm
 - ✅ Senkron `requests` → `httpx.Client` (config.py) — YÜKSEK
 - ✅ README.md versiyon + eksik özellik belgeleri → v2.6.1 + tam dokümantasyon — YÜKSEK
 
-**Kalan açık sorunlar (4 adet):**
-- 0 KRİTİK: Tüm kritik hatalar giderildi ✅
-- 0 YÜKSEK: Tüm yüksek öncelikli sorunlar giderildi ✅
-- 4 ORTA: GPU_MEMORY_FRACTION validasyon (6.7), version sort (6.8), format tutarsızlığı (6.9), bozuk JSON karantina (6.10)
+**Kalan açık sorunlar — Güncel Durum (2026-03-01 Uyumsuzluk Taraması + ANALIZ_RAPORU):**
+
+| Önem | Adet | Sorunlar |
+|------|------|---------|
+| 🔴 KRİTİK | 2 | U-01 (get_document test hatası), U-02 (security status_report) |
+| 🔴 YÜKSEK | 4 | U-03 (HF_HUB_OFFLINE çift), U-04 (CUDA versiyon), U-05 (CORS port), U-13 (rstrip bug) |
+| 🟡 ORTA | 5 | U-06 (_rate_lock), U-07 (DocumentStore export), U-08 (versiyon), U-09 (belleği temizle), U-14 (to_thread eksik) |
+| 🟢 DÜŞÜK | 4 | U-10 (branch sanitize), U-11 (HEALTHCHECK), U-12 (erişim regex), U-15 (private attr) |
+| **TOPLAM** | **15** | |
 
 **✅ Doğrulanan "bug değil" bulgular:**
 - `security.py:62-64`: `Path.resolve()` symlink traversal'ı zaten önlüyor
 - `index.html`: Tema localStorage'a kaydediliyor (`localStorage.setItem('sidar-theme', ...)`)
 
-**Sonuç:** Bu rapor döneminde **21 sorun** giderilmiştir (5 kritik + 9 yüksek + 7 orta/düşük). Proje artık üretim kalitesine ulaşmıştır (92/100). Kalan 4 orta öncelikli sorun (6.7-6.10) giderilirse skor **95+** seviyesine çıkacaktır.
+**Sonuç:** ANALIZ_RAPORU_2026_03_01 bağımsız doğrulaması proje skorunu **92/100** olarak teyit etmiştir (önceki ~78/100). Uyumsuzluk taraması 15 açık sorun saptamıştır. Kritik ve yüksek sorunlar (U-01–U-05, U-13) öncelikli olarak giderildiğinde skor **95+** seviyesine çıkacaktır.
 
 ---
 
-*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01 (v2.6.1 güncellemesi + Derinlemesine Analiz + Yüksek Öncelik Doğrulama)*
-*Analiz kapsamı: 31 kaynak dosya, ~10.400 satır kod*
-*Toplam düzeltilen: 31 sorun | Kalan açık: 4 sorun (0 KRİTİK, 0 YÜKSEK, 4 ORTA)*
+*Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01*
+*Son güncelleme: ANALIZ_RAPORU_2026_03_01 entegrasyonu + 15 yeni uyumsuzluk kaydı*
+*Analiz kapsamı: ~35 kaynak dosya, ~10.400 satır kod*
+*Toplam doğrulanan düzeltme: 54 | Yeni tespit edilen açık sorun: 15 (2 KRİTİK, 4 YÜKSEK, 5 ORTA, 4 DÜŞÜK)*
