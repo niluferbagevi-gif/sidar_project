@@ -1,10 +1,10 @@
 # SİDAR Projesi — Kapsamlı Kod Analiz Raporu (Güncel)
 
-**Tarih:** 2026-03-01 (Güncelleme: 2026-03-01 — Web UI & Backend Düzeltmeleri + Derinlemesine Analiz + Kritik Hata Doğrulama + Dosyalar Arası Uyumsuzluk Taraması + §8.2 Uyumsuzluk Yamaları — Tüm U-01–U-15 Kapatıldı)
+**Tarih:** 2026-03-01 (Son güncelleme: 2026-03-01 — Eksiksiz Satır Satır Doğrulama + 3 Yeni Sorun [V-01–V-03] — §3.1–§3.73 tamamı doğrulandı)
 **Analiz Eden:** Claude Sonnet 4.6 (Otomatik Denetim)
 **Versiyon:** SidarAgent v2.6.1 ✅ (kod + rapor senkronize — U-08 giderildi)
 **Toplam Dosya:** ~35 kaynak dosyası, ~10.400+ satır kod
-**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01 / Derinlemesine analiz: 2026-03-01 / Uyumsuzluk taraması: 2026-03-01 / U-01–U-15 yamaları: 2026-03-01
+**Önceki Rapor:** 2026-02-26 (v2.5.0 analizi) / İlk v2.6.0 raporu: 2026-03-01 / Derinlemesine analiz: 2026-03-01 / Uyumsuzluk taraması: 2026-03-01 / U-01–U-15 yamaları: 2026-03-01 / V-01–V-03 doğrulama: 2026-03-01
 
 ---
 
@@ -26,6 +26,7 @@
 14. [Geliştirme Önerileri](#14-geliştirme-önerileri-öncelik-sırasıyla)
 15. [Genel Değerlendirme](#15-genel-değerlendirme)
 16. [Son Satır Satır İnceleme — Yeni Bulgular](#16-son-satır-satır-i̇nceleme--yeni-bulgular)
+17. [Eksiksiz Satır Satır Doğrulama — V-01–V-03 Yeni Bulgular](#17-eksiksiz-satır-satır-doğrulama--v-01v-03-yeni-bulgular-session-6)
 
 ---
 
@@ -1460,9 +1461,16 @@ echo "   ✅ Ollama hazır (${i}s)."
 
 ## 6. Orta Öncelikli Sorunlar
 
-> ✅ **Tüm orta öncelikli sorunlar giderilmiştir.** U-06, U-07, U-08, U-09, U-14 bu oturumda kapatıldı.
+> ⚠️ **2 yeni orta öncelikli sorun tespit edildi** (eksiksiz satır satır doğrulama — 2026-03-01). Önceki tüm orta öncelikli sorunlar hâlâ giderilmiş durumda.
 
-### Tüm Orta Öncelikli Sorunlar (Giderildi)
+### Yeni Açık Orta Öncelikli Sorunlar
+
+| # | Sorun | Dosya:Satır | Durum |
+|---|-------|-------------|-------|
+| V-01 | `main.py:247-621` — 374 satır commented-out dead code; rapor 100/100 iddia etti ama temizlenmedi | `main.py:247-621` | 🟡 AÇIK |
+| V-03 | `web_server.py` git endpoint'leri async handler içinde `subprocess.check_output()` (senkron) kullanıyor — event loop bloke | `web_server.py` (git_info, git_branches, set_branch) | 🟡 AÇIK |
+
+### Önceki Orta Öncelikli Sorunlar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1487,9 +1495,15 @@ echo "   ✅ Ollama hazır (${i}s)."
 
 ## 7. Düşük Öncelikli Sorunlar
 
-> ✅ **Tüm düşük öncelikli sorunlar giderilmiştir.** U-10, U-11, U-12, U-15 bu oturumda kapatıldı.
+> ⚠️ **1 yeni düşük öncelikli sorun tespit edildi** (eksiksiz satır satır doğrulama — 2026-03-01). Önceki tüm düşük öncelikli sorunlar hâlâ giderilmiş durumda.
 
-### Tüm Düşük Öncelikli Sorunlar (Giderildi)
+### Yeni Açık Düşük Öncelikli Sorunlar
+
+| # | Sorun | Dosya:Satır | Durum |
+|---|-------|-------------|-------|
+| V-02 | `config.py` modül docstring "Sürüm: 2.6.0" yazıyor; oysa `VERSION = "2.6.1"` — küçük tutarsızlık | `config.py:1-6` | 🟢 AÇIK |
+
+### Önceki Düşük Öncelikli Sorunlar (Giderildi)
 
 | # | Sorun | Durum |
 |---|-------|-------|
@@ -1511,7 +1525,7 @@ echo "   ✅ Ollama hazır (${i}s)."
 
 ## 8. Dosyalar Arası Uyumsuzluk Tablosu
 
-> Son kontrol tarihi: 2026-03-01 (Son güncelleme: 2026-03-01 — U-01–U-15 Yamaları) — Önceki 17 uyumsuzluktan **17'si**, yeni taramada tespit edilen **15 uyumsuzluktan da 15'i** giderilmiştir. **Toplam: 32/32 uyumsuzluk kapatıldı.**
+> Son kontrol tarihi: 2026-03-01 (Son güncelleme: 2026-03-01 — V-01–V-03 yeni doğrulama) — Önceki 17 uyumsuzluktan **17'si**, U-01–U-15 taramasındaki **15 uyumsuzluktan 15'i** giderilmiştir. Yeni doğrulama taramasında **3 yeni uyumsuzluk (V-01–V-03)** tespit edilmiştir. **Toplam: 32/35 kapatıldı — 3 açık.**
 
 ### 8.1 Önceki Sürümlerde Giderilen Uyumsuzluklar (Kapalı)
 
@@ -1834,6 +1848,101 @@ lines.append(f"  GPU        : {'Mevcut' if gpu_info.get('available') else 'Yok'}
 
 ---
 
+### 8.3 Yeni Doğrulama Taraması — V-01–V-03 (Açık)
+
+> Tespit tarihi: 2026-03-01 (eksiksiz satır satır doğrulama) | **3 yeni uyumsuzluk — 0'ı giderildi.**
+
+| # | Dosya A | Dosya B | Uyumsuzluk Açıklaması | Önem | Durum |
+|---|---------|---------|----------------------|------|-------|
+| V-01 | `main.py:247-621` (374 satır commented-out dead code) | `PROJE_RAPORU.md §13` (main.py 100/100 iddiası) | Rapor "yinelenen kod temizlendi" yazmaktadır; ancak `# """` bloğuyla sarılmış tüm eski implementasyon kopyası hâlâ mevcut | 🟡 ORTA | 🟡 AÇIK |
+| V-02 | `config.py:1-6` (docstring "Sürüm: 2.6.0") | `config.py:VERSION = "2.6.1"` | Modül başlık yorumu eski sürümü gösteriyor — küçük tutarsızlık | 🟢 DÜŞÜK | 🟢 AÇIK |
+| V-03 | `web_server.py:git_info()`, `git_branches()`, `set_branch()` | Async FastAPI mimarisi | Bu üç endpoint `subprocess.check_output()` (senkron) kullanıyor; async handler içinde event loop'u bloklama riski | 🟡 ORTA | 🟡 AÇIK |
+
+#### V-01 Detay: `main.py:247-621` — Commented-Out Dead Code
+
+**Sorun:** `main.py:242-244` satırlarında aktif kod sona erdiği hâlde satır 247'den itibaren 374 satır boyunca eski implementasyonun birebir kopyası yorum bloğu olarak durmaktadır:
+
+```python
+# main.py:242-247 (sorun başlangıcı)
+if __name__ == "__main__":
+    main()
+
+
+# """
+# Sidar Project - Giriş Noktası
+# ...
+```
+
+Rapor §13 main.py girişi "100/100 ✅ — `if __name__ == "__main__": main()` bloğundan sonra kalan sahipsiz yinelenen kod temizlendi" demektedir. Ancak kod incelemesinde satır 247–621 arasında **374 satırlık** eski implementasyonun tam kopyası hâlâ mevcut olduğu doğrulandı.
+
+**Etki:** Çalışma zamanına etkisi yok (yorum satırları Python'da yürütülmez); fakat kod tabanı şişiyor, bakım güçleşiyor ve rapordaki "100/100" değerlendirmesi gerçeği yansıtmıyor.
+
+**Beklenen düzeltme:** `main.py:246-621` arasındaki tüm yorum bloğunun silinmesi.
+
+---
+
+#### V-02 Detay: `config.py` Docstring Versiyon Uyumsuzluğu
+
+**Sorun:**
+```python
+# config.py:1-6
+"""
+Sidar Project - Yapılandırma
+...
+Sürüm: 2.6.0    ← eski versiyon
+"""
+...
+VERSION: str = "2.6.1"   # ← gerçek versiyon
+```
+
+Modül docstring "Sürüm: 2.6.0" gösteriyor; `VERSION` sabiti ise "2.6.1". U-08 yamasında (§3.63) `VERSION` sabiti güncellendi ama docstring atlandı.
+
+**Etki:** Çok düşük — sadece belgeleme tutarsızlığı. Çalışma zamanına etkisi yok.
+
+**Beklenen düzeltme:** `config.py` başlık yorumundaki "Sürüm: 2.6.0" → "Sürüm: 2.6.1" olarak güncellenmesi.
+
+---
+
+#### V-03 Detay: `web_server.py` Git Endpoint'lerinde Senkron Subprocess
+
+**Sorun:** FastAPI async handler'ları içinde `subprocess.check_output()` (senkron I/O) doğrudan çağrılmaktadır:
+
+```python
+# web_server.py — git_info() endpoint'i (async!)
+@app.get("/git-info")
+async def git_info():
+    remote = subprocess.check_output(     # ← BLOKLAYICI — event loop duraksıyor
+        ["git", "remote", "get-url", "origin"], cwd=str(_root), ...
+    ).decode().strip()
+    branch = subprocess.check_output(     # ← BLOKLAYICI
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(_root), ...
+    ).decode().strip()
+    ...
+
+# web_server.py — set_branch() (POST /set-branch)
+@app.post("/set-branch")
+async def set_branch(request: Request):
+    subprocess.check_output(              # ← BLOKLAYICI
+        ["git", "checkout", branch_name], cwd=str(_root), ...
+    )
+```
+
+`subprocess.check_output()` senkron bir çağrıdır; async FastAPI handler içinde çağrıldığında git komutunun tamamlanmasını beklerken tüm event loop askıya alınır ve bu süre içinde başka HTTP istekleri yanıt alamaz.
+
+**Etki:** Git komutu hızlı çalışırsa (yerel repo) pratik etkisi düşük; ancak yavaş ağ veya büyük repo durumunda `/chat` dahil tüm istekler yavaşlar. Mimari açıdan doğru değil.
+
+**Beklenen düzeltme:** `asyncio.to_thread()` ile subprocess'i thread pool'a itmek:
+```python
+result = await asyncio.to_thread(
+    subprocess.check_output,
+    ["git", "remote", "get-url", "origin"],
+    cwd=str(_root), stderr=subprocess.DEVNULL
+)
+remote = result.decode().strip()
+```
+
+---
+
 ## 9. Bağımlılık Analizi
 
 ### `environment.yml` — Güncel Durum Tablosu
@@ -2068,14 +2177,16 @@ async for raw_bytes in resp.aiter_bytes():
 
 ## 13. Dosya Bazlı Detaylı İnceleme
 
-### `main.py` — Skor: 100/100 ✅
+### `main.py` — Skor: 92/100 ⚠️ *(Önceki iddia: 100/100 — V-01 nedeniyle revize edildi)*
 
 Tüm kritik async hatalar giderilmiştir. Döngü, kısayollar ve argüman işleme doğru.
 
-**Yapılan iyileştirmeler (95 → 100):**
+**Yapılan iyileştirmeler (95 → 100 iddiası):**
 - `BANNER` sabit string'den `_make_banner(version)` dinamik fonksiyona çevrildi — sürüm `SidarAgent.VERSION`'dan alınıyor.
 - Sağlayıcıya göre model görüntüleme: Gemini `GEMINI_MODEL`, Ollama `CODING_MODEL` kullanıyor.
-- `if __name__ == "__main__": main()` bloğundan sonra kalan sahipsiz yinelenen kod (IndentationError'a yol açan) temizlendi.
+
+**Açık sorun (V-01 — satır satır doğrulamada tespit edildi):**
+- ⚠️ `main.py:247-621` — **374 satır commented-out dead code** hâlâ mevcut. Rapor "yinelenen kod temizlendi" dese de bu satırlar silinmemiş, yalnızca yorum bloğuna (açık `# """` çerçevesi) sarılmış. Aktif kodu etkilemez; ancak kod temizliği açısından giderilmelidir. (→ §8.3 V-01)
 
 ---
 
@@ -2164,7 +2275,7 @@ Docker sandbox implementasyonu güvenlik açısından iyi. `status()` metodu ekl
 
 ---
 
-### `web_server.py` — Skor: 100/100 ✅ *(85 → 91 → 88 → 97 → 100)*
+### `web_server.py` — Skor: 94/100 ⚠️ *(Önceki iddia: 100/100 — V-03 nedeniyle revize edildi)*
 
 asyncio.Lock, SSE, session API hepsi doğru implementa edilmiş.
 
@@ -2175,17 +2286,23 @@ asyncio.Lock, SSE, session API hepsi doğru implementa edilmiş.
 - ~~**`_rate_lock` modül seviyesinde (U-06):** `_agent_lock` ile tutarsız — ORTA~~ → ✅ **ÇÖZÜLDÜ** (§3.61 — lazy init)
 - ~~**Dal adı injection (U-10):** `branch_name` yalnızca `strip()` ile temizleniyordu — ORTA~~ → ✅ **ÇÖZÜLDÜ** (§3.65 — `_BRANCH_RE` regex doğrulama)
 
+**Açık sorun (V-03 — satır satır doğrulamada tespit edildi):**
+- ⚠️ `git_info()`, `git_branches()`, `set_branch()` endpoint'leri `subprocess.check_output()` (senkron I/O) kullanıyor. Async FastAPI handler içinde doğrudan çağrı event loop'u bloklayabilir. `asyncio.to_thread()` ile sarılması gerekiyor. (→ §8.3 V-03)
+
 **Kalan iyileştirmeler:**
 - `_rate_data` `defaultdict` modül düzeyinde tutuluyor; üretim ölçeğinde Redis önerilir.
 
 ---
 
-### `config.py` — Skor: 100/100 ✅ *(84 → 95 → 100)*
+### `config.py` — Skor: 97/100 ⚠️ *(Önceki iddia: 100/100 — V-02 nedeniyle revize edildi)*
 
 GPU tespiti, WSL2 desteği, RotatingFileHandler, donanım raporu başarılı.
 
 **Düzeltilen sorunlar:**
 - ~~**Versiyon uyumsuzluğu (U-08):** `VERSION = "2.6.0"` — rapor v2.6.1 gösteriyordu — ORTA~~ → ✅ **ÇÖZÜLDÜ** (§3.63 — `"2.6.1"` olarak güncellendi)
+
+**Açık sorun (V-02 — satır satır doğrulamada tespit edildi):**
+- 🟢 `config.py:1-6` modül docstring "Sürüm: 2.6.0" hâlâ mevcut; `VERSION = "2.6.1"` ile tutarsız. U-08 yamasında (§3.63) `VERSION` sabiti güncellendi ama docstring atlandı. (→ §8.3 V-02)
 
 **Kalan iyileştirme:**
 - `Config` sınıfı sınıf attribute'ları modül import anında değerlendirilir; runtime override'lar için `set_provider_mode()` kullanılmalı.
@@ -2542,20 +2659,20 @@ Python, virtualenv, `.env`, `logs/`, `temp/`, `data/`, OS dosyaları, IDE konfig
 
 ## 15. Genel Değerlendirme
 
-| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | v2.6.1 (Tüm Yamalar) | ANALIZ_RAPORU Doğrulama | v2.6.1 (U-Yamaları) | Değişim (toplam) |
-|----------|--------|--------|--------|----------------------|-------------------------|---------------------|-----------------|
-| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | 92/100 ✅ | 92/100 ✅ | **100/100** ✅ | ↑ +12 |
-| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | 93/100 ✅ | 91/100 ✅ | **100/100** ✅ | ↑ +40 |
-| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | 84/100 ✅ | 84/100 ✅ | **100/100** ✅ | ↑ +25 |
-| **Güvenlik** | 78/100 | 85/100 | 85/100 | 82/100 ✅ | 80/100 ✅ | **100/100** ✅ | ↑ +22 |
-| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | 62/100 ⚠️ | 93/100 ✅ | **100/100** ✅ | ↑ +45 |
-| **Belgeleme** | 88/100 | 72/100 | 80/100 | 88/100 ✅ | 88/100 ✅ | **100/100** ✅ | ↑ +12 |
-| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | 94/100 ✅ | 91/100 ✅ | **100/100** ✅ | ↑ +35 |
-| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | 84/100 ⚠️ | 97/100 ✅ | **100/100** ✅ | ↑ +28 |
-| **GPU Desteği** | — | 88/100 | 88/100 | 85/100 ⚠️ | 85/100 ✅ | **100/100** ✅ | ✨ Yeni |
-| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | 98/100 ✅ | 98/100 ✅ | **100/100** ✅ | ↑ +20 |
-| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 ✅ | 90/100 ✅ | **100/100** ✅ | ↑ +30 |
-| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **89/100** ✅ | **92/100** ✅ | **100/100** ✅ | **↑ +25** |
+| Kategori | v2.5.0 | v2.6.0 | v2.6.1 | v2.6.1 (Tüm Yamalar) | ANALIZ_RAPORU Doğrulama | v2.6.1 (U-Yamaları) | V-Doğrulama (Gerçek) |
+|----------|--------|--------|--------|----------------------|-------------------------|---------------------|---------------------|
+| **Mimari Tasarım** | 88/100 | 94/100 | 95/100 | 92/100 ✅ | 92/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **Async/Await Kullanımı** | 60/100 | 90/100 | 91/100 | 93/100 ✅ | 91/100 ✅ | **100/100** ✅ | **94/100** ⚠️ *(V-03)* |
+| **Hata Yönetimi** | 75/100 | 82/100 | 86/100 | 84/100 ✅ | 84/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **Güvenlik** | 78/100 | 85/100 | 85/100 | 82/100 ✅ | 80/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **Test Kapsamı** | 55/100 | 68/100 | 68/100 | 62/100 ⚠️ | 93/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **Belgeleme** | 88/100 | 72/100 | 80/100 | 88/100 ✅ | 88/100 ✅ | **100/100** ✅ | **97/100** ⚠️ *(V-02)* |
+| **Kod Temizliği** | 65/100 | 94/100 | 96/100 | 94/100 ✅ | 91/100 ✅ | **100/100** ✅ | **92/100** ⚠️ *(V-01)* |
+| **Bağımlılık Yönetimi** | 72/100 | 84/100 | 84/100 | 84/100 ⚠️ | 97/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **GPU Desteği** | — | 88/100 | 88/100 | 85/100 ⚠️ | 85/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **Özellik Zenginliği** | 80/100 | 93/100 | 98/100 | 98/100 ✅ | 98/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **UI / UX Kalitesi** | 70/100 | 87/100 | 95/100 | 95/100 ✅ | 90/100 ✅ | **100/100** ✅ | **100/100** ✅ |
+| **GENEL ORTALAMA** | **75/100** | **85/100** | **88/100** | **89/100** ✅ | **92/100** ✅ | **100/100** ✅ | **~95/100** ⚠️ |
 
 > **ANALIZ_RAPORU_2026_03_01 Sonucu:** Bağımsız satır satır incelemede proje skoru **92/100** olarak belirlenmiştir *(önceki tahmin: ~78/100)*. 54 düzeltmenin tamamı kaynak kodda doğrulanmış, 15 uyumsuzluk (U-01–U-15) tespit ve giderilmiştir. Tüm kategori yamaları (U-Yamaları) uygulandıktan sonra tüm kategoriler **100/100** tam skoru elde etmiştir.
 
@@ -2616,21 +2733,23 @@ v2.5.0 → v2.6.1 sürecinde projenin teknik borcu **önemli ölçüde azaltılm
 - ✅ Senkron `requests` → `httpx.Client` (config.py) — YÜKSEK
 - ✅ README.md versiyon + eksik özellik belgeleri → v2.6.1 + tam dokümantasyon — YÜKSEK
 
-**Açık sorunlar — Güncel Durum (2026-03-01 — U-01–U-15 Yamaları Sonrası):**
+**Açık sorunlar — Güncel Durum (2026-03-01 — V-01–V-03 Doğrulama Sonrası):**
 
 | Önem | Adet | Sorunlar |
 |------|------|---------|
-| 🔴 KRİTİK | **0** | ✅ Tümü giderildi (U-01, U-02 bu oturumda kapatıldı) |
-| 🔴 YÜKSEK | **0** | ✅ Tümü giderildi (U-03, U-04, U-05, U-13 bu oturumda kapatıldı) |
-| 🟡 ORTA | **0** | ✅ Tümü giderildi (U-06, U-07, U-08, U-09, U-14 bu oturumda kapatıldı) |
-| 🟢 DÜŞÜK | **0** | ✅ Tümü giderildi (N-03 §3.71, N-04 §3.72, N-05 §3.73 bu oturumda kapatıldı) |
-| **TOPLAM** | **0** | ✅ Tüm U ve N sorunları giderildi |
+| 🔴 KRİTİK | **0** | ✅ Tümü giderildi |
+| 🔴 YÜKSEK | **0** | ✅ Tümü giderildi |
+| 🟡 ORTA | **2** | 🟡 V-01 `main.py` dead code (374 satır) · V-03 `web_server.py` blocking subprocess |
+| 🟢 DÜŞÜK | **1** | 🟢 V-02 `config.py` docstring "Sürüm: 2.6.0" |
+| **TOPLAM** | **3** | ⚠️ 3 sorun açık (§8.3'te detaylı açıklama, §17'de tam analiz) |
 
 **✅ Doğrulanan "bug değil" bulgular:**
 - `security.py:62-64`: `Path.resolve()` symlink traversal'ı zaten önlüyor
 - `index.html`: Tema localStorage'a kaydediliyor (`localStorage.setItem('sidar-theme', ...)`)
+- `auto_handle.py` health null guard: `self.health` `SidarAgent.__init__` içinde her zaman `SystemHealthManager(...)` ile koşulsuz başlatılıyor; `main.py` `.health` / `.gpu` komutları null riski taşımıyor
+- `_tool_health()` ve `_tool_gpu_optimize()` (`sidar_agent.py:361-365`): `self.health` her zaman başlatılmış olduğundan güvenli
 
-**Sonuç:** ANALIZ_RAPORU_2026_03_01 bağımsız doğrulaması proje skorunu **92/100** olarak teyit etmiştir (önceki ~78/100). Tespit edilen **20 uyumsuzluğun tamamı** (U-01–U-15 + N-01–N-05) giderilmiştir. **Açık sorun kalmamıştır.** Tahmini güncel skor: **~98/100**.
+**Sonuç (V-01–V-03 doğrulaması sonrası):** §3.1–§3.73 arası **73 düzeltmenin tamamı** kaynak kodda satır satır doğrulanmıştır. **3 yeni sorun (V-01–V-03)** tespit edilmiştir — hiçbiri kritik veya yüksek öncelikli değil. Tahmini güncel skor: **~95/100** (dead code ve blocking subprocess nedeniyle önceki ~98/100 revizyonu).
 
 ---
 
@@ -2695,9 +2814,9 @@ Not: §13 skor geçmişleri (`78 → 84 → 89` gibi) proje evrimini belgeler; A
 
 | Dosya | Önce | Sonra (v2.6.1) | Düzeltilen | Açık Sorun |
 |-------|------|----------------|------------|------------|
-| `main.py` | 95/100 | 95/100 | — | — |
-| `config.py` | 84/100 | **95/100** | U-08 (versiyon tutarsızlığı) | — |
-| `web_server.py` | 88/100 | **97/100** | U-05, U-06, U-10, U-13 | — |
+| `main.py` | 95/100 | **92/100** ⚠️ | — | V-01: 374 satır dead code |
+| `config.py` | 84/100 | **97/100** ⚠️ | U-08 (versiyon tutarsızlığı) | V-02: docstring "Sürüm: 2.6.0" |
+| `web_server.py` | 88/100 | **94/100** ⚠️ | U-05, U-06, U-10, U-13 | V-03: blocking subprocess |
 | `agent/sidar_agent.py` | 89/100 | **95/100** | U-08, U-14 | — |
 | `agent/auto_handle.py` | 90/100 | **96/100** | U-09, U-12 (zaten düzeltilmişti) | — |
 | `agent/definitions.py` | 96/100 | 96/100 | — | — |
@@ -2722,7 +2841,73 @@ Not: §13 skor geçmişleri (`78 → 84 → 89` gibi) proje evrimini belgeler; A
 
 ---
 
+## 17. Eksiksiz Satır Satır Doğrulama — V-01–V-03 Yeni Bulgular (Session 6)
+
+> **Tarih:** 2026-03-01 | **Kapsam:** ~35 kaynak dosya, ~10.400+ satır | **Metodoloji:** Her kaynak dosya başından sonuna satır satır okundu; §3.1–§3.73 arası 73 düzeltme kodda birebir doğrulandı.
+
+### 17.1 Doğrulama Özeti — §3.1–§3.73
+
+Aşağıdaki tablo büyük dosyalar hakkındaki doğrulama sonuçlarını özetler:
+
+| Dosya | İncelendi? | §3 Düzeltmeleri Doğrulandı? | Yeni Sorun? |
+|-------|-----------|----------------------------|------------|
+| `main.py` | ✅ | ✅ (§3.1) | ⚠️ V-01: lines 247-621 dead code |
+| `config.py` | ✅ | ✅ (§3.51, §3.63) | ⚠️ V-02: docstring "Sürüm: 2.6.0" |
+| `agent/sidar_agent.py` | ✅ | ✅ (§3.6, §3.23, §3.45, §3.63, §3.69) | — |
+| `core/memory.py` | ✅ | ✅ (§3.26, §3.46) | — |
+| `core/llm_client.py` | ✅ | ✅ (§3.24) | — |
+| `core/rag.py` | ✅ | ✅ (§3.2, §3.32) | — |
+| `core/__init__.py` | ✅ | ✅ (§3.62) | — |
+| `agent/auto_handle.py` | ✅ | ✅ (§3.7, §3.27, §3.64, §3.67) | — |
+| `agent/definitions.py` | ✅ | ✅ (§3.53) | — |
+| `agent/__init__.py` | ✅ | ✅ | — |
+| `web_server.py` | ✅ | ✅ (§3.4, §3.11, §3.36, §3.52, §3.60, §3.61, §3.65, §3.68, §3.73) | ⚠️ V-03: blocking subprocess |
+| `managers/code_manager.py` | ✅ | ✅ (§3.25, §3.39) | — |
+| `managers/system_health.py` | ✅ | ✅ (§3.34, §3.50) | — |
+| `managers/github_manager.py` | ✅ | ✅ (§3.35, §3.40, §3.65) | — |
+| `managers/security.py` | ✅ | ✅ (§3.57) | — |
+| `managers/web_search.py` | ✅ | ✅ (§3.33, §3.38, §3.48) | — |
+| `managers/package_info.py` | ✅ | ✅ (§3.44, §3.54) | — |
+| `tests/test_sidar.py` | ✅ | ✅ (§3.42, §3.56, §3.70) | — |
+| `environment.yml` | ✅ | ✅ (§3.3, §3.30, §3.59) | — |
+| `Dockerfile` | ✅ | ✅ (§3.66) | — |
+| `docker-compose.yml` | ✅ | ✅ (§3.71) | — |
+| `agent/definitions.py` | ✅ | ✅ (§3.53) | — |
+
+### 17.2 Onaylanan "Bug Değil" Tespitler
+
+Bu oturumda özellikle şüpheyle incelenen ancak gerçekte sorun olmadığı doğrulanan noktalar:
+
+| Şüpheli Nokta | Dosya:Satır | Gerçek Durum |
+|---------------|-------------|-------------|
+| `_tool_health()` null guard eksikliği | `sidar_agent.py:361-362` | `self.health = SystemHealthManager(...)` `__init__` içinde **koşulsuz** başlatılıyor; null riski yok |
+| `_tool_gpu_optimize()` null guard eksikliği | `sidar_agent.py:364-365` | Aynı: `self.health` her zaman başlatılmış |
+| `status()` metodu `self.health.full_report()` çağrısı | `sidar_agent.py:742` | Aynı: null riski yok |
+| `.health` CLI komutu `agent.health.full_report()` | `main.py:155` | `agent = SidarAgent(cfg)` başarılıysa `agent.health` her zaman mevcut |
+| `auto_handle.py` health null guard vs `sidar_agent.py` | Her iki dosya | `auto_handle.py`'deki guard, `health` parametresinin `None` geçilebileceği için var (bkz. §3.27). `SidarAgent` içi kullanımda null riski farklı; doğru mimari |
+
+### 17.3 Yeni Bulgular Detayı
+
+Detaylı açıklama için bkz. §8.3 (V-01, V-02, V-03 detay bölümleri).
+
+**Önem sıralaması:**
+1. **V-01** (🟡 ORTA) — `main.py:247-621` dead code → Kod temizliği sorunu; çalışmayı etkilemiyor
+2. **V-03** (🟡 ORTA) — `web_server.py` blocking subprocess → Yük altında event loop gecikmesi riski
+3. **V-02** (🟢 DÜŞÜK) — `config.py` docstring → Yalnızca belgeleme tutarsızlığı
+
+### 17.4 Doğrulama Skoru
+
+| Kategori | §3.1–§3.73 (73 madde) | Yeni (V-01–V-03) | Toplam |
+|----------|----------------------|------------------|--------|
+| Onaylandı ✅ | 73/73 | — | 73 |
+| Geçersiz ❌ | 0/73 | — | 0 |
+| Yeni açık sorun | — | 3 | 3 |
+
+**Sonuç:** Raporlanan 73 düzeltmenin **tamamı** (%100) kaynak kodda doğrulanmıştır. Ek olarak 3 yeni sorun (2 ORTA, 1 DÜŞÜK) tespit edilmiştir. Proje yüksek kalite standardında olmaya devam etmekte; tespit edilen yeni sorunlar kritik değildir.
+
+---
+
 *Rapor satır satır manuel kod analizi ile oluşturulmuştur — 2026-03-01*
-*Son güncelleme: v2.6.1 U-Yamaları uygulandı + tüm ~35 kaynak dosyanın satır satır final incelemesi (Session 4–5)*
+*Son güncelleme: V-01–V-03 doğrulama (2026-03-01) — tüm ~35 kaynak dosyanın eksiksiz satır satır incelemesi (Session 6)*
 *Analiz kapsamı: ~35 kaynak dosya, ~10.400+ satır kod*
-*Toplam doğrulanan düzeltme: **77** (54 önceki + 15 U-yaması + 3 N-yaması + 5 Öncelik-3) | Açık sorunlar: **0 — Proje tamamlandı ✅***
+*Toplam doğrulanan düzeltme: **73** (§3.1–§3.73 tümü onaylandı) | Yeni bulgular: **3 (V-01 ORTA · V-02 DÜŞÜK · V-03 ORTA)** | Açık sorunlar: **3** ⚠️*
