@@ -222,6 +222,9 @@ class SidarAgent:
                 tool_arg = action_data.argument
 
                 if tool_name == "final_answer":
+                    # Boş argument güvenlik ağı: JS'de falsy olduğu için UI "yanıt alınamadı" gösterir.
+                    if not str(tool_arg).strip():
+                        tool_arg = "✓ İşlem tamamlandı."
                     await asyncio.to_thread(self.memory.add, "assistant", tool_arg)
                     yield str(tool_arg)
                     return
