@@ -167,8 +167,10 @@ class SystemHealthManager:
                         dev["temperature_c"]    = temp
                         dev["utilization_pct"]  = util.gpu
                         dev["mem_utilization_pct"] = util.memory
-                    except Exception:
-                        pass  # pynvml hatası kritik değil
+                    except pynvml.NVMLError as e:
+                        logger.debug("pynvml sorgu hatası (beklenen davranış): %s", e)
+                    except Exception as e:
+                        logger.warning("pynvml beklenmedik hata: %s", e)
 
                 devices.append(dev)
 
