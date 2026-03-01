@@ -463,21 +463,25 @@ async def file_content(path: str):
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+def _git_run(cmd: list, cwd: str, stderr=subprocess.DEVNULL) -> str:
+    """Senkron git alt süreci çalıştırır. asyncio.to_thread() ile çağrılmalı."""
+    try:
+        return subprocess.check_output(cmd, cwd=cwd, stderr=stderr).decode().strip()
+    except Exception:
+        return ""
+
+
 @app.get("/git-info")
 async def git_info():
     """Git deposu bilgilerini (dal adı, repo adı) döndürür."""
-    _root = Path(__file__).parent
+    _root = str(Path(__file__).parent)
 
-    def _run(cmd):
-        try:
-            return subprocess.check_output(
-                cmd, cwd=str(_root), stderr=subprocess.DEVNULL
-            ).decode().strip()
-        except Exception:
-            return ""
-
-    branch  = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "main"
-    remote  = _run(["git", "remote", "get-url", "origin"]) or ""
+    branch = await asyncio.to_thread(
+        _git_run, ["git", "rev-parse", "--abbrev-ref", "HEAD"], _root
+    ) or "main"
+    remote = await asyncio.to_thread(
+        _git_run, ["git", "remote", "get-url", "origin"], _root
+    ) or ""
 
     # GitHub URL'sini "owner/repo" biçimine çevir
     repo = ""
@@ -493,19 +497,15 @@ async def git_info():
 @app.get("/git-branches")
 async def git_branches():
     """Yerel git dallarını listeler."""
-    _root = Path(__file__).parent
+    _root = str(Path(__file__).parent)
 
-    def _run(cmd):
-        try:
-            return subprocess.check_output(
-                cmd, cwd=str(_root), stderr=subprocess.DEVNULL
-            ).decode().strip()
-        except Exception:
-            return ""
-
-    branches_raw = _run(["git", "branch", "--format=%(refname:short)"])
+    branches_raw = await asyncio.to_thread(
+        _git_run, ["git", "branch", "--format=%(refname:short)"], _root
+    )
     branches = [b.strip() for b in branches_raw.split("\n") if b.strip()]
-    current = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+    current = await asyncio.to_thread(
+        _git_run, ["git", "rev-parse", "--abbrev-ref", "HEAD"], _root
+    ) or "main"
 
     return JSONResponse({"branches": branches or ["main"], "current": current})
 
@@ -523,11 +523,12 @@ async def set_branch(request: Request):
     if not _BRANCH_RE.match(branch_name):
         return JSONResponse({"success": False, "error": "Geçersiz dal adı: yalnızca harf, rakam, '/', '_', '-', '.' kullanılabilir."}, status_code=400)
 
-    _root = Path(__file__).parent
+    _root = str(Path(__file__).parent)
     try:
-        subprocess.check_output(
+        await asyncio.to_thread(
+            subprocess.check_output,
             ["git", "checkout", branch_name],
-            cwd=str(_root),
+            cwd=_root,
             stderr=subprocess.STDOUT,
         )
         return JSONResponse({"success": True, "branch": branch_name})
