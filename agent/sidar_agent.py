@@ -493,34 +493,80 @@ class SidarAgent:
         return self.docs.delete_document(a)
 
     async def _tool_get_config(self, _: str) -> str:
-        """Çalışma anındaki gerçek Config değerlerini döndürür (.env dahil)."""
-        gpu_line = (
-            f"{self.cfg.GPU_INFO} ({self.cfg.GPU_COUNT} GPU, CUDA {self.cfg.CUDA_VERSION})"
-            if self.cfg.USE_GPU else f"Yok ({self.cfg.GPU_INFO})"
-        )
+        """Çalışma anındaki gerçek Config değerlerini döndürür (.env dahil).
+        Dizin ağacı ve satır numaraları dahil — LLM'in zengin final_answer
+        üretebilmesi için tüm ham veri burada sağlanır.
+        """
+        import os as _os
+
+        # ── Dizin ağacı (kök seviyesi) ─────────────────────────────
+        base = str(self.cfg.BASE_DIR)
+        try:
+            entries = sorted(_os.listdir(base))
+        except OSError:
+            entries = []
+        dirs  = [e for e in entries if _os.path.isdir(_os.path.join(base, e))]
+        files = [e for e in entries if _os.path.isfile(_os.path.join(base, e))]
+        tree_lines = [f"{base}/"]
+        for d in dirs:
+            tree_lines.append(f"  ├── {d}/")
+        for i, f in enumerate(files):
+            prefix = "└──" if i == len(files) - 1 else "├──"
+            tree_lines.append(f"  {prefix} {f}")
+        dir_tree = "\n".join(tree_lines)
+
+        # ── GPU bilgisi ─────────────────────────────────────────────
+        if self.cfg.USE_GPU:
+            gpu_line = (
+                f"{getattr(self.cfg, 'GPU_INFO', 'GPU')} "
+                f"({getattr(self.cfg, 'GPU_COUNT', 1)} GPU, "
+                f"CUDA {getattr(self.cfg, 'CUDA_VERSION', 'N/A')})"
+            )
+        else:
+            gpu_line = f"Yok ({getattr(self.cfg, 'GPU_INFO', 'N/A')})"
+
         lines = [
-            "[Gerçek Config Değerleri — .env + Ortam Değişkenleri]",
+            f"[Proje Kök Dizini]\n{dir_tree}",
             "",
-            "# Temel",
+            "[Gerçek Config Değerleri — config.py + .env]",
+            "",
+            "## Temel",
             f"  Proje        : {self.cfg.PROJECT_NAME} v{self.cfg.VERSION}",
-            f"  Proje Dizini : {self.cfg.BASE_DIR}",
+            f"  Proje Dizini : {base}",
             f"  Erişim Seviye: {self.cfg.ACCESS_LEVEL.upper()}",
             f"  Debug Modu   : {self.cfg.DEBUG_MODE}",
             "",
-            "# AI Modeli",
-            f"  AI Sağlayıcı : {self.cfg.AI_PROVIDER.upper()}",
-            f"  Coding Modeli: {self.cfg.CODING_MODEL}",
-            f"  Text Modeli  : {self.cfg.TEXT_MODEL}",
-            f"  Ollama URL   : {self.cfg.OLLAMA_URL}",
-            f"  Ollama Timeout: {self.cfg.OLLAMA_TIMEOUT}s",
+            "## 1. AI_PROVIDER  [config.py satır 225]",
+            f"  Değer    : {self.cfg.AI_PROVIDER.upper()}",
+            "  Seçenekler: 'ollama' (yerel) | 'gemini' (bulut)",
+            "  Değiştirmek için: .env → AI_PROVIDER=gemini",
             "",
-            "# Donanım",
-            f"  GPU          : {gpu_line}",
-            f"  CPU Çekirdek : {self.cfg.CPU_COUNT}",
+            "## 2. USE_GPU / GPU_MEMORY_FRACTION  [config.py satır 243, 257]",
+            f"  USE_GPU              : {self.cfg.USE_GPU}",
+            f"  GPU                  : {gpu_line}",
+            f"  GPU_MEMORY_FRACTION  : {getattr(self.cfg, 'GPU_MEMORY_FRACTION', 0.8)} "
+            "(VRAM'in bu oranı ayrılır; geçerli aralık 0.1–1.0)",
             "",
-            "# Entegrasyon",
-            f"  GitHub Repo  : {self.cfg.GITHUB_REPO or '(ayarlanmamış)'}",
-            f"  ReAct Adım   : max {self.cfg.MAX_REACT_STEPS}",
+            "## 3. OLLAMA_URL / CODING_MODEL / TEXT_MODEL  [config.py satır 230–233]",
+            f"  OLLAMA_URL   : {self.cfg.OLLAMA_URL}",
+            f"  CODING_MODEL : {self.cfg.CODING_MODEL}",
+            f"  TEXT_MODEL   : {self.cfg.TEXT_MODEL}",
+            f"  OLLAMA_TIMEOUT: {getattr(self.cfg, 'OLLAMA_TIMEOUT', 30)}s",
+            "",
+            "## 4. MAX_REACT_STEPS / REACT_TIMEOUT  [config.py satır 273–274]",
+            f"  MAX_REACT_STEPS: {self.cfg.MAX_REACT_STEPS}",
+            f"  REACT_TIMEOUT  : {getattr(self.cfg, 'REACT_TIMEOUT', 60)}s",
+            "  Not: Karmaşık görevlerde bu değerlerin artırılması gerekebilir.",
+            "",
+            "## 5. RAG_TOP_K / RAG_CHUNK_SIZE / RAG_CHUNK_OVERLAP  [config.py satır 290–292]",
+            f"  RAG_TOP_K        : {getattr(self.cfg, 'RAG_TOP_K', 3)}  (en iyi N sonuç getirilir)",
+            f"  RAG_CHUNK_SIZE   : {getattr(self.cfg, 'RAG_CHUNK_SIZE', 1000)} karakter",
+            f"  RAG_CHUNK_OVERLAP: {getattr(self.cfg, 'RAG_CHUNK_OVERLAP', 200)} karakter",
+            "  Not: Bu değerler cevap kalitesini doğrudan etkiler.",
+            "",
+            "## Diğer",
+            f"  CPU Çekirdek : {getattr(self.cfg, 'CPU_COUNT', 'N/A')}",
+            f"  GitHub Repo  : {getattr(self.cfg, 'GITHUB_REPO', None) or '(ayarlanmamış)'}",
             f"  Bellek Turu  : max {self.cfg.MAX_MEMORY_TURNS}",
         ]
         return "\n".join(lines)
@@ -686,4 +732,3 @@ class SidarAgent:
             self.health.full_report(),
         ]
         return "\n".join(lines)
-        
