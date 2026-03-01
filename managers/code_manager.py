@@ -243,7 +243,10 @@ class CodeManager:
                 return True, "(Kod başarıyla çalıştı ancak konsola bir çıktı üretmedi)"
 
         except docker.errors.ImageNotFound:
-             return False, "Çalıştırma hatası: 'python:3.11-alpine' imajı bulunamadı. Lütfen terminalde 'docker pull python:3.11-alpine' komutunu çalıştırın."
+             return False, (
+                 f"Çalıştırma hatası: '{self.docker_image}' imajı bulunamadı. "
+                 f"Lütfen terminalde 'docker pull {self.docker_image}' komutunu çalıştırın."
+             )
         except Exception as exc:
             return False, f"Docker çalıştırma hatası: {exc}"
 
