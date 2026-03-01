@@ -792,116 +792,101 @@ Fonksiyon `async def` haline getirildi ve `async with _rate_lock:` ile tüm kont
 
 ## 6. Orta Öncelikli Sorunlar
 
----
-
-### 6.1 `core/memory.py` — `threading.RLock` Async Context'te
-
-**Dosya:** `core/memory.py`
-**Önem:** 🟡 ORTA
-
-**Sorun:**
-
-`ConversationMemory` sınıfı `threading.RLock` kullanmaktadır. Bu sınıf async bir bağlamdan (`sidar_agent.py`) çağrıldığından, teoride event loop'u bloklayabilir. Ancak memory yalnızca JSON dosyası I/O ve liste işlemleri yaptığından pratikte blokaj süresi ihmal edilebilir düzeydedir.
-
-```python
-# core/memory.py:27
-self._lock = threading.RLock()   # ← threading.Lock, async context
-
-def add(self, role: str, content: str) -> None:
-    with self._lock:              # ← async bağlamda sync block
-        ...
-        self._save()              # ← dosya yazma (I/O)
-```
-
-**Düzeltme:** `asyncio.Lock()` ve `async def` dönüşümü:
-```python
-self._lock = asyncio.Lock()
-
-async def add(self, role: str, content: str) -> None:
-    async with self._lock:
-        ...
-        await asyncio.to_thread(self._save)
-```
-
-**Not:** Bu dönüşüm `sidar_agent.py` ve `auto_handle.py`'de de tüm `memory.add()` çağrılarının `await` ile güncellenmesini gerektirir. Değişiklik kapsamlıdır; `asyncio.to_thread(self._save)` ile mevcut kodu koruyarak yalnızca I/O kısmını thread'e itmek daha pratik bir yaklaşımdır.
+> ✅ 10 orta öncelikli sorunun **tamamı düzeltilmiştir** (6.5 önceden çözülmüştü).
+>
+> | # | Sorun | Durum |
+> |---|-------|-------|
+> | 6.1 | `threading.RLock` Async Context'te | ✅ Düzeltildi |
+> | 6.2 | `asyncio.Lock()` Modül Düzeyinde | ✅ Düzeltildi |
+> | 6.3 | Docker Bağlantı Hatası Mesajı | ✅ Düzeltildi |
+> | 6.4 | GitHub Token Rehberi Eksik | ✅ Düzeltildi |
+> | 6.5 | Web UI Eksik Özellikler | ✅ Düzeltildi |
+> | 6.6 | Eksik Test Kapsamları | ✅ Düzeltildi |
+> | 6.7 | `GPU_MEMORY_FRACTION` Doğrulama | ✅ Düzeltildi |
+> | 6.8 | Version Sort Pre-Release Hatası | ✅ Düzeltildi |
+> | 6.9 | Araç Sonucu Format Tutarsızlığı | ✅ Düzeltildi |
+> | 6.10 | Bozuk JSON Sessizce Atlanıyor | ✅ Düzeltildi |
 
 ---
 
-### 6.2 `web_server.py` — `asyncio.Lock()` Modül Düzeyinde Oluşturma
+### ✅ 6.1 `core/memory.py` — `threading.RLock` Async Context'te (ORTA → ÇÖZÜLDÜ)
+
+**Dosya:** `core/memory.py`, `agent/sidar_agent.py`
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski sorun:** `memory.add()` + `_save()` çağrısı JSON dosyası I/O yaparak event loop'u teorik olarak bloklıyordu.
+
+**Uygulanan düzeltme:** `memory.py` değiştirilmedi (threading.RLock doğru ve thread-safe); `sidar_agent.py` içindeki tüm `memory.add()` ve `memory.set_last_file()` çağrıları `asyncio.to_thread()` ile thread pool'a iletildi:
+
+```python
+# sidar_agent.py — memory I/O event loop'u bloke etmez
+await asyncio.to_thread(self.memory.add, "user", user_input)
+await asyncio.to_thread(self.memory.add, "assistant", quick_response)
+await asyncio.to_thread(self.memory.add, "assistant", tool_arg)
+await asyncio.to_thread(self.memory.set_last_file, a)
+```
+
+`memory.py`'nin API'si tamamen değiştirilmeden (senkron kalarak) dosya I/O event loop dışına taşındı. `threading.RLock` worker thread içinde çalıştığından re-entrancy doğru davranır.
+
+---
+
+### ✅ 6.2 `web_server.py` — `asyncio.Lock()` Modül Düzeyinde Oluşturma (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `web_server.py`
-**Satır:** 17
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** `_agent_lock = asyncio.Lock()` modül yüklenirken oluşturuluyordu; Python <3.10'da DeprecationWarning üretirdi.
 
+**Uygulanan düzeltme:**
 ```python
-# web_server.py:17
-_agent_lock = asyncio.Lock()   # ← modül import anında oluşturuluyor
-```
-
-Python 3.10+'da `asyncio.Lock()` Event Loop gerektirmeden oluşturulabilir. Python 3.11 kullanıldığından şu an çalışmaktadır. Ancak bu yaklaşım, farklı Python sürümlerinde veya test ortamlarında beklenmedik davranışa yol açabilir.
-
-**Önerilen yaklaşım:**
-
-```python
+# ✅ Lazy başlatma — event loop başladıktan sonra oluşturulur
 _agent_lock: asyncio.Lock | None = None
 
 async def get_agent() -> SidarAgent:
     global _agent, _agent_lock
     if _agent_lock is None:
-        _agent_lock = asyncio.Lock()   # ← Event Loop başladıktan sonra oluştur
-    ...
+        _agent_lock = asyncio.Lock()
+    async with _agent_lock:
+        if _agent is None:
+            _agent = SidarAgent(cfg)
+    return _agent
 ```
 
 ---
 
-### 6.3 `managers/code_manager.py` — Docker Bağlantı Hatası Yutulabiliyor
+### ✅ 6.3 `managers/code_manager.py` — Docker Bağlantı Hatası Yutulabiliyor (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/code_manager.py`
-**Satırlar:** 42–70
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** `execute_code` Docker bulunamadığında kullanıcıya neden/nasıl çözüleceği hakkında bilgi verilmiyordu.
 
-`_init_docker()` metodunda Docker bağlantısı başarısız olduğunda `self.docker_available = False` olarak ayarlanır. Ancak kullanıcı `execute_code` aracını çağırdığında alacağı hata mesajı (`"Docker bağlantısı kurulamadığı için..."`) Docker'ın neden çalışmadığını veya nasıl çalıştırılacağını açıklamamaktadır.
-
-```python
-# code_manager.py:execute_code — Yetersiz hata mesajı
-if not self.docker_available:
-    return False, "[OpenClaw] Docker bağlantısı kurulamadığı için güvenlik sebebiyle kod çalıştırma reddedildi."
-    # ↑ Kullanıcıya neden/nasıl düzelteceği hakkında bilgi yok
-```
-
-**Düzeltme:**
+**Uygulanan düzeltme:**
 ```python
 return False, (
-    "[OpenClaw] Docker bağlantısı bulunamadı — kod çalıştırma devre dışı.\n"
+    "[OpenClaw] Docker bağlantısı bulunamadı — güvenlik sebebiyle kod çalıştırma devre dışı.\n"
     "Çözüm:\n"
-    "  WSL2: Docker Desktop > Settings > Resources > WSL Integration'ı etkinleştirin\n"
-    "  Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
-    "  Doğrulama: 'docker ps' komutunu terminalde çalıştırın"
+    "  • WSL2  : Docker Desktop → Settings → Resources → WSL Integration'ı etkinleştirin\n"
+    "  • Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
+    "  • macOS : Docker Desktop uygulamasının çalıştığından emin olun\n"
+    "  • Doğrulama: terminalde 'docker ps' komutunu çalıştırın"
 )
 ```
 
 ---
 
-### 6.4 `managers/github_manager.py` — Token Eksikliğinde Yönlendirme Mesajı Yok
+### ✅ 6.4 `managers/github_manager.py` — Token Eksikliğinde Yönlendirme Mesajı Yok (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/github_manager.py`
-**Satır:** ~20
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** Token yoksa kullanıcı yalnızca "GitHub: Bağlı değil" görüyordu; nasıl token ekleyeceği açıklanmıyordu.
 
-Token yoksa `is_available()` `False` döner, ancak kullanıcıya GitHub token'ını nasıl ekleyeceği hakkında rehber gösterilmez. `.github`, `.github_commits` vb. komutlarda kullanıcı yalnızca `"⚠ GitHub token ayarlanmamış."` mesajını görmektedir.
-
-**Düzeltme:**
+**Uygulanan düzeltme:**
 ```python
 def is_available(self) -> bool:
     if not self._available and not self.token:
-        # Yalnızca loglama — UI bağlamında çağrı yapan yer mesajı formatlar
-        logger.debug("GitHub: Token eksik. .env dosyasına GITHUB_TOKEN=... ekleyin.")
+        logger.debug("GitHub: Token eksik. .env'e GITHUB_TOKEN=<token> ekleyin.")
     return self._available
 
 def status(self) -> str:
@@ -910,9 +895,10 @@ def status(self) -> str:
             return (
                 "GitHub: Bağlı değil\n"
                 "  → Token eklemek için: .env dosyasına GITHUB_TOKEN=<token> satırı ekleyin\n"
-                "  → Token oluşturmak için: https://github.com/settings/tokens"
+                "  → Token oluşturmak için: https://github.com/settings/tokens\n"
+                "  → Gerekli izinler: repo (okuma) veya public_repo (genel depolar)"
             )
-        return "GitHub: Token geçersiz veya bağlantı hatası."
+        return "GitHub: Token geçersiz veya bağlantı hatası (log dosyasını kontrol edin)"
 ```
 
 ---
@@ -943,160 +929,132 @@ def status(self) -> str:
 
 ---
 
-### 6.6 `tests/test_sidar.py` — Eksik Test Kapsamları
+### ✅ 6.6 `tests/test_sidar.py` — Eksik Test Kapsamları (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `tests/test_sidar.py`
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eklenen test grupları:**
 
-Güncel test dosyasında şu kapsamlar eksiktir:
-
-1. **Çoklu oturum testleri:** `ConversationMemory.create_session()`, `load_session()`, `delete_session()` için birim test yok.
-2. **Dispatcher testi:** `_execute_tool()` dispatcher'ının bilinmeyen araç adında `None` döndürdüğü test edilmemiş.
-3. **Chunking sınır testleri:** `_chunk_size`'dan küçük, büyük ve tam eşit boyutlu metinler için chunking doğrulaması yok.
-4. **Rate limiter testi:** `web_server.py:_is_rate_limited()` doğrudan test edilmemiş.
-5. **AutoHandle async testleri:** `auto_handle.py`'deki async metodlar (`_try_web_search`, `_try_docs_add` vb.) için mock tabanlı testler yok.
-
-**Eklenmesi gereken örnek testler:**
-```python
-@pytest.mark.asyncio
-async def test_auto_handle_web_search_pattern():
-    """AutoHandle'ın web arama örüntüsünü tanıdığını test eder."""
-    # ...
-
-def test_memory_session_lifecycle(test_config):
-    """Session oluşturma, yükleme ve silme yaşam döngüsünü test eder."""
-    mem = ConversationMemory(test_config.MEMORY_FILE, max_turns=10)
-    sid = mem.create_session("Test Oturumu")
-    assert sid == mem.active_session_id
-    mem.add("user", "merhaba")
-    loaded = mem.load_session(sid)
-    assert loaded is True
-    assert len(mem._turns) == 1
-    deleted = mem.delete_session(sid)
-    assert deleted is True
-```
+| Test | Kapsam |
+|------|--------|
+| `test_session_create/add_and_load/delete/get_all_sorted/update_title/load_nonexistent` | Oturum yaşam döngüsü (önceki oturumda eklenmişti) |
+| `test_execute_tool_unknown_returns_none` | Dispatcher: bilinmeyen araç → `None` |
+| `test_execute_tool_known_does_not_return_none` | Dispatcher: bilinen araç → sonuç döner |
+| `test_rag_chunking_small_text` | Küçük metin tek chunk olarak saklanır |
+| `test_rag_chunking_large_text` | Büyük metin parçalanır, tümü geri alınır |
+| `test_auto_handle_no_match` | Normal LLM sorusuna müdahale edilmez |
+| `test_auto_handle_clear_command` | Bellek temizleme komutu çökme üretmez |
+| `test_session_broken_json_quarantine` | Bozuk JSON → `.json.broken` karantinası |
 
 ---
 
-### 6.7 `config.py:147-153` — `GPU_MEMORY_FRACTION` Aralık Doğrulaması Yok
+### ✅ 6.7 `config.py:147-153` — `GPU_MEMORY_FRACTION` Aralık Doğrulaması Yok (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `config.py`
-**Satırlar:** 147-153
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** Geçersiz değerler sessizce atlanıyor, kullanıcıya uyarı verilmiyordu.
 
-```python
-# config.py:147-153
-frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
-if 0.1 <= frac < 1.0:
-    torch.cuda.set_per_process_memory_fraction(frac, device=0)
-```
-
-`GPU_MEMORY_FRACTION` değeri `[0.1, 1.0)` aralığının dışındaysa (örn. `2.5`, `-0.5`, `0`) kod sessizce bu ayarı **atlar** ve PyTorch varsayılan davranışını kullanır. Kullanıcıya herhangi bir uyarı veya log mesajı gösterilmez.
-
-**Düzeltme:**
+**Uygulanan düzeltme:**
 ```python
 frac = get_float_env("GPU_MEMORY_FRACTION", 0.8)
 if not (0.1 <= frac < 1.0):
-    logger.warning("GPU_MEMORY_FRACTION=%.2f geçersiz aralık — 0.8 kullanılıyor.", frac)
+    logger.warning(
+        "GPU_MEMORY_FRACTION=%.2f geçersiz aralık (0.1–1.0 bekleniyor) "
+        "— varsayılan 0.8 kullanılıyor.", frac
+    )
     frac = 0.8
-torch.cuda.set_per_process_memory_fraction(frac, device=0)
+try:
+    torch.cuda.set_per_process_memory_fraction(frac, device=0)
+    logger.info("🔧 VRAM fraksiyonu ayarlandı: %.0f%%", frac * 100)
+except Exception as exc:
+    logger.debug("VRAM fraksiyon ayarı atlandı: %s", exc)
 ```
+
+Geçersiz değerde (ör. `GPU_MEMORY_FRACTION=2.5`) artık `WARNING` log üretilir ve değer `0.8`'e döndürülür.
 
 ---
 
-### 6.8 `managers/package_info.py:257-266` — Version Sort Key Pre-Release Sıralama Hatası
+### ✅ 6.8 `managers/package_info.py:257-266` — Version Sort Key Pre-Release Sıralama Hatası (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/package_info.py`
-**Satırlar:** 257-266
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** Manuel regex ayrıştırma `1.0.0a1` ile `1.0.0` arasındaki farkı doğru sıralayamıyordu; kullanıcıya stabil sürüm yerine pre-release önerilebiliyordu.
 
-```python
-# package_info.py:257-266
-@staticmethod
-def _version_sort_key(version: str):
-    parts = re.split(r"[.\-]", version)
-    result = []
-    for p in parts:
-        try:
-            result.append(int(p))
-        except ValueError:
-            result.append(0)   # ← tüm harf içeren parçalar 0 olur
-```
-
-`1.0.0a1`, `1.0.0b2`, `1.0.0rc1` hepsi sıralamada `[1, 0, 0, 1]`, `[1, 0, 0, 2]`, `[1, 0, 0, 1]` gibi eşit muamele görür. `1.0.0` ise `[1, 0, 0]` — dolayısıyla `1.0.0` < `1.0.0a1` gibi yanlış sıralama oluşabilir. Kullanıcıya stabil bir sürüm yerine pre-release önerilme riski doğar.
-
-**Düzeltme:** `packaging.version.parse()` kullanımı önerilir:
+**Uygulanan düzeltme:** PEP 440 uyumlu `packaging.version.Version` kullanımı:
 ```python
 from packaging.version import Version, InvalidVersion
-def _version_sort_key(version: str):
+
+@staticmethod
+def _version_sort_key(version: str) -> Version:
+    """
+    PEP 440: 1.0.0 > 1.0.0rc1 > 1.0.0b2 > 1.0.0a1
+    Geçersiz formatlarda 0.0.0 döndürülür (sona düşer).
+    """
     try:
         return Version(version)
     except InvalidVersion:
         return Version("0.0.0")
 ```
 
+Artık `1.0.0` > `1.0.0rc1` > `1.0.0b2` > `1.0.0a1` doğru sıralanır.
+
 ---
 
-### 6.9 `agent/sidar_agent.py:182-197` — Araç Sonucu Format String Tutarsızlığı
+### ✅ 6.9 `agent/sidar_agent.py:182-197` — Araç Sonucu Format String Tutarsızlığı (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `agent/sidar_agent.py`
-**Satırlar:** 182-197
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** `[Araç Sonucu]`, `[Sistem Hatası]`, etiketsiz — üç farklı format LLM'in geçmişi parse etmesini güçleştiriyordu.
 
+**Uygulanan düzeltme:** Modül seviyesinde üç sabit tanımlandı:
 ```python
-# sidar_agent.py — Birden fazla farklı format
-yield f"\x00TOOL:{tool_name}\x00"                         # sentinel (farklı format)
-{"role": "user", "content": f"[Araç Sonucu]\n{tool_result}"}  # araç başarılı
-{"role": "user", "content": f"[Sistem Hatası] {exc}"}          # araç başarısız (farklı etiket)
+_FMT_TOOL_OK  = "[ARAÇ:{name}]\n{result}"    # başarılı araç çıktısı
+_FMT_TOOL_ERR = "[ARAÇ:{name}:HATA]\n{error}" # bilinmeyen araç / araç hatası
+_FMT_SYS_ERR  = "[Sistem Hatası] {msg}"        # ayrıştırma / doğrulama hatası
 ```
 
-Araç sonuçları bazen `[Araç Sonucu]`, bazen `[Sistem Hatası]`, bazen de etiketsiz olarak memory'e eklenmektedir. Bu tutarsızlık:
-- LLM'in önceki araç sonuçlarını parse etmesini güçleştirir
-- Oturum dışa aktarmada (MD/JSON) araç çıktıları tutarsız görünür
-- ReAct prompt'unda format beklentisi ile gerçek format uyuşmaz
-
-**Düzeltme:** Tek bir sabit format şeması belirlenmeli:
+Tüm mesaj ekleme noktaları bu sabitleri kullanır:
 ```python
-TOOL_RESULT_TEMPLATE = "[ARAÇ:{tool_name}]\n{result}"
-TOOL_ERROR_TEMPLATE  = "[ARAÇ:{tool_name}:HATA]\n{error}"
+# Başarılı araç:
+_FMT_TOOL_OK.format(name=tool_name, result=tool_result)
+# Bilinmeyen araç:
+_FMT_TOOL_ERR.format(name=tool_name, error="Bu araç yok...")
+# JSON/Pydantic hatası:
+_FMT_SYS_ERR.format(msg="Ürettiğin JSON yapısı...")
 ```
 
 ---
 
-### 6.10 `core/memory.py:70-71` — Bozuk JSON Oturum Dosyaları Sessizce Atlanıyor
+### ✅ 6.10 `core/memory.py:70-71` — Bozuk JSON Oturum Dosyaları Sessizce Atlanıyor (ORTA → ÇÖZÜLDÜ)
 
 **Dosya:** `core/memory.py`
-**Satırlar:** 70-71
-**Önem:** 🟡 ORTA
+**Önem:** ~~🟡 ORTA~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** Bozuk JSON dosyaları `except Exception` ile sessizce atlanıyor, kullanıcı oturumun neden kaybolduğunu anlayamıyordu.
 
-```python
-# memory.py:70-71
-except Exception as exc:
-    logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
-    # ← continue — dosya atlanıyor, kullanıcıya bildirim yok
-```
-
-`data/sessions/` altındaki bir JSON dosyası bozulursa (disk hatası, yarım yazma, elle düzenleme) dosya sessizce atlanır. Kullanıcı bir oturumunun kaybolduğunu ancak sidebar'da göremeyince fark edebilir, log dosyasını kontrol etmeden nedenini anlayamaz.
-
-**Düzeltme:**
+**Uygulanan düzeltme:**
 ```python
 except json.JSONDecodeError as exc:
     logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
-    # Bozuk dosyayı karantinaya al:
+    # Bozuk dosyayı .json.broken uzantısıyla karantinaya al
     broken_path = file_path.with_suffix(".json.broken")
-    file_path.rename(broken_path)
-    logger.warning("Bozuk dosya yeniden adlandırıldı: %s", broken_path.name)
+    try:
+        file_path.rename(broken_path)
+        logger.warning(
+            "Bozuk dosya karantinaya alındı: %s → %s",
+            file_path.name, broken_path.name,
+        )
+    except OSError as rename_exc:
+        logger.warning("Karantina yeniden adlandırması başarısız: %s", rename_exc)
+except Exception as exc:
+    logger.error("Oturum okuma hatası (%s): %s", file_path.name, exc)
 ```
+
+`json.JSONDecodeError` ve genel `Exception` ayrı yakalanır. Bozuk dosya `<id>.json.broken` adıyla korunur; bir sonraki `get_all_sessions()` çağrısında artık taranmaz. `test_session_broken_json_quarantine` testi bu davranışı doğrular.
 
 ---
 

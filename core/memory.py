@@ -67,8 +67,20 @@ class ConversationMemory:
                         "user_count": user_count,
                         "asst_count": asst_count,
                     })
+                except json.JSONDecodeError as exc:
+                    logger.error("Bozuk oturum dosyası: %s — %s", file_path.name, exc)
+                    # Bozuk dosyayı .json.broken uzantısıyla karantinaya al
+                    broken_path = file_path.with_suffix(".json.broken")
+                    try:
+                        file_path.rename(broken_path)
+                        logger.warning(
+                            "Bozuk dosya karantinaya alındı: %s → %s",
+                            file_path.name, broken_path.name,
+                        )
+                    except OSError as rename_exc:
+                        logger.warning("Karantina yeniden adlandırması başarısız: %s", rename_exc)
                 except Exception as exc:
-                    logger.error(f"Oturum okuma hatası ({file_path.name}): {exc}")
+                    logger.error("Oturum okuma hatası (%s): %s", file_path.name, exc)
 
         # Güncellenme zamanına göre azalan (descending) sırala
         sessions.sort(key=lambda x: x["updated_at"], reverse=True)

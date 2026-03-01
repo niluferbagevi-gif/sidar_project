@@ -196,7 +196,14 @@ class CodeManager:
             return False, "[OpenClaw] Kod çalıştırma yetkisi yok (Restricted Mod)."
 
         if not self.docker_available:
-            return False, "[OpenClaw] Docker bağlantısı kurulamadığı için güvenlik sebebiyle kod çalıştırma reddedildi."
+            return False, (
+                "[OpenClaw] Docker bağlantısı bulunamadı — güvenlik sebebiyle kod çalıştırma devre dışı.\n"
+                "Çözüm:\n"
+                "  • WSL2  : Docker Desktop → Settings → Resources → WSL Integration'ı etkinleştirin\n"
+                "  • Ubuntu: 'sudo service docker start' veya 'dockerd &' ile başlatın\n"
+                "  • macOS : Docker Desktop uygulamasının çalıştığından emin olun\n"
+                "  • Doğrulama: terminalde 'docker ps' komutunu çalıştırın"
+            )
 
         try:
             import docker
