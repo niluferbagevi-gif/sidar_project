@@ -95,7 +95,19 @@ pull_models() {
   echo -e "\n🧠 6. Gerekli yapay zeka modelleri indiriliyor (İnternet hızınıza göre sürebilir)..."
   ollama serve >/dev/null 2>&1 &
   OLLAMA_PID=$!
-  sleep 5
+
+  echo -e "   Ollama servisi başlatılıyor..."
+  local retries=30
+  local i=0
+  until curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; do
+    i=$((i + 1))
+    if [[ $i -ge $retries ]]; then
+      echo "❌ Ollama 30 saniye içinde yanıt vermedi. Kurulum durduruluyor."
+      exit 1
+    fi
+    sleep 1
+  done
+  echo "   ✅ Ollama hazır (${i}s)."
 
   echo "-> nomic-embed-text (RAG embed) indiriliyor..."
   ollama pull nomic-embed-text
@@ -120,6 +132,21 @@ print_footer() {
   echo "============================================================"
 }
 
+download_vendor_libs() {
+  echo -e "\n📚 7. Web arayüzü bağımlılıkları yerel olarak indiriliyor (çevrimdışı destek)..."
+  local vendor_dir="$PROJECT_DIR/web_ui/vendor"
+  mkdir -p "$vendor_dir"
+
+  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" \
+    -o "$vendor_dir/highlight.min.css"
+  curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" \
+    -o "$vendor_dir/highlight.min.js"
+  curl -fsSL "https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" \
+    -o "$vendor_dir/marked.min.js"
+
+  echo "✅ Vendor kütüphaneleri web_ui/vendor/ dizinine indirildi."
+}
+
 print_header
 install_system_packages
 install_google_chrome
@@ -128,4 +155,5 @@ install_ollama
 clone_or_update_repo
 setup_conda_env
 pull_models
+download_vendor_libs
 print_footer
