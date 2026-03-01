@@ -1509,109 +1509,26 @@ await asyncio.to_thread(
 
 ## 4. Mevcut Kritik Hatalar
 
-> ✅ **Tüm kritik hatalar giderilmiştir.** U-01 ve U-02 bu oturumda kapatıldı.
-
-### Tüm Kritik Hatalar (Giderildi)
-
-| # | Sorun | Durum |
-|---|-------|-------|
-| 3.23 | Greedy Regex JSON Ayrıştırma (`sidar_agent.py`) | ✅ Düzeltildi — §3.23 |
-| 3.24 | UTF-8 Çok Baytlı Karakter Bölünmesi (`llm_client.py`) | ✅ Düzeltildi — §3.24 |
-| 3.25 | Hardcoded Docker Image (`code_manager.py`) | ✅ Düzeltildi — §3.25 |
-| 3.26 | Token Sayısı Limiti Yok (`memory.py`) | ✅ Düzeltildi — §3.26 |
-| 3.27 | `self.health` Null Kontrolü Yok (`auto_handle.py`) | ✅ Düzeltildi — §3.27 |
-| U-01 | `get_document()` test assertion uyumsuzluğu — FAIL üretiyordu | ✅ Düzeltildi — §3.56 |
-| U-02 | `status_report()` SANDBOX'ta "Terminal: ✗" yanlış bilgi | ✅ Düzeltildi — §3.57 |
-| N-03 | `GPU_MIXED_PRECISION` docker-compose varsayılan `false` ↔ `.env.example` `true` çelişkisi | ✅ Düzeltildi — §3.71 |
-| N-04 | `install_sidar.sh` `sleep 5` race condition → Ollama polling loop | ✅ Düzeltildi — §3.72 |
-| N-05 | `web_ui/index.html` CDN bağımlılığı → yerel vendor + CDN yedek | ✅ Düzeltildi — §3.73 |
+> ✅ Mevcut kritik hata bulunmamaktadır. Geçmişte tespit edilen tüm kritik hatalar giderilmiştir — bkz. §3.
 
 ---
 
 ## 5. Yüksek Öncelikli Sorunlar
 
-> ✅ **Tüm yüksek öncelikli sorunlar giderilmiştir.** U-03, U-04, U-05, U-13 bu oturumda kapatıldı.
-
-### Tüm Yüksek Öncelikli Sorunlar (Giderildi)
-
-| # | Sorun | Durum |
-|---|-------|-------|
-| 3.28 | README.md Versiyon Tutarsızlığı | ✅ Düzeltildi — §3.28 |
-| 3.29 | `config.py` Senkron `requests` Kullanımı | ✅ Düzeltildi — §3.29 |
-| 3.30 | `environment.yml` `requests` Bağımlılığı | ✅ Düzeltildi — §3.30 |
-| 3.31 | Stream Generator Yeniden Kullanım Riski | ✅ Düzeltildi — §3.31 |
-| 3.32 | ChromaDB Delete+Upsert Yarış Koşulu | ✅ Düzeltildi — §3.32 |
-| 3.33 | Tavily 401/403 Hatasında Fallback Yok | ✅ Düzeltildi — §3.33 |
-| 3.34 | pynvml Hataları Sessizce Yutuldu | ✅ Düzeltildi — §3.34 |
-| 3.35 | Uzantısız Dosyalar Güvenlik Kontrolünü Atlar | ✅ Düzeltildi — §3.35 |
-| 3.36 | Rate Limiting TOCTOU Yarış Koşulu | ✅ Düzeltildi — §3.36 |
-| U-03 | `.env.example` `HF_HUB_OFFLINE` çift tanım | ✅ Düzeltildi — §3.58 |
-| U-04 | CUDA wheel cu121 ↔ cu124 tutarsızlığı | ✅ Düzeltildi — §3.59 |
-| U-05 | CORS izin listesi sabit port 7860 | ✅ Düzeltildi — §3.60 |
-| U-13 | `rstrip(".git")` yanlış karakter kümesi silme | ✅ Düzeltildi — §3.68 |
+> ✅ Mevcut yüksek öncelikli sorun bulunmamaktadır. Geçmişte tespit edilen tüm yüksek öncelikli sorunlar giderilmiştir — bkz. §3.
 
 ---
 
 ## 6. Orta Öncelikli Sorunlar
 
-> ✅ **Tüm orta öncelikli sorunlar giderilmiştir.** V-01 ve V-03 bu oturumda kapatıldı.
-
-### V-Yamaları — Orta Öncelikli (Giderildi)
-
-| # | Sorun | Dosya:Satır | Durum |
-|---|-------|-------------|-------|
-| V-01 | `main.py:247-621` — 374 satır commented-out dead code | `main.py:247-621` | ✅ Düzeltildi — §3.74 |
-| V-03 | `web_server.py` git endpoint'lerinde blocking subprocess | `web_server.py` | ✅ Düzeltildi — §3.76 |
-
-### Önceki Orta Öncelikli Sorunlar (Giderildi)
-
-| # | Sorun | Durum |
-|---|-------|-------|
-| 3.37 | `threading.RLock` Async Context'te | ✅ Düzeltildi — §3.37 |
-| 3.38 | `asyncio.Lock()` Modül Düzeyinde | ✅ Düzeltildi — §3.38 |
-| 3.39 | Docker Bağlantı Hatası Mesajı | ✅ Düzeltildi — §3.39 |
-| 3.40 | GitHub Token Rehberi Eksik | ✅ Düzeltildi — §3.40 |
-| 3.41 | Web UI Eksik Özellikler | ✅ Düzeltildi — §3.41 |
-| 3.42 | Eksik Test Kapsamları | ✅ Düzeltildi — §3.42 |
-| 3.43 | `GPU_MEMORY_FRACTION` Doğrulama | ✅ Düzeltildi — §3.43 |
-| 3.44 | Version Sort Pre-Release Hatası | ✅ Düzeltildi — §3.44 |
-| 3.45 | Araç Sonucu Format Tutarsızlığı | ✅ Düzeltildi — §3.45 |
-| 3.46 | Bozuk JSON Sessizce Atlanıyor | ✅ Düzeltildi — §3.46 |
-| U-06 | `_rate_lock` / `_agent_lock` tutarsız başlatma pattern | ✅ Düzeltildi — §3.61 |
-| U-07 | `DocumentStore` `core/__init__.py`'den eksik | ✅ Düzeltildi — §3.62 |
-| U-08 | Versiyon "2.6.0" ↔ "2.6.1" uyumsuzluğu | ✅ Düzeltildi — §3.63 |
-| U-09 | Web UI "belleği temizle" AutoHandle'da işlenmiyor | ✅ Düzeltildi — §3.64 |
-| U-14 | `add_document()` event loop engeli | ✅ Düzeltildi — §3.69 |
+> ✅ Mevcut orta öncelikli sorun bulunmamaktadır. Geçmişte tespit edilen tüm orta öncelikli sorunlar giderilmiştir — bkz. §3.
 
 ---
 
 
 ## 7. Düşük Öncelikli Sorunlar
 
-> ✅ **Tüm düşük öncelikli sorunlar giderilmiştir.** V-02 bu oturumda kapatıldı.
-
-### V-Yamaları — Düşük Öncelikli (Giderildi)
-
-| # | Sorun | Dosya:Satır | Durum |
-|---|-------|-------------|-------|
-| V-02 | `config.py` docstring "Sürüm: 2.6.0" ↔ `VERSION = "2.6.1"` | `config.py:1-6` | ✅ Düzeltildi — §3.75 |
-
-### Önceki Düşük Öncelikli Sorunlar (Giderildi)
-
-| # | Sorun | Durum |
-|---|-------|-------|
-| 3.47 | `OLLAMA_PID` İsimlendirme Tutarlılığı | ✅ Onaylandı — §3.47 |
-| 3.48 | `search_docs` DDG `site:` Operatörü | ✅ Düzeltildi — §3.48 |
-| 3.49 | Git Ham Çıktısı Dil Etiketleme | ✅ Düzeltildi — §3.49 |
-| 3.50 | `nvidia-smi` Boş Çıktı Sessiz Kalıyor | ✅ Düzeltildi — §3.50 |
-| 3.51 | `cpu_count` Sıfır Başlangıç Değeri | ✅ Düzeltildi — §3.51 |
-| 3.52 | Güvenlik — Mutation Endpoint Rate Limit | ✅ Düzeltildi — §3.52 |
-| 3.53 | Eğitim Verisi Tarihi Yorumu | ✅ Onaylandı — §3.53 |
-| 3.54 | npm Sayısal Pre-Release Algılama | ✅ Düzeltildi — §3.54 |
-| U-10 | Dal adı git flag injection koruması eksik | ✅ Düzeltildi — §3.65 |
-| U-11 | HEALTHCHECK HTTP sağlığını kontrol etmiyor | ✅ Düzeltildi — §3.66 |
-| U-12 | `"erişim"` regex'i çok geniş | ✅ Onaylandı/Mevcut kod doğru — §3.67 |
-| U-15 | `_gpu_available` private attribute doğrudan erişim | ✅ Düzeltildi — §3.70 |
+> ✅ Mevcut düşük öncelikli sorun bulunmamaktadır. Geçmişte tespit edilen tüm düşük öncelikli sorunlar giderilmiştir — bkz. §3.
 
 ---
 
