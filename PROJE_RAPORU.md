@@ -1060,186 +1060,183 @@ except Exception as exc:
 
 ## 7. Düşük Öncelikli Sorunlar
 
+> ✅ 8 düşük öncelikli sorunun **tamamı değerlendirilmiştir** (4'ü kod değişikliği, 4'ü zaten uygulanmış).
+>
+> | # | Sorun | Durum |
+> |---|-------|-------|
+> | 7.1 | `OLLAMA_PID` İsimlendirme Tutarlılığı | ✅ Mevcut kod doğru |
+> | 7.2 | `search_docs` DDG `site:` Operatörü | ✅ Önceki oturumda düzeltildi |
+> | 7.3 | Git Ham Çıktısı Dil Etiketleme | ✅ Düzeltildi |
+> | 7.4 | `nvidia-smi` Boş Çıktı Sessiz Kalıyor | ✅ Düzeltildi |
+> | 7.5 | `cpu_count` Sıfır Başlangıç Değeri | ✅ Önceki oturumda düzeltildi |
+> | 7.6 | Güvenlik — Mutation Endpoint Rate Limit | ✅ Düzeltildi |
+> | 7.7 | Eğitim Verisi Tarihi Yorumu | ✅ Önceki oturumda düzeltildi |
+> | 7.8 | npm Sayısal Pre-Release Algılama | ✅ Düzeltildi |
+
 ---
 
-### 7.1 `install_sidar.sh` — `ollama_pid` Değişken İsimlendirme Uyumsuzluğu
+### ✅ 7.1 `install_sidar.sh` — `OLLAMA_PID` İsimlendirme (DÜŞÜK → ONAYLANDI)
 
 **Dosya:** `install_sidar.sh`
-**Satırlar:** 11, 17
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **Mevcut kod doğru**
 
-**Sorun:**
-
-Değişken `OLLAMA_PID` (büyük harf) olarak tanımlanmış ancak `cleanup()` fonksiyonunda `${OLLAMA_PID}` olarak kullanılmış. Bash'te büyük/küçük harf duyarlıdır; tutarlı olması önemlidir. Şu haliyle çalışır, ancak küçük harf `$ollama_pid` ile karışma riski vardır.
-
-```bash
-# install_sidar.sh:11
-OLLAMA_PID=""   # Üst kapsam (global)
-
-# install_sidar.sh:17 — cleanup fonksiyonu
-if [[ -n "${OLLAMA_PID}" ]] && kill -0 "${OLLAMA_PID}" >/dev/null 2>&1; then
-```
-
-Mevcut haliyle çalışmaktadır; isimden kaynaklanan hata yoktur.
+Değişken hem tanımda (`OLLAMA_PID=""`) hem `cleanup()` içinde (`${OLLAMA_PID}`) büyük harf ile tutarlı kullanılmaktadır. Kod değişikliği gerekmez; incelenmiş ve onaylanmıştır.
 
 ---
 
-### 7.2 `managers/web_search.py` — `search_docs` Google/Bing Operatörleri DDG'de Çalışmıyor
+### ✅ 7.2 `managers/web_search.py` — `search_docs` DDG `site:` Operatörü (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/web_search.py`
-**Satır:** ~295
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
-
+`search_docs()` artık motoru koşullu olarak ele alır:
 ```python
-async def search_docs(self, library: str, topic: str = "") -> Tuple[bool, str]:
-    q = f"{library} documentation {topic}".strip()
-    q += " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
-    return await self.search(q, max_results=5)
-```
-
-`site:` operatörü DuckDuckGo'da kısmi destek görmektedir; birden fazla `site:` ile `OR` kombinasyonu beklendiği gibi çalışmayabilir. Tavily veya Google üzerinden yapılan aramalarda sorun yoktur.
-
-**Düzeltme:**
-
-```python
-async def search_docs(self, library: str, topic: str = "") -> Tuple[bool, str]:
-    # Motor bağımsız çalışan sorgu
-    q = f"{library} official documentation {topic} tutorial".strip()
-    return await self.search(q, max_results=5)
+if self.tavily_key or (self.google_key and self.google_cx):
+    q = base + " site:docs.python.org OR site:pypi.org OR site:readthedocs.io OR site:github.com"
+else:
+    # DDG: site: filtresi yerine hedef odaklı arama terimi
+    q = f"{library} {topic} official docs reference".strip()
 ```
 
 ---
 
-### 7.3 `github_upload.py` — Hata Mesajlarında Türkçe/İngilizce Karışımı
+### ✅ 7.3 `github_upload.py` — Hata Mesajlarında Türkçe/İngilizce Karışımı (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `github_upload.py`
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
-Kullanıcıya gösterilen hata mesajları Türkçedir. Ancak `rule violations` gibi `err_msg` içinden alınan Git/GitHub ham çıktıları İngilizce olabilir. Kullanıcı arayüzü tutarsız görünebilir. Düşük önceliklidir.
+**Eski sorun:** Git subprocess çıktısı `"Sistem Notu:"` etiketiyle gösteriliyordu; İngilizce ham çıktı bağlamsız görünüyordu.
+
+**Uygulanan düzeltme:**
+```python
+# "Git çıktısı:" etiketi, ham İngilizce git çıktısını bağlamsal hale getirir
+print(f"{Colors.WARNING}Git çıktısı: {err_msg}{Colors.ENDC}")
+```
+
+Ve koda açıklayıcı not eklendi: `# Not: Git/GitHub ham çıktısı İngilizce olabilir — bu beklenen bir durumdur.`
 
 ---
 
-### 7.4 `managers/system_health.py` — WSL2'de `nvidia-smi` Timeout Yönetimi
+### ✅ 7.4 `managers/system_health.py` — `nvidia-smi` Boş Çıktı Sessiz (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/system_health.py`
-**Satır:** ~120
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski durum:** `nvidia-smi` boş döndüğünde veya bulunamadığında `except Exception: pass` ile sessiz şekilde `"N/A"` dönülüyordu.
 
+**Uygulanan düzeltme:** Her durum ayrı yakalanır ve debug log üretir:
 ```python
-result = subprocess.run(
-    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-    capture_output=True, text=True, timeout=5,   # 5 sn timeout mevcut ✓
-)
+if version:
+    return version
+logger.debug("nvidia-smi çıktısı boş (return code: %d) — sürücü sürümü N/A.", result.returncode)
+except FileNotFoundError:
+    logger.debug("nvidia-smi bulunamadı — NVIDIA sürücüsü kurulu değil.")
+except Exception as exc:
+    logger.debug("nvidia-smi çalıştırılamadı: %s", exc)
 ```
-
-Timeout koruması zaten mevcut. Ancak WSL2'de `nvidia-smi` başarısız olduğunda sessizce `"N/A"` döner; bu beklenmedik bir durum değildir. Düşük önceliklidir.
 
 ---
 
-### 7.5 `config.py` — `HardwareInfo.gpu_count` Sıfır Başlangıç Değeri
+### ✅ 7.5 `config.py` — `cpu_count` Sıfır Başlangıç Değeri (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `config.py`
-**Satır:** ~75
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
+`check_hardware()` zaten `multiprocessing.cpu_count()` kullanmakta ve hata durumunda `1` değerine fallback yapmaktadır:
 ```python
-@dataclass
-class HardwareInfo:
-    has_cuda: bool
-    gpu_name: str
-    gpu_count: int = 0    # ← CUDA yoksa 0, varsa torch.cuda.device_count()
-    cpu_count: int = 0    # ← check_hardware() içinde doldurulur
+try:
+    import multiprocessing
+    info.cpu_count = multiprocessing.cpu_count()
+except Exception:
+    info.cpu_count = 1  # Güvenli fallback
 ```
-
-`gpu_count = 0` ve `cpu_count = 0` varsayılan değerleri `check_hardware()` başarısız olduğunda kalabilir. `cpu_count`'un hiçbir durumda 0 kalmaması için:
-
-```python
-import multiprocessing
-info.cpu_count = multiprocessing.cpu_count()   # try/except zaten var ✓
-```
-
-Mevcut kod zaten `try/except` içermektedir; kritik değildir.
 
 ---
 
-### 7.7 `agent/definitions.py:23` — Eski Eğitim Verisi Tarihi Yorumu
+### ✅ 7.6 Güvenlik — Mutation Endpoint Rate Limiting (DÜŞÜK → ÇÖZÜLDÜ)
+
+**Dosya:** `web_server.py`
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
+
+**Eski durum:** Yalnızca `/chat` endpoint'i rate limit korumasına sahipti; `/sessions/new`, `/sessions/{id}` DELETE gibi mutation endpoint'leri korumasızdı.
+
+**Uygulanan düzeltme:** İki katmanlı rate limiting:
+
+| Kapsam | Limit | Hedef |
+|--------|-------|-------|
+| `POST /chat` | 20 req/60s/IP | LLM çağrısı (ağır) |
+| `POST` + `DELETE` (diğer) | 60 req/60s/IP | Oturum/repo mutasyonları |
+
+```python
+_RATE_LIMIT           = 20   # /chat — LLM çağrısı
+_RATE_LIMIT_MUTATIONS = 60   # POST/DELETE — mutasyon endpoint'leri
+
+# _is_rate_limited() artık key + limit parametresi alır
+async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool: ...
+
+# Middleware: /chat sıkı, diğer POST/DELETE gevşek limit
+elif request.method in ("POST", "DELETE"):
+    if await _is_rate_limited(f"{client_ip}:mut", _RATE_LIMIT_MUTATIONS):
+        return JSONResponse({"error": "..."}, status_code=429)
+```
+
+**Kalan kabul edilmiş riskler (single-user local kullanım için):**
+
+| Alan | Durum | Risk |
+|------|-------|------|
+| Bellek Şifreleme | `data/sessions/*.json` düz metin | Düşük — yerel kullanım |
+| Prompt Injection | Sistem prompt güçlü | Orta — kabul edilebilir |
+| Web Fetch Sandbox | `_clean_html()` script/style temizliyor | Düşük |
+| CORS | Yalnızca localhost | İyi yapılandırılmış |
+
+---
+
+### ✅ 7.7 `agent/definitions.py:23` — Eğitim Verisi Tarihi Yorumu (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `agent/definitions.py`
-**Satır:** 23
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
-
-```python
-# definitions.py:23
-- LLM eğitim verisi 2024 başına kadar günceldir.
+`definitions.py` zaten doğru tarihi içermektedir:
 ```
-
-Bu yorum SİDAR'ın kullandığı LLM modeline (Claude Sonnet 4.6) göre yanlıştır. Claude Sonnet 4.6'nın eğitim verisi 2025 Ağustos'una kadardır. Kullanıcı bu yorumu okuduğunda modelin bilgi tabanını olduğundan eski sanabilir.
-
-**Düzeltme:**
-```python
-- Bu modelin eğitim verisi yaklaşık 2025 ortasına kadardır.
-- Kesin bilgi için 'web_search' veya 'pypi' aracıyla doğrula.
+- LLM eğitim verisi Ağustos 2025'e kadar günceldir (Claude Sonnet 4.6).
 ```
 
 ---
 
-### 7.8 `managers/package_info.py:251-254` — npm Sayısal Pre-Release Sürümleri Algılanmıyor
+### ✅ 7.8 `managers/package_info.py:251-254` — npm Sayısal Pre-Release Algılanmıyor (DÜŞÜK → ÇÖZÜLDÜ)
 
 **Dosya:** `managers/package_info.py`
-**Satırlar:** 251-254
-**Önem:** 🟢 DÜŞÜK
+**Önem:** ~~🟢 DÜŞÜK~~ → ✅ **ÇÖZÜLDÜ**
 
-**Sorun:**
+**Eski sorun:** `re.search(r"[a-zA-Z]", version)` yalnızca harf içeren etiketleri tanıyor; `1.0.0-0` formatı kaçıyordu.
 
-```python
-# package_info.py:251-254
-@staticmethod
-def _is_prerelease(version: str) -> bool:
-    return bool(re.search(r"[a-zA-Z]", version))
-```
-
-`re.search(r"[a-zA-Z]", version)` yalnızca harf içeren pre-release etiketlerini (`alpha`, `beta`, `rc`, `a0`, `b1`) tanır. npm'de yaygın olan sayısal pre-release formatı `1.0.0-0` (`-0` veya `-1` gibi sayısal tag) ise tespit **edilemez** çünkü `[a-zA-Z]` pattern'i harf içermeyen pre-release'lere uymaz.
-
-**Düzeltme:**
+**Uygulanan düzeltme:**
 ```python
 @staticmethod
 def _is_prerelease(version: str) -> bool:
-    # Hem harf tabanlı (alpha/beta/rc) hem sayısal pre-release (1.0.0-0)
-    return bool(re.search(r"[a-zA-Z]", version)) or bool(re.match(r".*-\d+$", version))
+    """
+    Harf tabanlı (alpha/beta/rc/a0/b1) ve npm sayısal pre-release (1.0.0-0) desteklenir.
+    """
+    if re.search(r"[a-zA-Z]", version):
+        return True
+    # npm sayısal pre-release: 1.0.0-0, 1.0.0-1 (tire + sayı sonu)
+    if re.search(r"-\d+$", version):
+        return True
+    return False
 ```
-
----
-
-### 7.6 Güvenlik Açıkları — Üretim Ortamı İçin
-
-**Önem:** 🟢 DÜŞÜK (geliştirme/single-user için kabul edilebilir)
-
-| Alan | Mevcut Durum | Risk |
-|------|-------------|------|
-| Rate Limiting | Yalnızca web UI `/chat` endpoint'inde (20 req/60sn/IP) | Diğer endpoint'ler (status, sessions) korumasız |
-| Bellek Şifreleme | `data/sessions/*.json` düz metin | PII riski (düşük — yerel kullanım) |
-| Prompt Injection | Kullanıcı girdisi doğrudan LLM prompt'una gidiyor | Orta — sistem prompt güçlü |
-| Web Fetch Sandbox | HTML doğrudan `_clean_html()` ile işleniyor | Düşük — script/style temizleniyor |
-| CORS | Yalnızca localhost kabul ediliyor | İyi yapılandırılmış |
 
 ---
 
 ## 8. Dosyalar Arası Uyumsuzluk Tablosu
 
-> Son kontrol tarihi: 2026-03-01 — 17 uyumsuzluktan **15'i giderilmiştir.**
+> Son kontrol tarihi: 2026-03-01 — 17 uyumsuzluktan **17'si giderilmiştir.** ✅ Tümü kapatıldı
 
 | # | Dosya A | Dosya B | Uyumsuzluk Türü | Önem | Durum |
 |---|---------|---------|----------------|------|-------|
 | 1 | `README.md` (v2.3.2) | Tüm proje (v2.6.0) | Versiyon drift | 🔴 YÜKSEK | ✅ Düzeltildi |
 | 2 | `config.py:validate_critical_settings()` | Tüm proje (httpx) | Senkron `requests` kullanımı | 🔴 YÜKSEK | ✅ Düzeltildi |
 | 3 | `environment.yml` | `config.py` | `requests` bağımlılığı kaldırılmadı | 🔴 YÜKSEK | ✅ Düzeltildi |
-| 4 | `memory.py` (threading.RLock) | Async mimari | RLock async bağlamda I/O yapıyor | 🟡 ORTA | ⚠️ Açık |
+| 4 | `memory.py` (threading.RLock) | Async mimari | RLock async bağlamda I/O yapıyor | 🟡 ORTA | ✅ Düzeltildi |
 | 5 | `web_server.py` (asyncio.Lock module-level) | Python <3.10 uyumu | Loop bağımsız lock oluşturma | 🟡 ORTA | ✅ Geçersiz |
 | 6 | `README.md` | `web_server.py`, `memory.py`, `config.py` | Yeni özellikler belgelenmemiş | 🟡 ORTA | ✅ Düzeltildi |
 | 7 | `tests/test_sidar.py` | `memory.py` (session API) | Session lifecycle testleri eksik | 🟡 ORTA | ✅ Düzeltildi |
@@ -1256,7 +1253,7 @@ def _is_prerelease(version: str) -> bool:
 
 **Notlar:**
 - **#5 (Geçersiz):** Proje `python=3.11` gerektirir (bkz. `environment.yml:6`). Python 3.10+ ile `asyncio.Lock()` event loop dışında oluşturulabilir; sorun geçersizdir.
-- **#4 (Açık):** `threading.RLock` + `_save()` çağrısı event loop'u teorik olarak bloklayabilir. Ancak JSON I/O süresi ihmal edilebilir düzeyde olduğundan pratik etkisi minimal. `asyncio.to_thread(self._save)` ile iyileştirilebilir.
+- **#4 (Düzeltildi):** `sidar_agent.py` içindeki tüm `memory.add()` ve `memory.set_last_file()` çağrıları `asyncio.to_thread()` ile thread pool'a iletildi. `memory.py` senkron API'si korundu.
 
 ---
 
