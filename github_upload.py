@@ -40,12 +40,13 @@ def run_command(command, show_output=True):
         return True, result.stdout.strip()
     except subprocess.CalledProcessError as e:
         # Hata mesajlarını eksiksiz yakala (Hem stdout hem stderr)
+        # Not: Git/GitHub ham çıktısı İngilizce olabilir — bu beklenen bir durumdur.
         err_msg = e.stderr.strip()
         if e.stdout and e.stdout.strip():
             err_msg += "\n" + e.stdout.strip()
-            
+
         if show_output and err_msg:
-            print(f"{Colors.WARNING}Sistem Notu: {err_msg}{Colors.ENDC}")
+            print(f"{Colors.WARNING}Git çıktısı: {err_msg}{Colors.ENDC}")
         return False, err_msg
 
 # ═══════════════════════════════════════════════════════════════

@@ -200,8 +200,15 @@ class SystemHealthManager:
             version = result.stdout.strip().split("\n")[0]
             if version:
                 return version
-        except Exception:
-            pass
+            # Çıktı boş → GPU yok veya sürücü raporlamıyor (WSL2'de beklenen)
+            logger.debug(
+                "nvidia-smi çıktısı boş (return code: %d) — sürücü sürümü N/A.",
+                result.returncode,
+            )
+        except FileNotFoundError:
+            logger.debug("nvidia-smi bulunamadı — NVIDIA sürücüsü kurulu değil.")
+        except Exception as exc:
+            logger.debug("nvidia-smi çalıştırılamadı: %s", exc)
         return "N/A"
 
     def optimize_gpu_memory(self) -> str:

@@ -77,37 +77,55 @@ app.add_middleware(
 
 # ─────────────────────────────────────────────
 #  RATE LIMITING (basit in-memory)
+# Kapsam:
+#   /chat          → 20 istek/60 sn/IP (LLM çağrısı, ağır)
+#   POST + DELETE  → 60 istek/60 sn/IP (oturum/repo mutasyonları, hafif)
 # ─────────────────────────────────────────────
 
 _rate_data: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT  = 20   # maksimum istek sayısı
-_RATE_WINDOW = 60   # saniye cinsinden pencere
-_rate_lock   = asyncio.Lock()  # TOCTOU koruması: kontrol+yaz atomik
+_RATE_LIMIT           = 20   # /chat — LLM çağrısı başına limit
+_RATE_LIMIT_MUTATIONS = 60   # Diğer POST/DELETE — mutasyon endpoint'leri
+_RATE_WINDOW          = 60   # saniye cinsinden pencere (her iki limit için)
+_rate_lock            = asyncio.Lock()  # TOCTOU koruması: kontrol+yaz atomik
 
 
-async def _is_rate_limited(ip: str) -> bool:
-    """Atomik kontrol+yaz: asyncio.Lock ile TOCTOU yarış koşulunu önler."""
+async def _is_rate_limited(key: str, limit: int = _RATE_LIMIT) -> bool:
+    """
+    Atomik kontrol+yaz: asyncio.Lock ile TOCTOU yarış koşulunu önler.
+    key: IP adresi veya 'IP:namespace' formatında bileşik anahtar
+    limit: pencere boyunca izin verilen maksimum istek sayısı
+    """
     async with _rate_lock:
         now = time.monotonic()
         window_start = now - _RATE_WINDOW
-        calls = _rate_data[ip]
         # Pencere dışındakileri temizle
-        _rate_data[ip] = [t for t in calls if t > window_start]
-        if len(_rate_data[ip]) >= _RATE_LIMIT:
+        _rate_data[key] = [t for t in _rate_data[key] if t > window_start]
+        if len(_rate_data[key]) >= limit:
             return True
-        _rate_data[ip].append(now)
+        _rate_data[key].append(now)
         return False
 
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+
     if request.url.path == "/chat":
-        client_ip = request.client.host if request.client else "unknown"
-        if await _is_rate_limited(client_ip):
+        # /chat: LLM çağrısı — sıkı limit (20 req/60s)
+        if await _is_rate_limited(client_ip, _RATE_LIMIT):
             return JSONResponse(
                 {"error": "Çok fazla istek. Lütfen bir dakika bekleyin."},
                 status_code=429,
             )
+    elif request.method in ("POST", "DELETE"):
+        # Mutasyon endpoint'leri (oturum oluştur/sil, repo değiştir vb.)
+        # Gevşek limit (60 req/60s) — XSS/spam koruması
+        if await _is_rate_limited(f"{client_ip}:mut", _RATE_LIMIT_MUTATIONS):
+            return JSONResponse(
+                {"error": "Çok fazla işlem isteği. Lütfen bir dakika bekleyin."},
+                status_code=429,
+            )
+
     return await call_next(request)
 
 WEB_DIR = Path(__file__).parent / "web_ui"

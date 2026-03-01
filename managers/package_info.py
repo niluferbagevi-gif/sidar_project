@@ -251,8 +251,17 @@ class PackageInfoManager:
 
     @staticmethod
     def _is_prerelease(version: str) -> bool:
-        """Sürümün pre-release olup olmadığını kontrol et."""
-        return bool(re.search(r"[a-zA-Z]", version))
+        """
+        Sürümün pre-release olup olmadığını kontrol et.
+        Harf tabanlı (alpha/beta/rc/a0/b1) ve npm sayısal pre-release (1.0.0-0) desteklenir.
+        """
+        # Harf tabanlı pre-release: 1.0.0a1, 1.0.0b2, 1.0.0rc1, 1.0.0alpha
+        if re.search(r"[a-zA-Z]", version):
+            return True
+        # npm sayısal pre-release: 1.0.0-0, 1.0.0-1 (tire + sayı sonu)
+        if re.search(r"-\d+$", version):
+            return True
+        return False
 
     @staticmethod
     def _version_sort_key(version: str) -> Version:
